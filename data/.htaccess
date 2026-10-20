@@ -1,0 +1,2 @@
+# Base de données SQLite et fichiers internes : aucun accès depuis le web
+Require all denied

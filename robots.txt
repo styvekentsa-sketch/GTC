@@ -1,0 +1,12 @@
+# Global Trading Corporation — consignes pour les robots d'indexation
+# Site public indexable ; espace interne et dossiers techniques exclus.
+
+User-agent: *
+Allow: /
+Disallow: /dashboard/
+Disallow: /includes/
+Disallow: /data/
+Disallow: /tools/
+Disallow: /process-contact.php
+
+Sitemap: https://globaltradingcorporation.net/sitemap.xml

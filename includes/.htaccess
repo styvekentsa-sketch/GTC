@@ -1,0 +1,2 @@
+# Fichiers PHP inclus uniquement par les pages : aucun accès direct depuis le web
+Require all denied

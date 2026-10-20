@@ -1,0 +1,7 @@
+# Logo téléversé depuis le Dashboard : seules les images PNG / JPG sont servies.
+<FilesMatch ".*">
+    Require all denied
+</FilesMatch>
+<FilesMatch "\.(jpe?g|png)$">
+    Require all granted
+</FilesMatch>

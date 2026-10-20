@@ -1,0 +1,413 @@
+<?php
+/**
+ * Gabarit & utilitaires du Dashboard — Global Trading Corporation
+ *
+ * Usage dans une page de dashboard/ :
+ *   require_once __DIR__ . '/../includes/dashboard.php';
+ *   $user = require_login();
+ *   dash_header('Titre', 'cle-du-menu');
+ *   … contenu …
+ *   dash_footer();
+ */
+
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/icons.php';
+require_once __DIR__ . '/seo.php';      // asset_url() : fichiers CSS / JS versionnés
+
+/* ==========================================================================
+   Référentiels
+   ========================================================================== */
+
+const DASH_CURRENCIES = [
+    'XAF' => ['label' => 'FCFA',            'decimals' => 0],
+    'EUR' => ['label' => 'Euro',            'decimals' => 2],
+    'USD' => ['label' => 'Dollar US',       'decimals' => 2],
+    'CAD' => ['label' => 'Dollar canadien', 'decimals' => 2],
+    'NGN' => ['label' => 'Naira',           'decimals' => 2],
+    'AED' => ['label' => 'Dirham (Dubaï)',  'decimals' => 2],
+    'CNY' => ['label' => 'Yuan',            'decimals' => 2],
+];
+
+/** Rôles des collaborateurs (table users). */
+const USER_ROLES = [
+    'admin'      => 'Administrateur',
+    'caissier'   => 'Caissier',
+    'agent'      => 'Agent',
+    'secretaire' => 'Secrétaire / Accueil',
+];
+
+/** Rôles autorisés sur les opérations (tableau de bord, factures, simulateur, impression). */
+const OPERATION_ROLES = ['admin', 'caissier', 'agent'];
+
+/** Rôles autorisés sur la messagerie (messages du formulaire de contact). */
+const MESSAGE_ROLES = ['admin', 'secretaire'];
+
+/** Le compte connecté peut-il consulter les messages du site ? */
+function can_access_messages(): bool
+{
+    return in_array(current_user()['role'] ?? '', MESSAGE_ROLES, true);
+}
+
+/** Statuts d'un message (valeurs de la colonne messages.status). */
+const MESSAGE_STATUSES = [
+    'unread'   => ['label' => 'Non lu',   'tone' => 'info'],
+    'read'     => ['label' => 'Lu',       'tone' => 'muted'],
+    'replied'  => ['label' => 'Répondu',  'tone' => 'success'],
+    'archived' => ['label' => 'Archivé',  'tone' => 'warning'],
+];
+
+function role_label(?string $role): string
+{
+    return USER_ROLES[$role ?? ''] ?? 'Collaborateur';
+}
+
+const INVOICE_STATUSES = [
+    'draft'     => ['label' => 'Brouillon',  'tone' => 'muted'],
+    'pending'   => ['label' => 'En attente', 'tone' => 'warning'],
+    'paid'      => ['label' => 'Payée',      'tone' => 'success'],
+    'cancelled' => ['label' => 'Annulée',    'tone' => 'danger'],
+];
+
+/** Types d'opération (valeurs de la colonne invoices.operation_type). */
+const OPERATION_TYPES = [
+    'Dépôt'         => 'Dépôt',
+    'Retrait'       => 'Retrait',
+    'Exchange'      => 'Change / Exchange',
+    'Transfert'     => 'Transfert de fonds',
+    'Import/Export' => 'Import/Export',
+];
+
+/**
+ * Texte de la ligne « Motif » d'une facture : motif et/ou nom de la personne qui effectue l'opération.
+ * Les factures plus anciennes qui avaient un « Émetteur » séparé le reprennent ici.
+ */
+function invoice_reason_text(array $inv): string
+{
+    $reason = trim((string) ($inv['transaction_reason'] ?? ''));
+    $sender = trim((string) ($inv['sender_name'] ?? ''));
+    if ($reason !== '' && $sender !== '') {
+        return $reason . ' (' . $sender . ')';
+    }
+    return $reason !== '' ? $reason : ($sender !== '' ? $sender : 'Non spécifié');
+}
+
+/** Modes de paiement (valeurs de la colonne invoices.payment_method). */
+const PAYMENT_METHODS = [
+    'Espèces'      => 'Espèces',
+    'Orange Money' => 'Orange Money',
+    'Mobile Money' => 'Mobile Money',
+    'Virement'     => 'Virement',
+];
+
+/** Sens de saisie du taux. */
+const RATE_DIRECTIONS = ['multiply', 'divide'];
+
+/** Libellé d'affichage d'une devise (XAF → FCFA). */
+function currency_label(string $code): string
+{
+    return $code === 'XAF' ? 'FCFA' : $code;
+}
+
+/**
+ * Montant à recevoir.
+ *   multiply : taux saisi « 1 devise source = X devise cible »  → montant × taux
+ *   divide   : taux saisi « 1 devise cible = X devise source »  → montant ÷ taux
+ * Arrondi selon la devise cible (0 décimale pour le FCFA).
+ */
+function compute_received(float $given, float $rate, string $direction, string $target): float
+{
+    $decimals = DASH_CURRENCIES[$target]['decimals'] ?? 2;
+    $value    = $direction === 'divide' ? $given / $rate : $given * $rate;
+    return round($value, $decimals);
+}
+
+/** Taux lisible : « 1 EUR = 655,957 FCFA » (selon le sens de saisie). */
+function rate_text(array $inv): string
+{
+    $src = currency_label($inv['source_currency']);
+    $tgt = currency_label($inv['target_currency']);
+    $rate = rate_format($inv['exchange_rate']);
+    return ($inv['rate_direction'] ?? 'multiply') === 'divide'
+        ? "1 {$tgt} = {$rate} {$src}"
+        : "1 {$src} = {$rate} {$tgt}";
+}
+
+/** Taux formaté : jusqu'à 4 décimales, sans zéros inutiles (655,957 / 0,9215). */
+function rate_format(float|string|null $rate): string
+{
+    $formatted = rtrim(rtrim(number_format((float) $rate, 4, ',', "\u{202F}"), '0'), ',');
+    return $formatted === '' ? '0' : $formatted;
+}
+
+const JOB_STATUSES = [
+    'queued'    => ['label' => 'En file',  'tone' => 'muted'],
+    'printing'  => ['label' => 'En cours', 'tone' => 'info'],
+    'done'      => ['label' => 'Terminé',  'tone' => 'success'],
+    'failed'    => ['label' => 'Échec',    'tone' => 'danger'],
+    'cancelled' => ['label' => 'Annulé',   'tone' => 'muted'],
+];
+
+const JOB_PRIORITIES = [
+    'low'    => 'Basse',
+    'normal' => 'Normale',
+    'high'   => 'Urgente',
+];
+
+/* ==========================================================================
+   Formatage
+   ========================================================================== */
+
+/** Montant formaté à la française : 1 250 000 FCFA / 1 250,50 EUR */
+function money(float|string|null $amount, string $currency = 'XAF'): string
+{
+    $decimals = DASH_CURRENCIES[$currency]['decimals'] ?? 2;
+    $label    = $currency === 'XAF' ? 'FCFA' : $currency;
+    return number_format((float) $amount, $decimals, ',', "\u{202F}") . "\u{00A0}" . $label;
+}
+
+/** Date SQL → JJ/MM/AAAA (avec heure si demandé). */
+function fdate(?string $value, bool $withTime = false): string
+{
+    if (!$value) {
+        return '—';
+    }
+    $ts = strtotime($value);
+    return $ts ? date($withTime ? 'd/m/Y H:i' : 'd/m/Y', $ts) : '—';
+}
+
+/** Pastille de statut. */
+function badge(string $key, array $map): string
+{
+    $item = $map[$key] ?? ['label' => $key, 'tone' => 'muted'];
+    return '<span class="badge badge--' . e($item['tone']) . '">' . e($item['label']) . '</span>';
+}
+
+/** Valeur POST nettoyée (UTF-8 garanti : une saisie Windows-1252 est convertie). */
+function post(string $key, string $default = ''): string
+{
+    $value = trim((string) ($_POST[$key] ?? $default));
+    return mb_check_encoding($value, 'UTF-8') ? $value : mb_convert_encoding($value, 'UTF-8', 'Windows-1252');
+}
+
+/** Valeur GET nettoyée. */
+function query(string $key, string $default = ''): string
+{
+    return trim((string) ($_GET[$key] ?? $default));
+}
+
+/* ==========================================================================
+   Gabarit
+   ========================================================================== */
+
+/**
+ * Identité de la session affichée (compte + éventuelle prise de contrôle), comparée entre onglets
+ * par assets/js/dashboard.js : un onglet resté ouvert sur une autre identité est averti.
+ */
+function session_identity(): string
+{
+    if (empty($_SESSION['user_id'])) {
+        return '';
+    }
+    return 'u' . (int) $_SESSION['user_id'] . (impersonation_active() ? '-par-' . (int) $_SESSION['original_admin_id'] : '');
+}
+
+function dash_header(string $title, string $active = ''): void
+{
+    $user = current_user();
+    $unread = can_access_messages() ? (int) db_value("SELECT COUNT(*) FROM messages WHERE status = 'unread'") : 0;
+
+    // Menu selon le rôle : la secrétaire / l'accueil ne voit que la messagerie
+    $menu = [];
+    if (in_array($user['role'] ?? '', OPERATION_ROLES, true)) {
+        $menu = [
+            'index'    => ['href' => 'index.php',    'icon' => 'grid',    'label' => 'Tableau de bord'],
+            'invoices' => ['href' => 'invoices.php', 'icon' => 'file',    'label' => 'Factures'],
+            'simulator' => ['href' => 'simulator.php', 'icon' => 'calc',   'label' => 'Simulateur Avancé'],
+            'rates'    => ['href' => 'rates.php',    'icon' => 'exchange', 'label' => 'Taux de change'],
+            'printing' => ['href' => 'printing.php', 'icon' => 'printer', 'label' => 'Impression réseau'],
+        ];
+    }
+    if (can_access_messages()) {
+        $menu['messages'] = ['href' => 'messages.php', 'icon' => 'mail', 'label' => 'Messages'];
+    }
+    if (is_admin()) {
+        $menu['team']  = ['href' => 'team.php',  'icon' => 'users',  'label' => 'Équipe'];
+        $menu['partners'] = ['href' => 'partners.php', 'icon' => 'hand', 'label' => 'Partenaires'];
+        $menu['users'] = ['href' => 'users.php', 'icon' => 'shield', 'label' => 'Utilisateurs'];
+    }
+    ?>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title><?= e($title) ?> | Dashboard GTC</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="../assets/img/favicon-32.png" sizes="32x32" type="image/png">
+    <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+    <link rel="stylesheet" href="<?= e(asset_url('assets/css/custom-select.css', '../')) ?>">
+    <link rel="stylesheet" href="<?= e(asset_url('assets/css/dashboard.css', '../')) ?>">
+</head>
+<body class="dash" data-session="<?= e(session_identity()) ?>" data-session-name="<?= e($user['name'] ?? '') ?>">
+
+<aside class="sidebar" id="sidebar" aria-label="Menu du dashboard">
+    <div class="sidebar__brand">
+        <span class="sidebar__logo"><img src="../assets/img/logo-gtc.svg" alt="" width="60" height="33"></span>
+        <span class="sidebar__name">Global Trading<small>Dashboard</small></span>
+    </div>
+
+    <nav class="sidebar__nav">
+        <?php foreach ($menu as $key => $item): ?>
+            <a href="<?= e($item['href']) ?>" class="sidebar__link<?= $key === $active ? ' is-active' : '' ?>"
+               <?= $key === $active ? 'aria-current="page"' : '' ?>>
+                <?= icon($item['icon']) ?>
+                <span><?= e($item['label']) ?></span>
+                <?php if ($key === 'messages' && $unread > 0): ?>
+                    <span class="sidebar__count" title="<?= $unread ?> message<?= $unread > 1 ? 's' : '' ?> non lu<?= $unread > 1 ? 's' : '' ?>"><?= $unread ?></span>
+                <?php endif; ?>
+            </a>
+        <?php endforeach; ?>
+    </nav>
+
+    <div class="sidebar__footer">
+        <a href="../index.php" class="sidebar__link" target="_blank" rel="noopener">
+            <?= icon('external') ?><span>Voir le site</span>
+        </a>
+        <a href="settings.php" class="sidebar__link<?= in_array($active, ['settings', 'password'], true) ? ' is-active' : '' ?>"
+           <?= in_array($active, ['settings', 'password'], true) ? 'aria-current="page"' : '' ?>>
+            <?= icon('settings') ?><span>Paramètres</span>
+        </a>
+        <form action="logout.php" method="post">
+            <?= csrf_field() ?>
+            <button type="submit" class="sidebar__link sidebar__link--btn">
+                <?= icon('logout') ?><span>Déconnexion</span>
+            </button>
+        </form>
+    </div>
+</aside>
+<div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
+
+<div class="dash-main">
+    <?php if (impersonation_active()): ?>
+        <!-- Prise de contrôle de compte en cours (dashboard/switch-user.php) -->
+        <div class="impersonation-bar" role="alert">
+            <p class="impersonation-bar__text">
+                <?= icon('alert') ?>
+                Vous êtes actuellement connecté en tant que <strong><?= e($user['name'] ?? '') ?></strong>
+                (<?= e(role_label($user['role'] ?? null)) ?>) — <em>Prise de contrôle Admin</em>.
+            </p>
+            <form action="switch-user.php" method="post" class="impersonation-bar__form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="stop">
+                <button type="submit" class="impersonation-bar__btn"><?= icon('arrow-left') ?> Revenir au compte Administrateur</button>
+            </form>
+        </div>
+    <?php endif; ?>
+    <header class="topbar">
+        <button class="topbar__menu" id="sidebar-toggle" type="button" aria-label="Ouvrir le menu"
+                aria-controls="sidebar" aria-expanded="false">
+            <?= icon('menu') ?>
+        </button>
+        <h1 class="topbar__title"><?= e($title) ?></h1>
+        <div class="topbar__user">
+            <span class="topbar__avatar" aria-hidden="true"><?= e(initials($user['name'] ?? '?')) ?></span>
+            <span class="topbar__meta">
+                <strong><?= e($user['name'] ?? '') ?></strong>
+                <small><?= e(role_label($user['role'] ?? null)) ?></small>
+            </span>
+        </div>
+    </header>
+
+    <main class="dash-content" id="contenu">
+        <?php foreach (flash_pull() as $f): ?>
+            <div class="alert alert--<?= e($f['type']) ?>" role="status" data-autohide>
+                <?= icon($f['type'] === 'success' ? 'check' : 'alert') ?>
+                <p><?= e($f['message']) ?></p>
+            </div>
+        <?php endforeach; ?>
+    <?php
+}
+
+function dash_footer(): void
+{
+    ?>
+    </main>
+    <footer class="dash-footer">© <?= date('Y') ?> <?= e(GTC_NAME) ?> — Espace de gestion interne</footer>
+</div>
+
+<script src="<?= e(asset_url('assets/js/custom-select.js', '../')) ?>" defer></script>
+<script src="<?= e(asset_url('assets/js/dashboard.js', '../')) ?>" defer></script>
+</body>
+</html>
+    <?php
+}
+
+/** Gabarit des pages publiques du Dashboard (connexion, installation). */
+function auth_layout_open(string $title, string $subtitle): void
+{
+    ?>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title><?= e($title) ?> | Dashboard GTC</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="../assets/img/favicon-32.png" sizes="32x32" type="image/png">
+    <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+    <link rel="stylesheet" href="<?= e(asset_url('assets/css/custom-select.css', '../')) ?>">
+    <link rel="stylesheet" href="<?= e(asset_url('assets/css/dashboard.css', '../')) ?>">
+</head>
+<body class="auth" data-session="">
+<main class="auth-card">
+    <div class="auth-card__brand">
+        <span class="sidebar__logo"><img src="../assets/img/logo-gtc.svg" alt="" width="60" height="33"></span>
+        <span class="auth-card__name">Global Trading Corporation</span>
+    </div>
+    <h1 class="auth-card__title"><?= e($title) ?></h1>
+    <p class="auth-card__subtitle"><?= e($subtitle) ?></p>
+    <?php foreach (flash_pull() as $f): ?>
+        <div class="alert alert--<?= e($f['type']) ?>" role="status">
+            <?= icon($f['type'] === 'success' ? 'check' : 'alert') ?>
+            <p><?= e($f['message']) ?></p>
+        </div>
+    <?php endforeach; ?>
+    <?php
+}
+
+function auth_layout_close(): void
+{
+    ?>
+    <p class="auth-card__back"><a href="../index.php"><?= icon('arrow-left') ?> Retour au site</a></p>
+</main>
+<script src="<?= e(asset_url('assets/js/custom-select.js', '../')) ?>" defer></script>
+<script src="<?= e(asset_url('assets/js/dashboard.js', '../')) ?>" defer></script>
+</body>
+</html>
+    <?php
+}
+
+/** Pagination simple. */
+function pagination(int $total, int $page, int $perPage, array $params = []): string
+{
+    $pages = (int) ceil($total / $perPage);
+    if ($pages <= 1) {
+        return '';
+    }
+    $html = '<nav class="pagination" aria-label="Pagination">';
+    for ($i = 1; $i <= $pages; $i++) {
+        $url = '?' . http_build_query(array_merge($params, ['page' => $i]));
+        $html .= $i === $page
+            ? '<span class="pagination__item is-active" aria-current="page">' . $i . '</span>'
+            : '<a class="pagination__item" href="' . e($url) . '">' . $i . '</a>';
+    }
+    return $html . '</nav>';
+}

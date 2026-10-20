@@ -1,0 +1,39 @@
+# ==========================================================================
+# Global Trading Corporation — fichiers à ne jamais publier
+# ==========================================================================
+
+# --- Secrets & configuration locale (modèle : includes/db.local.example.php) ---
+includes/db.local.php
+.env
+.env.*
+!.env.example
+
+# --- Données de l'application (base, clé des visites, caches des taux) ---
+# Le dossier data/ reste présent grâce à son .htaccess (accès web interdit).
+data/*
+!data/.htaccess
+
+# --- Sauvegardes et exports de base de données (mots de passe hachés, clients) ---
+*.sql
+*.sql.gz
+*.sqlite
+*.sqlite-journal
+*.db
+
+# --- Fichiers envoyés depuis le Dashboard (logos des factures, photos de l'équipe) ---
+assets/img/brand/*
+!assets/img/brand/.htaccess
+assets/img/team/membre-*
+
+# --- Journaux ---
+*.log
+logs/
+
+# --- Systèmes d'exploitation & éditeurs ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*~
