@@ -215,6 +215,10 @@ function dash_header(string $title, string $active = ''): void
 {
     $user = current_user();
     $unread = can_access_messages() ? (int) db_value("SELECT COUNT(*) FROM messages WHERE status = 'unread'") : 0;
+    // Actualisation automatique de la messagerie (assets/js/messages-live.js) : dernier message connu au chargement
+    $liveAttrs = can_access_messages()
+        ? ' data-messages-api="messages-api.php" data-messages-last="' . (int) db_value('SELECT COALESCE(MAX(id), 0) FROM messages') . '"'
+        : '';
 
     // Menu selon le rôle : la secrétaire / l'accueil ne voit que la messagerie
     $menu = [];
@@ -249,14 +253,22 @@ function dash_header(string $title, string $active = ''): void
     <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="../assets/img/favicon-32.png" sizes="32x32" type="image/png">
     <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+    <!-- Application installable « GTC Dashboard » (dashboard/manifest.webmanifest, assets/js/pwa-install.js) -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#1F2630">
+    <meta name="application-name" content="GTC Dashboard">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="GTC Dashboard">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="stylesheet" href="<?= e(asset_url('assets/css/custom-select.css', '../')) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('assets/css/dashboard.css', '../')) ?>">
 </head>
-<body class="dash" data-session="<?= e(session_identity()) ?>" data-session-name="<?= e($user['name'] ?? '') ?>">
+<body class="dash" data-session="<?= e(session_identity()) ?>" data-session-name="<?= e($user['name'] ?? '') ?>"<?= $liveAttrs ?>>
 
 <aside class="sidebar" id="sidebar" aria-label="Menu du dashboard">
     <div class="sidebar__brand">
-        <span class="sidebar__logo"><img src="../assets/img/logo-gtc.svg" alt="" width="60" height="33"></span>
+        <span class="sidebar__logo"><img src="../assets/img/logo-gtc.svg" alt="" width="63" height="33"></span>
         <span class="sidebar__name">Global Trading<small>Dashboard</small></span>
     </div>
 
@@ -267,13 +279,16 @@ function dash_header(string $title, string $active = ''): void
                 <?= icon($item['icon']) ?>
                 <span><?= e($item['label']) ?></span>
                 <?php if ($key === 'messages' && $unread > 0): ?>
-                    <span class="sidebar__count" title="<?= $unread ?> message<?= $unread > 1 ? 's' : '' ?> non lu<?= $unread > 1 ? 's' : '' ?>"><?= $unread ?></span>
+                    <span class="sidebar__count" data-unread-count title="<?= $unread ?> message<?= $unread > 1 ? 's' : '' ?> non lu<?= $unread > 1 ? 's' : '' ?>"><?= $unread ?></span>
                 <?php endif; ?>
             </a>
         <?php endforeach; ?>
     </nav>
 
     <div class="sidebar__footer">
+        <button type="button" class="sidebar__link sidebar__link--btn sidebar__link--install" data-pwa-install hidden>
+            <?= icon('download') ?><span>Installer l'application</span>
+        </button>
         <a href="../index.php" class="sidebar__link" target="_blank" rel="noopener">
             <?= icon('external') ?><span>Voir le site</span>
         </a>
@@ -341,6 +356,10 @@ function dash_footer(): void
 
 <script src="<?= e(asset_url('assets/js/custom-select.js', '../')) ?>" defer></script>
 <script src="<?= e(asset_url('assets/js/dashboard.js', '../')) ?>" defer></script>
+<script src="<?= e(asset_url('assets/js/pwa-install.js', '../')) ?>" defer></script>
+<?php if (can_access_messages()): ?>
+<script src="<?= e(asset_url('assets/js/messages-live.js', '../')) ?>" defer></script>
+<?php endif; ?>
 </body>
 </html>
     <?php
@@ -363,13 +382,21 @@ function auth_layout_open(string $title, string $subtitle): void
     <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="../assets/img/favicon-32.png" sizes="32x32" type="image/png">
     <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+    <!-- Application installable « GTC Dashboard » (dashboard/manifest.webmanifest, assets/js/pwa-install.js) -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#1F2630">
+    <meta name="application-name" content="GTC Dashboard">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="GTC Dashboard">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="stylesheet" href="<?= e(asset_url('assets/css/custom-select.css', '../')) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('assets/css/dashboard.css', '../')) ?>">
 </head>
 <body class="auth" data-session="">
 <main class="auth-card">
     <div class="auth-card__brand">
-        <span class="sidebar__logo"><img src="../assets/img/logo-gtc.svg" alt="" width="60" height="33"></span>
+        <span class="sidebar__logo"><img src="../assets/img/logo-gtc.svg" alt="" width="63" height="33"></span>
         <span class="auth-card__name">Global Trading Corporation</span>
     </div>
     <h1 class="auth-card__title"><?= e($title) ?></h1>
@@ -386,10 +413,17 @@ function auth_layout_open(string $title, string $subtitle): void
 function auth_layout_close(): void
 {
     ?>
+    <p class="auth-card__install" data-pwa-install hidden>
+        <button type="button" class="btn btn--ghost btn--block"><?= icon('download') ?> Installer l'application GTC Dashboard</button>
+    </p>
     <p class="auth-card__back"><a href="../index.php"><?= icon('arrow-left') ?> Retour au site</a></p>
 </main>
 <script src="<?= e(asset_url('assets/js/custom-select.js', '../')) ?>" defer></script>
 <script src="<?= e(asset_url('assets/js/dashboard.js', '../')) ?>" defer></script>
+<script src="<?= e(asset_url('assets/js/pwa-install.js', '../')) ?>" defer></script>
+<?php if (can_access_messages()): ?>
+<script src="<?= e(asset_url('assets/js/messages-live.js', '../')) ?>" defer></script>
+<?php endif; ?>
 </body>
 </html>
     <?php

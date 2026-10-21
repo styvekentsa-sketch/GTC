@@ -21,7 +21,7 @@ $legalLinks = [
         <!-- Colonne 1 : Présentation -->
         <div class="site-footer__col">
             <a href="<?= e($root) ?>index.php" class="logo logo--light" data-secret-logo>
-                <img class="logo__img" src="<?= e($root) ?>assets/img/logo-gtc.svg" alt="" width="91" height="50" loading="lazy">
+                <img class="logo__img" src="<?= e($root) ?>assets/img/logo-gtc.svg" alt="" width="95" height="50" loading="lazy">
                 <span class="logo__text">
                     <span class="logo__name">Global Trading</span>
                     <span class="logo__sub">Corporation</span>

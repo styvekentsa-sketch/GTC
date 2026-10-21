@@ -237,7 +237,7 @@ dash_header('Tableau de bord', 'index');
 <!-- ==================== MESSAGES DU SITE (aperçu ; gestion complète : messages.php) ==================== -->
 <section class="panel" id="messages">
     <header class="panel__head">
-        <h2 class="panel__title">Messages du site <?php if ($stats['unread']): ?><span class="badge badge--info"><?= $stats['unread'] ?> non lu<?= $stats['unread'] > 1 ? 's' : '' ?></span><?php endif; ?></h2>
+        <h2 class="panel__title">Messages du site <span class="badge badge--info" data-unread-badge<?= $stats['unread'] ? '' : ' hidden' ?>><?= $stats['unread'] ?> non lu<?= $stats['unread'] > 1 ? 's' : '' ?></span></h2>
         <a href="messages.php" class="panel__link">Ouvrir la messagerie</a>
     </header>
     <?php if (!$messages): ?>

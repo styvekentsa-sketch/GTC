@@ -1,0 +1,167 @@
+/**
+ * Global Trading Corporation — Actualisation automatique de la messagerie (Dashboard)
+ *
+ * Chargé sur toutes les pages du Dashboard pour les comptes ayant accès aux messages
+ * (includes/dashboard.php → dash_footer). Interroge dashboard/messages-api.php toutes les 8 secondes :
+ *   - pastille « Messages » du menu, titre de l'onglet « (3) … », pastille du panneau de l'accueil ;
+ *   - page Messages (1re page de « Tous » / « Non lus », sans recherche) : nouveaux messages ajoutés
+ *     en tête de liste sans recharger, compteurs des filtres, bouton « Tout marquer comme lu » ;
+ *   - notification discrète « Nouveau message de … » sur les autres pages.
+ *
+ * Léger : pause quand l'onglet est masqué (reprise immédiate au retour), espacement progressif en cas
+ * d'erreur, arrêt si la session a expiré. Aucune donnée n'est modifiée par ces requêtes (GET seulement).
+ */
+(function () {
+  'use strict';
+
+  var body = document.body;
+  var api = body.getAttribute('data-messages-api');
+  if (!api || !window.fetch) return;
+
+  var INTERVAL = 8000;          // délai normal entre deux vérifications (ms)
+  var MAX_INTERVAL = 60000;     // délai maximal après des erreurs répétées
+  var lastId = parseInt(body.getAttribute('data-messages-last') || '0', 10) || 0;
+  var delay = INTERVAL;
+  var timer = null;
+  var busy = false;
+  var stopped = false;
+  var baseTitle = document.title.replace(/^\(\d+\)\s*/, '');
+
+  var live = document.querySelector('[data-messages-live]');         // liste de la page Messages
+  var list = live && live.querySelector('[data-messages-list]');
+  var onUnreadFilter = /[?&]f=unread\b/.test(location.search);
+
+  /* ---------- Mise à jour de l'affichage ---------- */
+
+  var plural = function (n, word) { return n + ' ' + word + (n > 1 ? 's' : ''); };
+
+  var setUnread = function (n) {
+    // Titre de l'onglet
+    document.title = n > 0 ? '(' + n + ') ' + baseTitle : baseTitle;
+
+    // Pastille du menu (créée au premier message non lu)
+    var link = document.querySelector('.sidebar__link[href="messages.php"]');
+    if (link) {
+      var count = link.querySelector('[data-unread-count]');
+      if (n > 0) {
+        if (!count) {
+          count = document.createElement('span');
+          count.className = 'sidebar__count';
+          count.setAttribute('data-unread-count', '');
+          link.appendChild(count);
+        }
+        count.textContent = n;
+        count.title = plural(n, 'message') + ' non ' + (n > 1 ? 'lus' : 'lu');
+      } else if (count) {
+        count.remove();
+      }
+    }
+
+    // Pastille du panneau « Messages du site » (accueil)
+    document.querySelectorAll('[data-unread-badge]').forEach(function (badge) {
+      badge.textContent = n + ' non ' + (n > 1 ? 'lus' : 'lu');
+      badge.hidden = n === 0;
+    });
+
+    // Bouton « Tout marquer comme lu » (page Messages)
+    var readAll = document.querySelector('[data-read-all]');
+    if (readAll) readAll.hidden = n === 0;
+  };
+
+  var setCounts = function (counts) {
+    Object.keys(counts || {}).forEach(function (key) {
+      var el = document.querySelector('[data-filter-count="' + key + '"]');
+      if (el) el.textContent = counts[key];
+    });
+  };
+
+  // Lignes renvoyées par le serveur (même rendu que la page, jetons CSRF compris), ajoutées en tête de liste
+  var addRows = function (rows) {
+    if (!list || !rows || !rows.length) return 0;
+    var added = 0;
+    // Les plus anciens d'abord, chacun inséré en tête : l'ordre final reste « du plus récent au plus ancien »
+    rows.slice().reverse().forEach(function (row) {
+      if (onUnreadFilter && row.status !== 'unread') return;
+      if (list.querySelector('[data-message-id="' + row.id + '"]')) return;
+      var tpl = document.createElement('template');
+      tpl.innerHTML = row.html.trim();
+      var tr = tpl.content.firstElementChild;
+      if (!tr) return;
+      tr.classList.add('is-new');
+      list.insertBefore(tr, list.firstElementChild);
+      added++;
+    });
+    if (added) {
+      var empty = live.querySelector('[data-messages-empty]');
+      var table = live.querySelector('[data-messages-table]');
+      if (empty) empty.hidden = true;
+      if (table) table.hidden = false;
+    }
+    return added;
+  };
+
+  /* ---------- Notification discrète ---------- */
+
+  var toastBox = null;
+  var notify = function (fresh) {
+    if (!fresh.length) return;
+    if (!toastBox) {
+      toastBox = document.createElement('div');
+      toastBox.className = 'live-toasts';
+      toastBox.setAttribute('role', 'status');
+      toastBox.setAttribute('aria-live', 'polite');
+      body.appendChild(toastBox);
+    }
+    var toast = document.createElement('a');
+    toast.className = 'live-toast';
+    toast.href = fresh.length === 1 ? 'messages.php?id=' + encodeURIComponent(fresh[0].id) : 'messages.php';
+    var title = document.createElement('strong');
+    title.textContent = fresh.length === 1 ? 'Nouveau message de ' + fresh[0].sender : fresh.length + ' nouveaux messages';
+    var text = document.createElement('span');
+    text.textContent = fresh.length === 1 ? fresh[0].subject : 'Ouvrir la messagerie';
+    toast.appendChild(title);
+    toast.appendChild(text);
+    toastBox.appendChild(toast);
+    setTimeout(function () { toast.classList.add('is-leaving'); }, 7000);
+    setTimeout(function () { toast.remove(); }, 7600);
+  };
+
+  /* ---------- Interrogation du serveur ---------- */
+
+  var schedule = function () {
+    clearTimeout(timer);
+    if (!stopped && document.visibilityState === 'visible') timer = setTimeout(poll, delay);
+  };
+
+  var poll = function () {
+    if (busy || stopped) return;
+    busy = true;
+    var url = api + '?since=' + lastId + (list ? '&rows=1&back=' + encodeURIComponent(live.getAttribute('data-back') || 'messages.php') : '');
+    fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' }, cache: 'no-store' })
+      .then(function (r) {
+        if (r.status === 401 || r.status === 403) { stopped = true; return null; }   // session expirée / droits retirés
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (data) {
+        if (!data) return;
+        delay = INTERVAL;
+        var fresh = (data.new || []).filter(function (m) { return m.id > lastId; });
+        lastId = Math.max(lastId, data.latest_id || 0);
+        setUnread(data.unread || 0);
+        setCounts(data.counts);
+        var added = addRows(data.rows);
+        // Sur la liste, les nouveaux messages apparaissent directement ; ailleurs, une notification les signale
+        if (!added) notify(fresh.filter(function (m) { return m.status === 'unread'; }));
+      })
+      .catch(function () { delay = Math.min(delay * 2, MAX_INTERVAL); })
+      .then(function () { busy = false; schedule(); });
+  };
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') { delay = INTERVAL; poll(); }
+    else clearTimeout(timer);
+  });
+
+  schedule();
+})();

@@ -6,37 +6,14 @@
  *   messages.php?id=X         Lecture d'un message (passe automatiquement de « Non lu » à « Lu »)
  *
  * Accès : Administrateur et Secrétaire / Accueil (MESSAGE_ROLES).
+ * Actualisation automatique : assets/js/messages-live.js interroge dashboard/messages-api.php (nouveaux messages
+ * ajoutés en tête de liste, compteurs et pastille du menu mis à jour sans recharger la page).
  */
 require_once __DIR__ . '/../includes/dashboard.php';
+require_once __DIR__ . '/../includes/messages.php';   // filtres, lignes de la liste, actions
 
 $user = require_login();
 require_roles(MESSAGE_ROLES);
-
-/** Filtres de la liste : clé d'URL → [libellé, condition SQL]. « Tous » = hors archives. */
-const MESSAGE_FILTERS = [
-    'all'      => ['Tous',      "status <> 'archived'"],
-    'unread'   => ['Non lus',   "status = 'unread'"],
-    'read'     => ['Lus',       "status = 'read'"],
-    'replied'  => ['Répondus',  "status = 'replied'"],
-    'archived' => ['Archivés',  "status = 'archived'"],
-];
-
-/** Adresse de retour après une action : la liste filtrée ou le message, jamais une URL externe. */
-function messages_back(): string
-{
-    $back = post('back');
-    return preg_match('/^messages\.php(\?[a-z0-9_=&%+.-]*)?$/i', $back) ? $back : 'messages.php';
-}
-
-/** Lien WhatsApp vers le numéro de l'expéditeur (numéro camerounais à 9 chiffres complété par 237). */
-function message_whatsapp(?string $phone): ?string
-{
-    $digits = preg_replace('/\D+/', '', (string) $phone);
-    if (strlen($digits) === 9 && $digits[0] === '6') {
-        $digits = '237' . $digits;
-    }
-    return strlen($digits) >= 8 ? 'https://wa.me/' . $digits : null;
-}
 
 /* ==========================================================================
    Actions (POST + CSRF)
@@ -46,7 +23,7 @@ if (is_post()) {
     csrf_verify();
     $op = post('op');
     $id = (int) post('id');
-    $back = messages_back();
+    $back = messages_safe_back(post('back'));
 
     if ($op === 'read_all') {
         $n = db_query("UPDATE messages SET status = 'read' WHERE status = 'unread'")->rowCount();
@@ -83,18 +60,6 @@ if (is_post()) {
 
     flash('error', 'Action inconnue.');
     redirect($back);
-}
-
-/** Petit formulaire d'action sur un message. */
-function message_action(int $id, string $op, string $label, string $icon, string $back, string $class = 'btn btn--ghost btn--sm', string $confirm = ''): string
-{
-    return '<form method="post" action="messages.php" class="inline-form">' . csrf_field()
-        . '<input type="hidden" name="op" value="' . e($op) . '">'
-        . '<input type="hidden" name="id" value="' . $id . '">'
-        . '<input type="hidden" name="back" value="' . e($back) . '">'
-        . '<button type="submit" class="' . e($class) . '"' . ($confirm !== '' ? ' data-confirm="' . e($confirm) . '"' : '')
-        . ' title="' . e($label) . '">' . icon($icon)
-        . '<span' . (str_contains($class, 'icon-btn') ? ' class="visually-hidden"' : '') . '>' . e($label) . '</span></button></form>';
 }
 
 /* ==========================================================================
@@ -180,10 +145,7 @@ $q       = mb_substr(query('q'), 0, 100);
 $page    = max(1, (int) query('page', '1'));
 $perPage = 20;
 
-$counts = [];
-foreach (MESSAGE_FILTERS as $key => [, $cond]) {
-    $counts[$key] = (int) db_value("SELECT COUNT(*) FROM messages WHERE {$cond}");
-}
+$counts = messages_counts();
 
 $where  = [MESSAGE_FILTERS[$filter][1]];
 $params = [];
@@ -206,7 +168,7 @@ dash_header('Messages', 'messages');
     <nav class="chips" aria-label="Filtrer les messages">
         <?php foreach (MESSAGE_FILTERS as $key => [$label]): ?>
             <a href="messages.php<?= $key === 'all' ? '' : '?f=' . $key ?>" class="chip<?= $key === $filter ? ' is-active' : '' ?>"
-               <?= $key === $filter ? 'aria-current="page"' : '' ?>><?= e($label) ?> (<?= $counts[$key] ?>)</a>
+               <?= $key === $filter ? 'aria-current="page"' : '' ?>><?= e($label) ?> (<span data-filter-count="<?= e($key) ?>"><?= $counts[$key] ?></span>)</a>
         <?php endforeach; ?>
     </nav>
     <div class="toolbar__actions">
@@ -218,55 +180,30 @@ dash_header('Messages', 'messages');
                 <input id="q" name="q" type="search" placeholder="Nom, e-mail, sujet…" value="<?= e($q) ?>">
             </div>
         </form>
-        <?php if ($counts['unread']): ?>
-            <form method="post" class="inline-form">
-                <?= csrf_field() ?>
-                <input type="hidden" name="op" value="read_all">
-                <input type="hidden" name="back" value="<?= e($back) ?>">
-                <button type="submit" class="btn btn--ghost btn--sm"><?= icon('check') ?> Tout marquer comme lu</button>
-            </form>
-        <?php endif; ?>
+        <form method="post" class="inline-form" data-read-all<?= $counts['unread'] ? '' : ' hidden' ?>>
+            <?= csrf_field() ?>
+            <input type="hidden" name="op" value="read_all">
+            <input type="hidden" name="back" value="<?= e($back) ?>">
+            <button type="submit" class="btn btn--ghost btn--sm"><?= icon('check') ?> Tout marquer comme lu</button>
+        </form>
     </div>
 </div>
 
-<section class="panel">
-    <?php if (!$rows): ?>
-        <p class="empty"><?= $q !== '' ? 'Aucun message ne correspond à cette recherche.' : ($filter === 'all' ? 'Aucun message reçu via le formulaire de contact.' : 'Aucun message dans cette catégorie.') ?></p>
-    <?php else: ?>
-        <div class="table-wrap">
-            <table class="table table--hover table--stack mail-table">
-                <thead><tr><th>Expéditeur</th><th>Sujet</th><th>Reçu le</th><th>Statut</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr></thead>
-                <tbody>
-                <?php foreach ($rows as $m): $mid = (int) $m['id']; ?>
-                    <tr class="<?= $m['status'] === 'unread' ? 'is-unread' : '' ?>">
-                        <td data-label="Expéditeur"><span class="cell-stack">
-                            <a href="messages.php?id=<?= $mid ?>" class="link-strong"><?= e($m['sender_name']) ?></a>
-                            <small class="cell-sub"><?= e($m['sender_email']) ?></small>
-                        </span></td>
-                        <td data-label="Sujet"><span class="cell-stack">
-                            <a href="messages.php?id=<?= $mid ?>" class="mail-table__subject"><?= e($m['subject']) ?></a>
-                            <small class="cell-sub mail-table__excerpt"><?= e(mb_strimwidth(preg_replace('/\s+/', ' ', $m['message']), 0, 110, '…')) ?></small>
-                        </span></td>
-                        <td data-label="Reçu le"><?= e(fdate($m['created_at'], true)) ?></td>
-                        <td data-label="Statut"><?= badge($m['status'], MESSAGE_STATUSES) ?></td>
-                        <td class="actions mail-table__actions">
-                            <a href="messages.php?id=<?= $mid ?>" class="icon-btn" title="Lire le message"><?= icon('eye') ?><span class="visually-hidden">Lire</span></a>
-                            <?php if ($m['status'] === 'unread'): ?>
-                                <?= message_action($mid, 'read', 'Marquer comme lu', 'check', $back, 'icon-btn') ?>
-                            <?php endif; ?>
-                            <?= $m['status'] === 'archived'
-                                ? message_action($mid, 'unarchive', 'Désarchiver', 'inbox', $back, 'icon-btn')
-                                : message_action($mid, 'archive', 'Archiver', 'archive', $back, 'icon-btn') ?>
-                            <?= message_action($mid, 'delete', 'Supprimer', 'trash', $back, 'icon-btn icon-btn--danger',
-                                'Supprimer définitivement le message de ' . $m['sender_name'] . ' ?') ?>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-        <?= pagination($total, $page, $perPage, array_filter(['f' => $filter === 'all' ? '' : $filter, 'q' => $q])) ?>
-    <?php endif; ?>
+<?php
+// Nouveaux messages ajoutés en direct seulement là où ils apparaîtraient : 1re page de « Tous » ou « Non lus », sans recherche
+$live = $page === 1 && $q === '' && in_array($filter, ['all', 'unread'], true);
+?>
+<section class="panel"<?= $live ? ' data-messages-live data-back="' . e($back) . '"' : '' ?>>
+    <p class="empty" data-messages-empty<?= $rows ? ' hidden' : '' ?>><?= $q !== '' ? 'Aucun message ne correspond à cette recherche.' : ($filter === 'all' ? 'Aucun message reçu via le formulaire de contact.' : 'Aucun message dans cette catégorie.') ?></p>
+    <div class="table-wrap" data-messages-table<?= $rows ? '' : ' hidden' ?>>
+        <table class="table table--hover table--stack mail-table">
+            <thead><tr><th>Expéditeur</th><th>Sujet</th><th>Reçu le</th><th>Statut</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr></thead>
+            <tbody data-messages-list>
+            <?php foreach ($rows as $m) { echo message_row($m, $back); } ?>
+            </tbody>
+        </table>
+    </div>
+    <?= pagination($total, $page, $perPage, array_filter(['f' => $filter === 'all' ? '' : $filter, 'q' => $q])) ?>
 </section>
 
 <?php dash_footer(); ?>

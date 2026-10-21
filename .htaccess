@@ -89,6 +89,14 @@ ServerSignature Off
     Header always unset X-Powered-By
 </IfModule>
 
+# Application installable du Dashboard : le service worker et le manifeste sont toujours revérifiés
+# (sinon la mise en cache d'un mois des scripts empêcherait les mises à jour de l'application installée)
+<IfModule mod_headers.c>
+    <FilesMatch "^(sw\.js|manifest\.webmanifest)$">
+        Header set Cache-Control "no-cache"
+    </FilesMatch>
+</IfModule>
+
 
 # --------------------------------------------------------------------------
 # 5. Compression (Brotli si disponible, sinon GZIP)

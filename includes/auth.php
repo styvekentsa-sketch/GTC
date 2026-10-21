@@ -71,6 +71,12 @@ function auth_session_start(): void
             return;
         }
     }
+    // Requête de fond (actualisation automatique, ex. dashboard/messages-api.php) : la session est vérifiée,
+    // mais elle n'est ni prolongée (un onglet resté ouvert ne doit pas empêcher la déconnexion après
+    // 30 min d'inactivité) ni renouvelée (évite les conflits avec les pages chargées en même temps).
+    if (defined('GTC_PASSIVE_REQUEST') && GTC_PASSIVE_REQUEST) {
+        return;
+    }
     $_SESSION['last_activity'] = $now;
 
     // Régénération périodique de l'identifiant (anti-fixation)

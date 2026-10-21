@@ -126,7 +126,7 @@ if (!function_exists('e')) {
 <header class="site-header" id="site-header">
     <div class="container site-header__inner">
         <a href="<?= e($root) ?>index.php" class="logo" aria-label="<?= e(GTC_NAME) ?> — Accueil">
-            <img class="logo__img" src="<?= e($root) ?>assets/img/logo-gtc.svg" alt="" width="91" height="50">
+            <img class="logo__img" src="<?= e($root) ?>assets/img/logo-gtc.svg" alt="" width="95" height="50">
             <span class="logo__text">
                 <span class="logo__name">Global Trading</span>
                 <span class="logo__sub">Corporation</span>

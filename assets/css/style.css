@@ -468,6 +468,7 @@ p + p {
 /* Pied de page (fond sombre) : logo affiché sans fond */
 .logo--light .logo__img {
   height: 54px;
+  border-radius: 8px;   /* fond blanc du logo : pastille arrondie sur le pied de page sombre */
 }
 
 .logo--light .logo__name {
