@@ -89,7 +89,7 @@ dash_header('Tableau de bord', 'index');
     <article class="stat">
         <span class="stat__icon stat__icon--gold"><?= icon('receipt') ?></span>
         <div>
-            <p class="stat__label">Factures du jour</p>
+            <p class="stat__label">Reçus du jour</p>
             <p class="stat__value"><?= $summary['invoices_today'] ?></p>
             <p class="stat__note"><a href="invoices.php">Voir les dernières transactions</a></p>
         </div>
@@ -99,7 +99,7 @@ dash_header('Tableau de bord', 'index');
 <nav class="quick-links" aria-label="Accès rapides">
     <a href="invoices.php" class="quick-link quick-link--primary">
         <span class="quick-link__icon"><?= icon('file') ?></span>
-        <span class="quick-link__text"><strong>Nouveau bordereau</strong><small>Créer et imprimer une facture</small></span>
+        <span class="quick-link__text"><strong>Nouveau reçu de caisse</strong><small>Créer et imprimer un reçu</small></span>
         <?= icon('arrow') ?>
     </a>
     <?php if (is_admin()): ?>
@@ -124,7 +124,7 @@ dash_header('Tableau de bord', 'index');
     <article class="stat">
         <span class="stat__icon stat__icon--blue"><?= icon('file') ?></span>
         <div>
-            <p class="stat__label">Factures ce mois</p>
+            <p class="stat__label">Reçus ce mois</p>
             <p class="stat__value"><?= $stats['invoices_month'] ?></p>
         </div>
     </article>
@@ -158,13 +158,13 @@ dash_header('Tableau de bord', 'index');
     <!-- ==================== GRAPHIQUE ==================== -->
     <section class="panel">
         <header class="panel__head">
-            <h2 class="panel__title">Factures sur 6 mois</h2>
+            <h2 class="panel__title">Reçus de caisse sur 6 mois</h2>
             <div class="legend">
-                <span class="legend__item"><span class="legend__dot legend__dot--total"></span>Émises</span>
-                <span class="legend__item"><span class="legend__dot legend__dot--paid"></span>Payées</span>
+                <span class="legend__item"><span class="legend__dot legend__dot--total"></span>Émis</span>
+                <span class="legend__item"><span class="legend__dot legend__dot--paid"></span>Payés</span>
             </div>
         </header>
-        <div class="chart" role="img" aria-label="Nombre de factures émises et payées par mois sur les 6 derniers mois">
+        <div class="chart" role="img" aria-label="Nombre de reçus émis et payés par mois sur les 6 derniers mois">
             <?php foreach ($months as $key => $m): ?>
                 <div class="chart__col">
                     <div class="chart__bars">
@@ -205,14 +205,14 @@ dash_header('Tableau de bord', 'index');
     </section>
 </div>
 
-<!-- ==================== DERNIÈRES FACTURES ==================== -->
+<!-- ==================== DERNIERS REÇUS DE CAISSE ==================== -->
 <section class="panel">
     <header class="panel__head">
-        <h2 class="panel__title">Dernières factures</h2>
-        <a href="invoices.php" class="panel__link">Toutes les factures</a>
+        <h2 class="panel__title">Derniers reçus de caisse</h2>
+        <a href="invoices.php" class="panel__link">Tous les reçus</a>
     </header>
     <?php if (!$recentInvoices): ?>
-        <p class="empty">Aucune facture pour le moment. <a href="invoices.php">Créer la première facture</a></p>
+        <p class="empty">Aucun reçu de caisse pour le moment. <a href="invoices.php">Créer le premier reçu</a></p>
     <?php else: ?>
         <div class="table-wrap">
             <table class="table">

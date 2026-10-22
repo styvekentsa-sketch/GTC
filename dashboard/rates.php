@@ -75,7 +75,7 @@ if (is_post()) {
             $changed = company_rates_save($values, (int) $user['id']);
             settings_save(['market_margin_percent' => (string) round($margin, 2), 'rates_updated' => date('Y-m-d')]);
             flash('success', $changed
-                ? "{$changed} taux mis à jour et appliqués à tout le site : simulateur public, simulateur avancé et factures."
+                ? "{$changed} taux mis à jour et appliqués à tout le site : simulateur public, simulateur avancé et reçus de caisse."
                 : 'Aucun taux modifié.');
             redirect('rates.php');
         }
@@ -134,7 +134,7 @@ dash_header('Taux de change', 'rates');
             <h2 class="panel__title"><?= icon('exchange') ?> Grille des taux de l'entreprise</h2>
             <p class="cell-sub">
                 Dernière modification : <?= e(company_rates_updated_label()) ?><?= $updated['by'] ? ' par ' . e($updated['by']) : '' ?>
-                · appliquée au simulateur du site, au simulateur avancé et aux factures.
+                · appliquée au simulateur du site, au simulateur avancé et aux reçus de caisse.
             </p>
         </div>
     </header>

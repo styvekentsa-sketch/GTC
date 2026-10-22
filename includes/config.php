@@ -51,8 +51,24 @@ define('GTC_GEO_LNG', '');
 
 // Mentions légales des factures : à compléter avec les numéros officiels de l'entreprise.
 // Laissés vides, ils ne sont pas affichés.
-define('GTC_RCCM', '');   // Registre du Commerce et du Crédit Mobilier, ex. RC/DLA/2020/B/xxxx
-define('GTC_NIU', '');    // Numéro d'Identifiant Unique (impôts)
+define('GTC_RCCM', 'RC/DLA/2019/B/2990');    // Registre du Commerce et du Crédit Mobilier
+define('GTC_NIU', 'M061912787291Z');         // Numéro d'Identifiant Unique / N° de contribuable (impôts)
+define('GTC_CNPS', '356-0014221-000-E');     // N° matricule CNPS (employeur)
+
+// En-tête officiel des factures commerciales (dashboard/print-commercial-invoice.php), d'après les documents de la société
+const GTC_ACTIVITIES = [
+    "Transfert d'Argent", 'Transit', "Centrale d'achat", 'Exchange',
+    'Import/Export', 'Consignation', 'Négoce', 'Agent Maritime',
+];
+const GTC_BANK = [
+    'name'        => 'Afriland First Bank',
+    'bank_code'   => '10005',
+    'branch_code' => '00061',
+    'account'     => '07275701001-27',
+];
+define('GTC_PO_BOX', 'BP : 1575 Douala-Bonapriso');
+// Site indiqué sur les documents officiels (le site actuel est GTC_WEBSITE : vérifier lequel imprimer)
+define('GTC_OFFICIAL_WEBSITE', 'globaltradingcorporation.com');
 
 // Pages légales (dossier legal/) : à compléter. Une information laissée vide n'est pas affichée.
 define('GTC_LEGAL_FORM', '');            // forme juridique et capital, ex. « SARL au capital de 1 000 000 FCFA »

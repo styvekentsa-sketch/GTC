@@ -278,7 +278,7 @@ if (is_post()) {
                 $values['company_logo'] = '';
             }
             settings_save($values);
-            flash('success', 'Coordonnées de l\'entreprise enregistrées : elles figurent désormais sur les factures.');
+            flash('success', 'Coordonnées de l\'entreprise enregistrées : elles figurent désormais sur les reçus de caisse.');
             redirect('settings.php#entreprise');
         }
     }
@@ -590,7 +590,7 @@ dash_header('Paramètres', 'settings');
             <input type="hidden" name="MAX_FILE_SIZE" value="<?= LOGO_MAX_BYTES ?>">
             <header class="panel__head">
                 <h2 class="panel__title">Coordonnées de l'agence</h2>
-                <span class="cell-sub">Reprises automatiquement sur les factures imprimées</span>
+                <span class="cell-sub">Reprises automatiquement sur les reçus de caisse imprimés</span>
             </header>
             <div class="form-grid form-grid--2">
                 <div class="field">
@@ -627,15 +627,15 @@ dash_header('Paramètres', 'settings');
                     <label for="c-niu">NIU (Numéro d'Identifiant Unique)</label>
                     <input id="c-niu" name="company_niu" maxlength="20" autocomplete="off" spellcheck="false" placeholder="M012345678901A"
                            style="text-transform: uppercase" value="<?= $val('company_niu', $s['company_niu']) ?>"<?= $inv('company_niu') ?>>
-                    <small class="field__hint">Imprimé automatiquement sur toutes les factures, sous l'adresse et le téléphone.</small>
+                    <small class="field__hint">Imprimé automatiquement sur tous les reçus de caisse, sous l'adresse et le téléphone.</small>
                     <?= $err('company_niu') ?>
                 </div>
             </div>
 
             <div class="field">
-                <label for="c-logo">Logo des factures (PNG ou JPG, 2 Mo max)</label>
+                <label for="c-logo">Logo des reçus et factures (PNG ou JPG, 2 Mo max)</label>
                 <div class="logo-current">
-                    <img src="<?= e(settings_logo_url('../')) ?>" alt="Logo actuel des factures" height="56">
+                    <img src="<?= e(settings_logo_url('../')) ?>" alt="Logo actuel des reçus et factures" height="56">
                     <?php if ($s['company_logo'] !== ''): ?>
                         <label class="check"><input type="checkbox" name="remove_logo"> Revenir au logo GTC par défaut</label>
                     <?php else: ?>
@@ -648,7 +648,7 @@ dash_header('Paramètres', 'settings');
 
             <div class="form-actions">
                 <button type="submit" class="btn btn--primary"><?= icon('check') ?> Enregistrer</button>
-                <a href="print-invoice.php?id=<?= (int) db_value('SELECT MAX(id) FROM invoices') ?>&amp;autoprint=0" class="btn btn--ghost" target="_blank" rel="noopener"><?= icon('eye') ?> Aperçu d'une facture</a>
+                <a href="print-invoice.php?id=<?= (int) db_value('SELECT MAX(id) FROM invoices') ?>&amp;autoprint=0" class="btn btn--ghost" target="_blank" rel="noopener"><?= icon('eye') ?> Aperçu d'un reçu</a>
             </div>
         </form>
     </section>
@@ -662,7 +662,7 @@ dash_header('Paramètres', 'settings');
             <header class="panel__head">
                 <div>
                     <h2 class="panel__title">Taux de change de l'entreprise</h2>
-                    <span class="cell-sub">Mis à jour le <?= e(company_rates_updated_label()) ?> · appliqués au site, aux simulateurs et aux factures</span>
+                    <span class="cell-sub">Mis à jour le <?= e(company_rates_updated_label()) ?> · appliqués au site, aux simulateurs et aux reçus de caisse</span>
                 </div>
                 <a href="rates.php" class="btn btn--primary btn--sm"><?= icon('exchange') ?> <?= $canCompany ? 'Gérer la grille des taux' : 'Voir la grille' ?></a>
             </header>
@@ -730,7 +730,7 @@ dash_header('Paramètres', 'settings');
 
             <section class="panel">
                 <h2 class="panel__title">Sauvegarde de la base de données</h2>
-                <p class="page-intro">Télécharge un fichier <code>.sql</code> contenant la structure et toutes les données : factures, comptes, équipe, messages, paramètres.</p>
+                <p class="page-intro">Télécharge un fichier <code>.sql</code> contenant la structure et toutes les données : reçus de caisse, factures, comptes, équipe, messages, paramètres.</p>
                 <p class="help-text"><?= icon('alert') ?> Fichier confidentiel (il contient les empreintes des mots de passe) : conservez-le hors du serveur, en lieu sûr.</p>
                 <form method="post" class="form-actions">
                     <?= csrf_field() ?>
@@ -739,7 +739,7 @@ dash_header('Paramètres', 'settings');
                 </form>
                 <dl class="detail-list settings__sysinfo">
                     <div><dt>Moteur</dt><dd><?= DB_DRIVER === 'mysql' ? 'MySQL' : 'SQLite' ?></dd></div>
-                    <div><dt>Factures enregistrées</dt><dd><?= (int) db_value('SELECT COUNT(*) FROM invoices') ?></dd></div>
+                    <div><dt>Reçus de caisse enregistrés</dt><dd><?= (int) db_value('SELECT COUNT(*) FROM invoices') ?></dd></div>
                     <div><dt>Comptes</dt><dd><?= (int) db_value('SELECT COUNT(*) FROM users') ?></dd></div>
                     <div><dt>PHP</dt><dd><?= e(PHP_VERSION) ?></dd></div>
                 </dl>
@@ -751,7 +751,7 @@ dash_header('Paramètres', 'settings');
             <section class="panel">
                 <header class="panel__head">
                     <h2 class="panel__title">Imprimantes réseau de l'agence</h2>
-                    <span class="cell-sub">Proposées dans « Imprimante de sortie » à la création d'une facture</span>
+                    <span class="cell-sub">Proposées dans « Imprimante de sortie » à la création d'un reçu</span>
                 </header>
                 <?php if (!$printers): ?>
                     <p class="empty">Aucune imprimante enregistrée : ajoutez la première avec le formulaire.</p>
@@ -810,7 +810,7 @@ dash_header('Paramètres', 'settings');
                         </table>
                     </div>
                 <?php endif; ?>
-                <p class="help-text"><?= icon('alert') ?> Le format de papier de l'imprimante choisie est appliqué automatiquement à la facture. Avec l'« envoi direct », le serveur transmet la facture (exemplaire client + exemplaire caisse) au périphérique sans boîte de dialogue ; sinon, l'agent confirme l'imprimante dans la fenêtre d'impression du navigateur.</p>
+                <p class="help-text"><?= icon('alert') ?> Le format de papier de l'imprimante choisie est appliqué automatiquement au reçu. Avec l'« envoi direct », le serveur transmet le reçu (exemplaire client + exemplaire caisse) au périphérique sans boîte de dialogue ; sinon, l'agent confirme l'imprimante dans la fenêtre d'impression du navigateur.</p>
             </section>
 
             <form method="post" action="settings.php<?= $prnForm['id'] ? '?edit=' . (int) $prnForm['id'] : '' ?>#systeme" class="panel form" novalidate>
@@ -835,7 +835,7 @@ dash_header('Paramètres', 'settings');
                             <option value="<?= e($key) ?>" <?= $prnForm['paper_format'] === $key ? 'selected' : '' ?>><?= e($label) ?></option>
                         <?php endforeach; ?>
                     </select>
-                    <small class="field__hint">Mise en page appliquée aux factures envoyées vers cette imprimante.</small>
+                    <small class="field__hint">Mise en page appliquée aux reçus envoyés vers cette imprimante.</small>
                     <?= $err('paper_format') ?>
                 </div>
                 <div class="form-grid form-grid--2">
@@ -887,7 +887,7 @@ dash_header('Paramètres', 'settings');
                 <div class="field">
                     <label for="scan-subnet">Sous-réseau de l'agence</label>
                     <input id="scan-subnet" name="printer_scan_subnet" maxlength="18" placeholder="<?= e($scanHint) ?>" value="<?= $val('printer_scan_subnet', $s['printer_scan_subnet']) ?>"<?= $inv('printer_scan_subnet') ?>>
-                    <small class="field__hint">Laissez vide pour désactiver. Utilisé aussi par le bouton « Actualiser / Détecter » des factures (résultat conservé 2 minutes).</small>
+                    <small class="field__hint">Laissez vide pour désactiver. Utilisé aussi par le bouton « Actualiser / Détecter » des reçus (résultat conservé 2 minutes).</small>
                     <?= $err('printer_scan_subnet') ?>
                 </div>
                 <button type="submit" class="btn btn--primary"><?= icon('refresh') ?> Détecter maintenant</button>

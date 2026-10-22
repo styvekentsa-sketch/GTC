@@ -60,7 +60,7 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
-    <title><?= $inv ? e($inv['invoice_number']) . ' — ' : 'Facture introuvable — ' ?><?= e($company['company_name']) ?></title>
+    <title><?= $inv ? e($inv['invoice_number']) . ' — ' : 'Reçu introuvable — ' ?><?= e($company['company_name']) ?></title>
     <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= e(asset_url('assets/css/custom-select.css', '../')) ?>">
@@ -71,7 +71,7 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
 
 <!-- ==================== BARRE D'OUTILS (écran uniquement) ==================== -->
 <nav class="print-toolbar" aria-label="Actions"<?= $inv && $printers ? ' data-printer-picker data-compact data-api="printers-api.php"' : '' ?>>
-    <a href="invoices.php" class="pt-btn" data-href="invoices.php"><?= icon('arrow-left') ?> Retour aux factures</a>
+    <a href="invoices.php" class="pt-btn" data-href="invoices.php"><?= icon('arrow-left') ?> Retour aux reçus</a>
     <?php if ($inv): ?>
         <div class="pt-group" role="group" aria-label="Format de papier">
             <a href="<?= e($formatUrl('a4')) ?>" class="pt-btn<?= $format === 'a4' ? ' is-active' : '' ?>">A4</a>
@@ -117,10 +117,10 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
     <!-- ==================== FACTURE INTROUVABLE ==================== -->
     <main class="receipt receipt--error" role="alert">
         <p class="receipt__label">Erreur</p>
-        <h1 class="receipt__number">Facture introuvable</h1>
-        <p>La facture demandée n'existe pas ou a été supprimée<?= $id > 0 ? ' (référence n° ' . $id . ')' : '' ?>.</p>
-        <p>Vérifiez le lien ou retrouvez-la dans la liste des factures.</p>
-        <p><a href="invoices.php?action=list" class="pt-btn pt-btn--primary">Voir toutes les factures</a></p>
+        <h1 class="receipt__number">Reçu introuvable</h1>
+        <p>Le reçu demandé n'existe pas ou a été supprimée<?= $id > 0 ? ' (référence n° ' . $id . ')' : '' ?>.</p>
+        <p>Vérifiez le lien ou retrouvez-le dans la liste des reçus.</p>
+        <p><a href="invoices.php?action=list" class="pt-btn pt-btn--primary">Voir tous les reçus</a></p>
     </main>
 <?php else: ?>
     <?php
@@ -151,7 +151,7 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
             <!-- Informations de la transaction -->
             <section class="receipt__ref">
                 <div>
-                    <p class="receipt__label">Facture — Bordereau de transaction</p>
+                    <p class="receipt__label">Reçu de caisse</p>
                     <p class="receipt__number"><?= e($inv['invoice_number']) ?></p>
                 </div>
                 <dl class="receipt__meta">
@@ -194,7 +194,7 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
             <footer class="receipt__foot">
                 <p class="receipt__thanks"><?= $copy === 'caisse'
                     ? 'Exemplaire caisse — à classer avec les pièces comptables du jour.'
-                    : 'Merci pour votre confiance. Gardez ce bordereau comme justificatif.' ?></p>
+                    : 'Merci pour votre confiance. Gardez ce reçu comme justificatif.' ?></p>
                 <p>Ce document atteste la transaction réalisée à la date indiquée au taux confirmé lors de l'opération.
                    <?= e($company['company_name']) ?> — <?= e($company['company_address']) ?>.<?= $legal ? ' ' . e(implode(' · ', $legal)) . '.' : '' ?></p>
                 <p class="receipt__printed">Imprimé le <?= e(date('d/m/Y à H:i')) ?> par <?= e($user['name']) ?></p>
@@ -231,7 +231,7 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
     document.querySelectorAll('[data-autosubmit]').forEach(function (select) {
         select.addEventListener('change', function () { select.form.submit(); });
     });
-    // « Imprimer à nouveau » et « Retour aux factures »
+    // « Imprimer à nouveau » et « Retour aux reçus »
     document.querySelectorAll('[data-print]').forEach(function (btn) {
         btn.addEventListener('click', function () { window.GTCPrinters.print(); });
     });

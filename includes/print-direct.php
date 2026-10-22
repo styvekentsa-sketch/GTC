@@ -66,7 +66,7 @@ function print_thanks(string $copy): string
 {
     return $copy === 'caisse'
         ? 'Exemplaire caisse — à classer avec les pièces comptables du jour.'
-        : 'Merci pour votre confiance. Gardez ce bordereau comme justificatif.';
+        : 'Merci pour votre confiance. Gardez ce reçu comme justificatif.';
 }
 
 /* ==========================================================================
@@ -287,7 +287,7 @@ function pdf_draw_receipt(GtcPdf $pdf, array $d, ?array $logo, float $x, float $
 
     // Référence, date, agent
     $y += 5;
-    $pdf->text($x, $y, 'FACTURE — BORDEREAU DE TRANSACTION', 6.5, true, 'left', 0.35);
+    $pdf->text($x, $y, 'REÇU DE CAISSE', 6.5, true, 'left', 0.35);
     $pdf->text($x, $y + 5.5, $d['number'], 13, true);
     foreach ([['Émise le', $d['issued']], ['Agent responsable', $d['agent']]] as $i => [$k, $v]) {
         $by = $y + $i * 4.5;
@@ -439,7 +439,7 @@ function invoice_escpos(array $d): string
             }
         }
         $t .= $left . str_repeat('=', $cols) . "\n";
-        $t .= $enc('FACTURE - BORDEREAU DE TRANSACTION') . "\n";
+        $t .= $enc('REÇU DE CAISSE') . "\n";
         $t .= $boldOn . $tallOn . $enc($d['number']) . $normal . $boldOff . "\n";
         $t .= $enc($kv('Émise le', $d['issued']) . $kv('Agent', $d['agent']));
         $t .= str_repeat('-', $cols) . "\n";
@@ -570,6 +570,6 @@ function print_invoice_direct(array $inv, array $printer, array $user): array
     return $error
         ? [false, 'Échec de l\'envoi : ' . $error . '.', $copies]
         : [true, $copies > 1
-            ? "Facture envoyée sur « {$printer['printer_name']} » : exemplaire client + exemplaire caisse."
-            : "Facture envoyée sur « {$printer['printer_name']} ».", $copies];
+            ? "Reçu envoyé sur « {$printer['printer_name']} » : exemplaire client + exemplaire caisse."
+            : "Reçu envoyé sur « {$printer['printer_name']} ».", $copies];
 }

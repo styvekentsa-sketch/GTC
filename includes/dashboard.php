@@ -225,7 +225,8 @@ function dash_header(string $title, string $active = ''): void
     if (in_array($user['role'] ?? '', OPERATION_ROLES, true)) {
         $menu = [
             'index'    => ['href' => 'index.php',    'icon' => 'grid',    'label' => 'Tableau de bord'],
-            'invoices' => ['href' => 'invoices.php', 'icon' => 'file',    'label' => 'Factures'],
+            'invoices' => ['href' => 'invoices.php', 'icon' => 'receipt', 'label' => 'Reçus de caisse'],
+            'commercial' => ['href' => 'invoices-list.php', 'icon' => 'file', 'label' => 'Factures'],
             'simulator' => ['href' => 'simulator.php', 'icon' => 'calc',   'label' => 'Simulateur Avancé'],
             'rates'    => ['href' => 'rates.php',    'icon' => 'exchange', 'label' => 'Taux de change'],
             'printing' => ['href' => 'printing.php', 'icon' => 'printer', 'label' => 'Impression réseau'],

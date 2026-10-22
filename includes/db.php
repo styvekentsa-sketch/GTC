@@ -180,6 +180,10 @@ function db_ensure_schema(PDO $pdo): void
         // Anciennes listes figées (ENUM / CHECK) : Dépôt, Retrait, Orange Money… seraient refusés
         db_widen_invoice_lists($pdo);
     }
+    if (!db_table_exists($pdo, 'commercial_invoices')) {
+        // Factures commerciales multi-lignes (dashboard/invoices-list.php), distinctes des reçus de caisse
+        db_install_commercial_invoices($pdo);
+    }
     if (!db_table_exists($pdo, 'exchange_rates')) {
         // Grille des taux de l'entreprise (achat / vente), remplie par includes/company_rates.php
         db_install_company_rates($pdo);
@@ -747,6 +751,67 @@ function db_widen_invoice_lists(PDO $pdo): void
         throw $e;
     } finally {
         $pdo->exec('PRAGMA foreign_keys = ON');
+    }
+}
+
+/**
+ * Factures commerciales (facture, facture proforma, devis) : en-tête + lignes d'articles.
+ * Les montants sont recalculés côté serveur à chaque enregistrement (jamais repris tels quels du navigateur).
+ * Numéro unique par type et par année : FAC-2026-0001, PRO-2026-0001, DEV-2026-0001.
+ */
+function db_install_commercial_invoices(PDO $pdo): void
+{
+    ['pk' => $pk, 'fk' => $fk, 'dt' => $dt, 'money' => $money, 'suffix' => $suffix] = db_types();
+    $mysql  = DB_DRIVER === 'mysql';
+    $qty    = $mysql ? 'DECIMAL(15,3)' : 'NUMERIC';
+    $rate   = $mysql ? 'DECIMAL(5,2)' : 'NUMERIC';
+    $ts     = $mysql ? 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' : 'TEXT DEFAULT CURRENT_TIMESTAMP';
+    $type   = db_enum_type('doc_type', ['invoice', 'proforma', 'quote']);
+    $status = db_enum_type('status', ['issued', 'paid', 'cancelled']);
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS commercial_invoices (
+            id {$pk},
+            invoice_number VARCHAR(30) NOT NULL UNIQUE,
+            doc_type {$type} NOT NULL DEFAULT 'invoice',
+            status {$status} NOT NULL DEFAULT 'issued',
+            client_name VARCHAR(150) NOT NULL,
+            client_phone VARCHAR(50) NULL,
+            client_email VARCHAR(150) NULL,
+            client_address VARCHAR(255) NULL,
+            client_niu VARCHAR(30) NULL,
+            issue_date DATE NOT NULL,
+            due_date DATE NULL,
+            currency VARCHAR(10) NOT NULL DEFAULT 'XAF',
+            tax_rate {$rate} NOT NULL DEFAULT 0,
+            subtotal {$money} NOT NULL DEFAULT 0,
+            tax_amount {$money} NOT NULL DEFAULT 0,
+            total {$money} NOT NULL DEFAULT 0,
+            notes TEXT NULL,
+            created_by {$fk} NULL,
+            created_by_name VARCHAR(100) NULL,
+            created_at {$ts},
+            updated_at {$dt} NULL
+        ){$suffix}");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS commercial_invoice_items (
+            id {$pk},
+            invoice_id {$fk} NOT NULL,
+            position INT NOT NULL DEFAULT 1,
+            description VARCHAR(500) NOT NULL,
+            quantity {$qty} NOT NULL DEFAULT 1,
+            unit_price {$money} NOT NULL DEFAULT 0,
+            line_total {$money} NOT NULL DEFAULT 0,
+            FOREIGN KEY (invoice_id) REFERENCES commercial_invoices(id) ON DELETE CASCADE
+        ){$suffix}");
+    foreach ([
+        'CREATE INDEX idx_cinv_date ON commercial_invoices (issue_date)',
+        'CREATE INDEX idx_cinv_client ON commercial_invoices (client_name)',
+        'CREATE INDEX idx_citems_invoice ON commercial_invoice_items (invoice_id, position)',
+    ] as $sql) {
+        try {
+            $pdo->exec($sql);
+        } catch (PDOException) {
+            // index déjà présent
+        }
     }
 }
 

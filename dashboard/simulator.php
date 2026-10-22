@@ -127,9 +127,9 @@ dash_header('Simulateur Avancé', 'simulator');
                 <strong id="r-final">—</strong>
             </div>
             <a href="invoices.php" class="btn btn--primary btn--lg btn--block" id="sim-to-invoice" aria-disabled="true">
-                <?= icon('file') ?> Créer le Bordereau
+                <?= icon('file') ?> Créer le reçu
             </a>
-            <p class="field__hint sim-result__hint">Ouvre la saisie de facture avec tous les champs pré-remplis.</p>
+            <p class="field__hint sim-result__hint">Ouvre la saisie du reçu de caisse avec tous les champs pré-remplis.</p>
         </aside>
     </div>
 

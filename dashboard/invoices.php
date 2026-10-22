@@ -3,7 +3,7 @@
  * Factures / bordereaux de transaction.
  *
  *   (défaut)      Saisie rapide + 10 dernières transactions
- *   ?action=list  Toutes les factures (recherche, filtres, pagination)
+ *   ?action=list  Tous les reçus (recherche, filtres, pagination)
  *   ?action=view  Détail d'une facture
  *
  * Montant à recevoir = (montant versé − commission) × taux (taux « 1 source = X cible »)
@@ -147,7 +147,7 @@ if (is_post()) {
                          (int) $_SESSION['user_id'], (string) $_SESSION['user_name'], db_now()]
                     );
                     $newId = (int) db()->lastInsertId();
-                    flash('success', "Facture {$number} enregistrée.");
+                    flash('success', "Reçu {$number} enregistré.");
                     redirect('print-invoice.php?' . http_build_query(array_filter(['id' => $newId, 'printer_id' => $form['printer_id'], 'autoprint' => 1])));
                 } catch (PDOException $ex) {
                     if ($try === 2) {
@@ -171,7 +171,7 @@ if (is_post()) {
     if ($op === 'delete') {
         require_role('admin');
         db_query('DELETE FROM invoices WHERE id = ?', [(int) post('id')]);
-        flash('success', 'Facture supprimée.');
+        flash('success', 'Reçu supprimé.');
         redirect('invoices.php?action=list');
     }
 }
@@ -181,7 +181,7 @@ function invoice_row(array $inv): string
 {
     ob_start(); ?>
     <tr>
-        <td data-label="N° facture">
+        <td data-label="N° reçu">
             <a href="invoices.php?action=view&amp;id=<?= (int) $inv['id'] ?>" class="link-strong"><?= e($inv['invoice_number']) ?></a>
         </td>
         <td data-label="Date"><?= e(fdate($inv['created_at'] ?: $inv['issue_date'], true)) ?></td>
@@ -203,7 +203,7 @@ function invoice_row(array $inv): string
     return (string) ob_get_clean();
 }
 
-const INVOICE_TABLE_HEAD = '<thead><tr><th>N° facture</th><th>Date</th><th>Client</th><th>Opération</th><th class="num">Montants</th><th>Agent</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr></thead>';
+const INVOICE_TABLE_HEAD = '<thead><tr><th>N° reçu</th><th>Date</th><th>Client</th><th>Opération</th><th class="num">Montants</th><th>Agent</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr></thead>';
 
 /* ==========================================================================
    Vue : détail
@@ -212,14 +212,14 @@ const INVOICE_TABLE_HEAD = '<thead><tr><th>N° facture</th><th>Date</th><th>Clie
 if ($action === 'view') {
     $inv = db_one('SELECT * FROM invoices WHERE id = ?', [$id]);
     if (!$inv) {
-        flash('error', 'Facture introuvable.');
+        flash('error', 'Reçu introuvable.');
         redirect('invoices.php');
     }
 
-    dash_header('Facture ' . $inv['invoice_number'], 'invoices');
+    dash_header('Reçu de caisse ' . $inv['invoice_number'], 'invoices');
     ?>
     <div class="toolbar">
-        <a href="invoices.php?action=list" class="btn btn--ghost"><?= icon('arrow-left') ?> Toutes les factures</a>
+        <a href="invoices.php?action=list" class="btn btn--ghost"><?= icon('arrow-left') ?> Tous les reçus</a>
         <div class="toolbar__actions">
             <form method="post" class="inline-form">
                 <?= csrf_field() ?>
@@ -273,8 +273,8 @@ if ($action === 'view') {
             <?= csrf_field() ?>
             <input type="hidden" name="op" value="delete">
             <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
-            <button type="submit" class="btn btn--danger btn--sm" data-confirm="Supprimer définitivement la facture <?= e($inv['invoice_number']) ?> ?">
-                <?= icon('trash') ?> Supprimer la facture
+            <button type="submit" class="btn btn--danger btn--sm" data-confirm="Supprimer définitivement le reçu <?= e($inv['invoice_number']) ?> ?">
+                <?= icon('trash') ?> Supprimer le reçu
             </button>
         </form>
     <?php endif; ?>
@@ -309,7 +309,7 @@ if ($action === 'list') {
     $offset   = ($page - 1) * $perPage;
     $rows     = db_all("SELECT * FROM invoices {$whereSql} ORDER BY id DESC LIMIT {$perPage} OFFSET {$offset}", $params);
 
-    dash_header('Toutes les factures', 'invoices');
+    dash_header('Tous les reçus', 'invoices');
     ?>
     <div class="toolbar">
         <form method="get" class="filters" role="search">
@@ -328,12 +328,12 @@ if ($action === 'list') {
             </select>
             <?php if ($q !== '' || $type !== ''): ?><a href="invoices.php?action=list" class="btn btn--ghost btn--sm">Réinitialiser</a><?php endif; ?>
         </form>
-        <a href="invoices.php" class="btn btn--primary"><?= icon('plus') ?> Nouvelle facture</a>
+        <a href="invoices.php" class="btn btn--primary"><?= icon('plus') ?> Nouveau reçu</a>
     </div>
 
     <section class="panel">
         <?php if (!$rows): ?>
-            <p class="empty">Aucune facture ne correspond à ces critères.</p>
+            <p class="empty">Aucun reçu ne correspond à ces critères.</p>
         <?php else: ?>
             <div class="table-wrap">
                 <table class="table table--hover table--stack"><?= INVOICE_TABLE_HEAD ?><tbody>
@@ -394,13 +394,13 @@ $currencyOptions = function (string $selected): string {
     return $html;
 };
 
-dash_header('Factures', 'invoices');
+dash_header('Reçus de caisse', 'invoices');
 ?>
 
 <?php if ($errors): ?>
     <div class="alert alert--error" role="alert"><?= icon('alert') ?><p>Merci de corriger les champs indiqués.</p></div>
 <?php elseif ($prefilled): ?>
-    <div class="alert alert--success" role="status"><?= icon('calc') ?><p>Facture pré-remplie depuis le simulateur : complétez les informations du client puis enregistrez.</p></div>
+    <div class="alert alert--success" role="status"><?= icon('calc') ?><p>Reçu pré-rempli depuis le simulateur : complétez les informations du client puis enregistrez.</p></div>
 <?php endif; ?>
 
 <!-- ==================== SAISIE RAPIDE ==================== -->
@@ -413,7 +413,7 @@ dash_header('Factures', 'invoices');
     <input type="hidden" name="op" value="save">
 
     <header class="panel__head">
-        <h2 class="panel__title"><?= icon('file') ?> Nouvelle facture</h2>
+        <h2 class="panel__title"><?= icon('file') ?> Nouveau reçu</h2>
         <p class="cell-sub">N° attribué automatiquement · Agent : <strong><?= e($user['name']) ?></strong></p>
     </header>
 
@@ -510,7 +510,7 @@ dash_header('Factures', 'invoices');
                     <option value="Voyage">
                     <option value="Règlement fournisseur">
                 </datalist>
-                <small class="field__hint">Motif de l'opération et/ou nom de la personne qui dépose ou envoie (ex. « Assistance familiale — Jean Mbarga »). Facultatif : « Non spécifié » sur la facture s'il est laissé vide.</small>
+                <small class="field__hint">Motif de l'opération et/ou nom de la personne qui dépose ou envoie (ex. « Assistance familiale — Jean Mbarga »). Facultatif : « Non spécifié » sur le reçu s'il est laissé vide.</small>
                 <?= $err('transaction_reason') ?>
             </div>
         </div>
@@ -543,10 +543,10 @@ dash_header('Factures', 'invoices');
                 </div>
                 <?= $err('printer_id') ?>
             <?php else: ?>
-                <p class="field__hint">Aucune imprimante configurée : la facture sortira sur l'imprimante par défaut du poste<?= is_admin() ? ' (<a href="settings.php#systeme">ajouter une imprimante</a>)' : '' ?>.</p>
+                <p class="field__hint">Aucune imprimante configurée : le reçu sortira sur l'imprimante par défaut du poste<?= is_admin() ? ' (<a href="settings.php#systeme">ajouter une imprimante</a>)' : '' ?>.</p>
             <?php endif; ?>
         </div>
-        <button type="submit" class="btn btn--primary btn--lg"><?= icon('printer') ?> Enregistrer &amp; Imprimer la Facture</button>
+        <button type="submit" class="btn btn--primary btn--lg"><?= icon('printer') ?> Enregistrer &amp; Imprimer le reçu</button>
     </div>
 </form>
 
@@ -554,10 +554,10 @@ dash_header('Factures', 'invoices');
 <section class="panel">
     <header class="panel__head">
         <h2 class="panel__title">Dernières transactions</h2>
-        <a href="invoices.php?action=list" class="panel__link">Toutes les factures</a>
+        <a href="invoices.php?action=list" class="panel__link">Tous les reçus</a>
     </header>
     <?php if (!$recent): ?>
-        <p class="empty">Aucune facture enregistrée pour le moment.</p>
+        <p class="empty">Aucun reçu enregistré pour le moment.</p>
     <?php else: ?>
         <div class="table-wrap">
             <table class="table table--hover table--stack"><?= INVOICE_TABLE_HEAD ?><tbody>

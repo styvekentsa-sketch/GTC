@@ -51,7 +51,7 @@ if ($action === 'send') {
     $inv = db_one('SELECT * FROM invoices WHERE id = ?', [(int) post('id')]);
     $printer = printer_find((int) post('printer_id'));
     if (!$inv) {
-        api_reply(404, ['error' => 'Facture introuvable.']);
+        api_reply(404, ['error' => 'Reçu introuvable.']);
     }
     if (!printer_is_direct($printer)) {
         api_reply(422, ['error' => "Cette imprimante n'accepte pas l'envoi direct : utilisez la boîte d'impression du navigateur."]);
@@ -61,7 +61,7 @@ if ($action === 'send') {
     db_query(
         'INSERT INTO print_jobs (title, printer_id, copies, color, duplex, priority, status, notes, requested_by, created_at, updated_at)
          VALUES (?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?)',
-        ['Facture ' . $inv['invoice_number'] . ($copies > 1 ? ' (client + caisse)' : ''), $printer['id'], max(1, $copies),
+        ['Reçu ' . $inv['invoice_number'] . ($copies > 1 ? ' (client + caisse)' : ''), $printer['id'], max(1, $copies),
          'normal', $ok ? 'done' : 'failed', $message, $user['id'], db_now(), db_now()]
     );
     api_reply($ok ? 200 : 502, $ok ? ['ok' => true, 'message' => $message] : ['ok' => false, 'error' => $message]);

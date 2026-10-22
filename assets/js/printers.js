@@ -147,7 +147,7 @@
       printer_id: body.getAttribute('data-printer-id'),
       csrf_token: body.getAttribute('data-csrf')
     });
-    showDirect('pending', 'Envoi de la facture à « ' + body.getAttribute('data-printer') + ' »…');
+    showDirect('pending', 'Envoi du reçu à « ' + body.getAttribute('data-printer') + ' »…');
     fetch(body.getAttribute('data-api'), {
       method: 'POST',
       body: params,
