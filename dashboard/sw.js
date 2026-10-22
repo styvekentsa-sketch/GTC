@@ -6,9 +6,9 @@
  * (données confidentielles, toujours lues en direct sur le serveur) ; seuls la page hors connexion
  * et le logo le sont. Changer VERSION à chaque modification de ce fichier.
  */
-const VERSION = 'gtc-dashboard-v1';
+const VERSION = 'gtc-dashboard-v2';   // v2 : nouveau logo
 const OFFLINE_URL = 'offline.html';
-const PRECACHE = [OFFLINE_URL, '../assets/img/logo-gtc.svg', '../assets/img/app-192.png'];
+const PRECACHE = [OFFLINE_URL, '../assets/img/logo-gtc.png', '../assets/img/app-192.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(VERSION).then((cache) => cache.addAll(PRECACHE)).then(() => self.skipWaiting()));

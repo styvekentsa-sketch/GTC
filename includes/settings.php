@@ -80,5 +80,5 @@ function settings_logo_url(string $prefix = ''): string
     if ($file !== '' && preg_match('/^logo-[a-f0-9]{16}\.(png|jpe?g)$/', $file) && is_file(BRAND_DIR . '/' . $file)) {
         return $prefix . BRAND_URL . '/' . $file . '?v=' . filemtime(BRAND_DIR . '/' . $file);
     }
-    return $prefix . 'assets/img/logo-gtc.svg';
+    return $prefix . 'assets/img/logo-recu.png';   // logo des reçus de caisse (globe GTC)
 }

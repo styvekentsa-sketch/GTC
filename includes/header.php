@@ -126,11 +126,8 @@ if (!function_exists('e')) {
 <header class="site-header" id="site-header">
     <div class="container site-header__inner">
         <a href="<?= e($root) ?>index.php" class="logo" aria-label="<?= e(GTC_NAME) ?> — Accueil">
-            <img class="logo__img" src="<?= e($root) ?>assets/img/logo-gtc.svg" alt="" width="95" height="50">
-            <span class="logo__text">
-                <span class="logo__name">Global Trading</span>
-                <span class="logo__sub">Corporation</span>
-            </span>
+            <!-- Logo officiel (globe + GLOBAL TRADING CORPORATION) : le nom fait partie de l'image -->
+            <img class="logo__img" src="<?= e(asset_url('assets/img/logo-gtc.png', $root)) ?>" alt="<?= e(GTC_NAME) ?>" width="202" height="50">
         </a>
 
         <button class="burger" id="burger" type="button"

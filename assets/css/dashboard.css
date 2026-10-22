@@ -174,25 +174,23 @@ code {
 
 .sidebar__brand {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.25rem 0.5rem 1.5rem;
+  flex-direction: column;   /* logo officiel (horizontal) puis la mention « Dashboard » dessous */
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem 1.25rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .sidebar__logo {
   display: grid;
   place-items: center;
-  flex-shrink: 0;
-  padding: 5px 7px;
-  border-radius: var(--radius-sm);
-  background-color: #fff;
+  flex-shrink: 0;   /* barre latérale sombre : version claire du logo, sans fond (assets/img/logo-gtc-light.png) */
 }
 
 .sidebar__logo img {
   display: block;
   width: auto;
-  height: 32px;
+  height: 38px;   /* logo officiel horizontal (globe + nom) */
 }
 
 .sidebar__name {
@@ -1743,7 +1741,8 @@ body.auth {
 
 .auth-card > * + * { margin-top: 1rem; }
 .auth-card__brand { display: flex; align-items: center; gap: 0.75rem; }
-.auth-card__name { font-weight: 700; color: var(--anthracite); }
+.auth-card__logo { padding: 0; }
+.auth-card__logo img { height: 54px; }
 .auth-card__title { margin-top: 1.75rem; font-size: 1.5rem; }
 .auth-card__subtitle { margin-top: 0.375rem !important; font-size: 0.875rem; color: var(--text-muted); }
 .auth-card .form { margin-top: 1.5rem; }

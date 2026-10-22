@@ -169,7 +169,7 @@ body {
   border-bottom: 2px solid var(--ink);
 }
 
-.receipt__logo { width: 120px; height: auto; flex-shrink: 0; }
+.receipt__logo { width: 70px; height: auto; flex-shrink: 0; }   /* globe GTC (assets/img/logo-recu.png, carré) */
 
 /* « Exemplaire client » / « Exemplaire caisse / archive » */
 .receipt__copy {
@@ -190,6 +190,9 @@ body {
 .receipt__company { color: var(--muted); font-size: 12px; }
 .receipt__niu { color: var(--ink); font-weight: 600; letter-spacing: .02em; }
 .receipt__name { font-size: 18px; font-weight: 700; color: var(--ink); }
+/* Nom de l'entreprise aux couleurs du logo : Global (bleu) Trading (vert) Corporation (bleu) */
+.receipt__brand--blue  { color: #0B4EA2; }
+.receipt__brand--green { color: #009A44; }
 
 .receipt__ref {
   display: flex;
@@ -292,7 +295,7 @@ body {
 }
 
 .receipt-sheet--a4 .receipt__head { gap: 14px; padding-bottom: 6px; }
-.receipt-sheet--a4 .receipt__logo { width: 86px; }
+.receipt-sheet--a4 .receipt__logo { width: 60px; }
 .receipt-sheet--a4 .receipt__name { font-size: 15px; }
 .receipt-sheet--a4 .receipt__company { font-size: 10.5px; line-height: 1.35; }
 .receipt-sheet--a4 .receipt__ref { margin: 7px 0 4px; }
@@ -365,7 +368,7 @@ body {
 
 /* ---------- Format A5 ---------- */
 .print-page--a5 .receipt { width: 148mm; min-height: 0; padding: 9mm 9mm 7mm; font-size: 11.5px; }
-.print-page--a5 .receipt__logo { width: 92px; }
+.print-page--a5 .receipt__logo { width: 56px; }
 .print-page--a5 .receipt__name { font-size: 15px; }
 .print-page--a5 .receipt__company { font-size: 10.5px; }
 .print-page--a5 .receipt__number { font-size: 16px; }
@@ -385,7 +388,7 @@ body {
 }
 
 .print-page--ticket .receipt__head { flex-direction: column; text-align: center; gap: 6px; border-bottom-width: 1px; }
-.print-page--ticket .receipt__logo { width: 90px; }
+.print-page--ticket .receipt__logo { width: 58px; }
 .print-page--ticket .receipt__name { font-size: 14px; }
 .print-page--ticket .receipt__company { font-size: 10px; }
 .print-page--ticket .receipt__ref { flex-direction: column; gap: 6px; margin: 10px 0; }

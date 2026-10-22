@@ -269,8 +269,8 @@ function dash_header(string $title, string $active = ''): void
 
 <aside class="sidebar" id="sidebar" aria-label="Menu du dashboard">
     <div class="sidebar__brand">
-        <span class="sidebar__logo"><img src="../assets/img/logo-gtc.svg" alt="" width="63" height="33"></span>
-        <span class="sidebar__name">Global Trading<small>Dashboard</small></span>
+        <span class="sidebar__logo"><img src="<?= e(asset_url('assets/img/logo-gtc-light.png', '../')) ?>" alt="<?= e(GTC_NAME) ?>" width="166" height="41"></span>
+        <span class="sidebar__name"><small>Dashboard</small></span>
     </div>
 
     <nav class="sidebar__nav">
@@ -397,8 +397,7 @@ function auth_layout_open(string $title, string $subtitle): void
 <body class="auth" data-session="">
 <main class="auth-card">
     <div class="auth-card__brand">
-        <span class="sidebar__logo"><img src="../assets/img/logo-gtc.svg" alt="" width="63" height="33"></span>
-        <span class="auth-card__name">Global Trading Corporation</span>
+        <span class="sidebar__logo auth-card__logo"><img src="<?= e(asset_url('assets/img/logo-gtc.png', '../')) ?>" alt="<?= e(GTC_NAME) ?>" width="218" height="54"></span>
     </div>
     <h1 class="auth-card__title"><?= e($title) ?></h1>
     <p class="auth-card__subtitle"><?= e($subtitle) ?></p>

@@ -15,7 +15,7 @@ require_once __DIR__ . '/dashboard.php';
 require_once __DIR__ . '/settings.php';
 require_once __DIR__ . '/printers.php';
 
-const PRINT_LOGO_FALLBACK = __DIR__ . '/../assets/img/logo-gtc-print.jpg';
+const PRINT_LOGO_FALLBACK = __DIR__ . '/../assets/img/logo-recu-print.jpg';   // logo des reçus de caisse
 
 /* ==========================================================================
    Données de la facture (communes au PDF et au ticket)
@@ -159,13 +159,15 @@ final class GtcPdf
     }
 
     /** Texte sur la ligne de base $y (mm depuis le haut). $gray : 0 noir → 1 blanc. */
-    public function text(float $x, float $y, string $s, float $size, bool $bold = false, string $align = 'left', float $gray = 0): void
+    public function text(float $x, float $y, string $s, float $size, bool $bold = false, string $align = 'left', float $gray = 0, ?array $rgb = null): void
     {
         if ($align !== 'left') {
             $w = $this->width($s, $size, $bold);
             $x -= $align === 'right' ? $w : $w / 2;
         }
-        $this->ops[] = sprintf('BT /%s %s Tf %s g %s %s Td (%s) Tj ET', $bold ? 'F2' : 'F1', self::f($size), self::f($gray),
+        // Couleur : niveau de gris, ou couleur RVB [r, v, b] (0 à 255)
+        $color = $rgb ? sprintf('%s %s %s rg', self::f($rgb[0] / 255), self::f($rgb[1] / 255), self::f($rgb[2] / 255)) : self::f($gray) . ' g';
+        $this->ops[] = sprintf('BT /%s %s Tf %s %s %s Td (%s) Tj ET', $bold ? 'F2' : 'F1', self::f($size), $color,
             self::f($x * self::K), self::f(($this->hMm - $y) * self::K), self::encode($s));
     }
 
@@ -266,13 +268,20 @@ function pdf_draw_receipt(GtcPdf $pdf, array $d, ?array $logo, float $x, float $
     // En-tête : logo, coordonnées, mention d'exemplaire
     $textX = $x;
     if ($logo) {
-        $lh = 15;
-        $lw = $lh * $logo[1] / $logo[2];
-        $pdf->image($logo, $x, $y, $lw, $lh);
+        // Hauteur 15 mm au plus, largeur 42 mm au plus (logo horizontal), centré verticalement dans l'en-tête
+        $ratio = $logo[1] / $logo[2];
+        $lw = min(15 * $ratio, 42);
+        $lh = $lw / $ratio;
+        $pdf->image($logo, $x, $y + (15 - $lh) / 2, $lw, $lh);
         $textX = $x + $lw + 4;
     }
     $badgeW = $label ? $pdf->width(mb_strtoupper($label), 7, true) + 6 : 0;
-    $pdf->text($textX, $y + 4.5, $d['company'], 12, true);
+    // Nom aux couleurs du logo : 1er mot bleu, 2e mot vert, suite en bleu (même rendu que le reçu imprimé)
+    $cx = $textX;
+    foreach (preg_split('/\s+/', trim($d['company'])) as $i => $word) {
+        $pdf->text($cx, $y + 4.5, $word, 12, true, 'left', 0, $i === 1 ? [0, 154, 68] : [11, 78, 162]);
+        $cx += $pdf->width($word . ' ', 12, true);
+    }
     foreach ($d['lines'] as $i => $line) {
         $pdf->text($textX, $y + 8.6 + $i * 3.4, $line, 7.5, false, 'left', 0.3);
     }

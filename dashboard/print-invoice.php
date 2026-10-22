@@ -26,6 +26,20 @@ require_once __DIR__ . '/../includes/print-direct.php';
 $user = require_login();
 require_roles(OPERATION_ROLES);   // pas d'accès pour le rôle Secrétaire / Accueil
 
+/** Nom de l'entreprise aux couleurs du logo : 1er mot bleu, 2e mot vert, suite en bleu (« Global Trading Corporation »). */
+function receipt_brand_name(string $name): string
+{
+    $words = preg_split('/\s+/', trim($name)) ?: [];
+    if (count($words) < 2) {
+        return e($name);
+    }
+    $html = [];
+    foreach ($words as $i => $word) {
+        $html[] = '<span class="receipt__brand--' . ($i === 1 ? 'green' : 'blue') . '">' . e($word) . '</span>';
+    }
+    return implode(' ', $html);
+}
+
 $id      = (int) ($_GET['id'] ?? 0);
 $company = settings_all();
 $auto    = ($_GET['autoprint'] ?? '1') !== '0';
@@ -137,9 +151,9 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
         <article class="receipt<?= $copy ? ' receipt--' . $copy : '' ?>"<?= $copy === 'caisse' ? ' aria-hidden="true"' : '' ?>>
             <!-- En-tête de l'entreprise -->
             <header class="receipt__head">
-                <img class="receipt__logo" src="<?= e(settings_logo_url('../')) ?>" alt="<?= e($company['company_name']) ?>" width="120" height="66">
+                <img class="receipt__logo" src="<?= e(settings_logo_url('../')) ?>" alt="<?= e($company['company_name']) ?>" width="70" height="70">
                 <div class="receipt__company">
-                    <p class="receipt__name"><?= e($company['company_name']) ?></p>
+                    <p class="receipt__name"><?= receipt_brand_name($company['company_name']) ?></p>
                     <p><?= e($company['company_address']) ?></p>
                     <p>Tél. <?= e($company['company_phone']) ?><?= $company['company_phone2'] !== '' ? ' · ' . e($company['company_phone2']) : '' ?></p>
                     <?php if ($niu !== ''): ?><p class="receipt__niu">NIU : <?= e($niu) ?></p><?php endif; ?>

@@ -436,7 +436,7 @@ p + p {
   flex-shrink: 0;
 }
 
-/* Logo GTC (SVG, ratio 710 × 390) */
+/* Logo officiel GTC (assets/img/logo-gtc.png, ratio 871 × 216 : globe + nom) */
 .logo__img {
   display: block;
   width: auto;
@@ -464,11 +464,9 @@ p + p {
   color: var(--color-accent-dark);
 }
 
-/* Variante logo sur fond foncé */
-/* Pied de page (fond sombre) : logo affiché sans fond */
+/* Pied de page (fond sombre) : version claire du logo (assets/img/logo-gtc-light.png), sans fond */
 .logo--light .logo__img {
-  height: 54px;
-  border-radius: 8px;   /* fond blanc du logo : pastille arrondie sur le pied de page sombre */
+  height: 50px;
 }
 
 .logo--light .logo__name {

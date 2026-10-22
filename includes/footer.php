@@ -21,11 +21,7 @@ $legalLinks = [
         <!-- Colonne 1 : Présentation -->
         <div class="site-footer__col">
             <a href="<?= e($root) ?>index.php" class="logo logo--light" data-secret-logo>
-                <img class="logo__img" src="<?= e($root) ?>assets/img/logo-gtc.svg" alt="" width="95" height="50" loading="lazy">
-                <span class="logo__text">
-                    <span class="logo__name">Global Trading</span>
-                    <span class="logo__sub">Corporation</span>
-                </span>
+                <img class="logo__img" src="<?= e(asset_url('assets/img/logo-gtc-light.png', $root)) ?>" alt="<?= e(GTC_NAME) ?>" width="202" height="50" loading="lazy">
             </a>
             <p class="site-footer__about">
                 <?= e(GTC_NAME) ?> vous accompagne dans vos opérations de transfert de fonds
