@@ -184,6 +184,10 @@ function db_ensure_schema(PDO $pdo): void
         // Factures commerciales multi-lignes (dashboard/invoices-list.php), distinctes des reçus de caisse
         db_install_commercial_invoices($pdo);
     }
+    if (!db_column_exists($pdo, 'commercial_invoices', 'columns_json')) {
+        // Tableau personnalisable : colonnes propres à chaque facture, cellules de chaque ligne en JSON
+        db_upgrade_commercial_invoices_flexible($pdo);
+    }
     if (!db_table_exists($pdo, 'exchange_rates')) {
         // Grille des taux de l'entreprise (achat / vente), remplie par includes/company_rates.php
         db_install_company_rates($pdo);
@@ -756,6 +760,9 @@ function db_widen_invoice_lists(PDO $pdo): void
 
 /**
  * Factures commerciales (facture, facture proforma, devis) : en-tête + lignes d'articles.
+ * Tableau personnalisable : columns_json = colonnes de la facture [{key, label, type: text|amount}],
+ * cells_json = cellules de chaque ligne {clé: valeur}. description (1re colonne texte) et line_total (montant)
+ * sont tenus à jour pour la recherche et les totaux.
  * Les montants sont recalculés côté serveur à chaque enregistrement (jamais repris tels quels du navigateur).
  * Numéro unique par type et par année : FAC-2026-0001, PRO-2026-0001, DEV-2026-0001.
  */
@@ -763,7 +770,6 @@ function db_install_commercial_invoices(PDO $pdo): void
 {
     ['pk' => $pk, 'fk' => $fk, 'dt' => $dt, 'money' => $money, 'suffix' => $suffix] = db_types();
     $mysql  = DB_DRIVER === 'mysql';
-    $qty    = $mysql ? 'DECIMAL(15,3)' : 'NUMERIC';
     $rate   = $mysql ? 'DECIMAL(5,2)' : 'NUMERIC';
     $ts     = $mysql ? 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' : 'TEXT DEFAULT CURRENT_TIMESTAMP';
     $type   = db_enum_type('doc_type', ['invoice', 'proforma', 'quote']);
@@ -787,6 +793,7 @@ function db_install_commercial_invoices(PDO $pdo): void
             tax_amount {$money} NOT NULL DEFAULT 0,
             total {$money} NOT NULL DEFAULT 0,
             notes TEXT NULL,
+            columns_json TEXT NULL,
             created_by {$fk} NULL,
             created_by_name VARCHAR(100) NULL,
             created_at {$ts},
@@ -796,10 +803,9 @@ function db_install_commercial_invoices(PDO $pdo): void
             id {$pk},
             invoice_id {$fk} NOT NULL,
             position INT NOT NULL DEFAULT 1,
-            description VARCHAR(500) NOT NULL,
-            quantity {$qty} NOT NULL DEFAULT 1,
-            unit_price {$money} NOT NULL DEFAULT 0,
+            description VARCHAR(500) NOT NULL DEFAULT '',
             line_total {$money} NOT NULL DEFAULT 0,
+            cells_json TEXT NULL,
             FOREIGN KEY (invoice_id) REFERENCES commercial_invoices(id) ON DELETE CASCADE
         ){$suffix}");
     foreach ([
@@ -812,6 +818,31 @@ function db_install_commercial_invoices(PDO $pdo): void
         } catch (PDOException) {
             // index déjà présent
         }
+    }
+}
+
+/**
+ * Factures créées avant le tableau personnalisable (Désignation, Quantité, Prix unitaire, Montant) :
+ * ajout des colonnes JSON, lignes reprises en « Désignation » + « Montant » (quantité et prix unitaire
+ * intégrés au texte lorsqu'ils étaient utiles). Les anciennes colonnes restent, inutilisées.
+ */
+function db_upgrade_commercial_invoices_flexible(PDO $pdo): void
+{
+    $pdo->exec('ALTER TABLE commercial_invoices ADD COLUMN columns_json TEXT NULL');
+    if (!db_column_exists($pdo, 'commercial_invoice_items', 'cells_json')) {
+        $pdo->exec('ALTER TABLE commercial_invoice_items ADD COLUMN cells_json TEXT NULL');
+    }
+    $columns = json_encode([['key' => 'c1', 'label' => 'Désignation', 'type' => 'text'], ['key' => 'amount', 'label' => 'Montant', 'type' => 'amount']], JSON_UNESCAPED_UNICODE);
+    $pdo->prepare('UPDATE commercial_invoices SET columns_json = ? WHERE columns_json IS NULL')->execute([$columns]);
+
+    $hasQty = db_column_exists($pdo, 'commercial_invoice_items', 'quantity');
+    $update = $pdo->prepare('UPDATE commercial_invoice_items SET cells_json = ? WHERE id = ?');
+    foreach ($pdo->query('SELECT * FROM commercial_invoice_items WHERE cells_json IS NULL')->fetchAll(PDO::FETCH_ASSOC) as $item) {
+        $text = (string) $item['description'];
+        if ($hasQty && ((float) $item['quantity'] != 1.0)) {
+            $text .= ' (' . rtrim(rtrim(number_format((float) $item['quantity'], 3, ',', ''), '0'), ',') . ' × ' . number_format((float) $item['unit_price'], 0, ',', ' ') . ')';
+        }
+        $update->execute([json_encode(['c1' => $text, 'amount' => (float) $item['line_total']], JSON_UNESCAPED_UNICODE), $item['id']]);
     }
 }
 

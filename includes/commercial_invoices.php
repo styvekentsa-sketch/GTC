@@ -1,6 +1,7 @@
 <?php
 /**
- * Factures commerciales (facture, facture proforma, devis) — lignes d'articles, totaux, numérotation,
+ * Factures commerciales (facture, facture proforma, devis) — tableau personnalisable (colonnes et lignes libres,
+ * une colonne des montants), totaux, numérotation,
  * montant en lettres. Utilisé par dashboard/invoices-list.php (saisie, liste) et
  * dashboard/print-commercial-invoice.php (impression avec l'en-tête officiel).
  *
@@ -126,10 +127,53 @@ function amount_in_words(float $amount, string $currency): string
 }
 
 /* ==========================================================================
+   Tableau personnalisable : colonnes de la facture
+   ========================================================================== */
+
+/** Colonnes d'une nouvelle facture : une colonne texte et la colonne des montants (align : alignement de la colonne). */
+const CINV_DEFAULT_COLUMNS = [
+    ['key' => 'c1', 'label' => 'Désignation', 'type' => 'text', 'align' => 'left'],
+    ['key' => 'amount', 'label' => 'Montant', 'type' => 'amount', 'align' => 'right'],
+];
+/** Alignements possibles (colonne entière ou cellule). */
+const CINV_ALIGNS = ['left', 'center', 'right'];
+
+/** Alignement par défaut : texte à gauche, montants à droite. */
+function cinv_default_align(string $type): string
+{
+    return $type === 'amount' ? 'right' : 'left';
+}
+
+/** Alignement d'une cellule : celui choisi pour la cellule, sinon celui de sa colonne. */
+function cinv_cell_align(array $row, array $col): string
+{
+    $own = $row['_align'][$col['key']] ?? null;
+    return in_array($own, CINV_ALIGNS, true) ? $own : ($col['align'] ?? cinv_default_align($col['type']));
+}
+const CINV_MAX_TEXT_COLUMNS = 5;    // + la colonne des montants (largeur d'une page A4)
+const CINV_MAX_LABEL = 40;
+const CINV_MAX_CELL = 500;
+
+/** Colonnes enregistrées (JSON) → tableau validé, colonnes par défaut si absent ou illisible. */
+function cinv_columns(?string $json): array
+{
+    $cols = $json ? json_decode($json, true) : null;
+    if (!is_array($cols)) {
+        return CINV_DEFAULT_COLUMNS;
+    }
+    $valid = array_values(array_filter($cols, fn ($c) => is_array($c) && isset($c['key'], $c['label'], $c['type'])));
+    foreach ($valid as &$c) {
+        $c['align'] = in_array($c['align'] ?? null, CINV_ALIGNS, true) ? $c['align'] : cinv_default_align($c['type']);
+    }
+    unset($c);
+    return $valid && in_array('amount', array_column($valid, 'key'), true) ? $valid : CINV_DEFAULT_COLUMNS;
+}
+
+/* ==========================================================================
    Saisie, calculs, enregistrement
    ========================================================================== */
 
-/** Nombre saisi à la française (« 1 250 000,50 ») → float, null si invalide. */
+/** Nombre saisi à la française (« 1 250 000,50 », « -10 000 ») → float, null si invalide. */
 function cinv_number(string $value): ?float
 {
     $raw = str_replace([' ', "\u{202F}", "\u{00A0}", ','], ['', '', '', '.'], trim($value));
@@ -142,9 +186,17 @@ function cinv_round(float $value, string $currency): float
     return round($value, DASH_CURRENCIES[$currency]['decimals'] ?? 2);
 }
 
+/** Texte reçu du formulaire : chaîne UTF-8 nettoyée (une saisie Windows-1252 est convertie, comme post()). */
+function cinv_text($value): string
+{
+    $v = trim(is_scalar($value) ? (string) $value : '');
+    return mb_check_encoding($v, 'UTF-8') ? $v : mb_convert_encoding($v, 'UTF-8', 'Windows-1252');
+}
+
 /**
- * Lecture et validation du formulaire. Retourne [données, lignes, erreurs].
- * Les lignes entièrement vides sont ignorées ; les montants sont recalculés ici.
+ * Lecture et validation du formulaire. Retourne [données, calculs, erreurs].
+ * Colonnes : col_key[] / col_label[] (colonnes texte puis la colonne « amount ») ;
+ * cellules : cell[<clé>][] alignées par ligne. Les lignes entièrement vides sont ignorées.
  */
 function cinv_input(): array
 {
@@ -211,59 +263,106 @@ function cinv_input(): array
         $e['notes'] = 'Notes trop longues (2 000 caractères au plus).';
     }
 
-    // Lignes d'articles
+    // ---- Colonnes : clés techniques sûres, libellés libres, une seule colonne des montants (en dernier)
+    $keys   = array_values((array) ($_POST['col_key'] ?? []));
+    $labels = array_values((array) ($_POST['col_label'] ?? []));
+    $aligns = array_values((array) ($_POST['col_align'] ?? []));
+    $columns = [];
+    $seen = [];
+    foreach ($keys as $i => $key) {
+        $key = cinv_text($key);
+        if (!preg_match('/^(c\d{1,3}|amount)$/', $key) || isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $label = cinv_text($labels[$i] ?? '');
+        if ($label === '') {
+            $label = $key === 'amount' ? 'Montant' : 'Colonne ' . (count($columns) + 1);
+        }
+        if (mb_strlen($label) > CINV_MAX_LABEL) {
+            $e['items'][] = 'Titre de colonne trop long (' . CINV_MAX_LABEL . ' caractères au plus) : « ' . mb_substr($label, 0, 20) . '… ».';
+        }
+        $type  = $key === 'amount' ? 'amount' : 'text';
+        $align = cinv_text($aligns[$i] ?? '');
+        $columns[] = ['key' => $key, 'label' => mb_substr($label, 0, CINV_MAX_LABEL), 'type' => $type,
+                      'align' => in_array($align, CINV_ALIGNS, true) ? $align : cinv_default_align($type)];
+    }
+    $text   = array_values(array_filter($columns, fn ($c) => $c['type'] === 'text'));
+    $amount = array_values(array_filter($columns, fn ($c) => $c['type'] === 'amount'))[0] ?? CINV_DEFAULT_COLUMNS[1];
+    if (!$text) {
+        $text = [CINV_DEFAULT_COLUMNS[0]];
+    }
+    if (count($text) > CINV_MAX_TEXT_COLUMNS) {
+        $e['items'][] = 'Le tableau compte au plus ' . CINV_MAX_TEXT_COLUMNS . ' colonnes de texte (plus la colonne des montants).';
+        $text = array_slice($text, 0, CINV_MAX_TEXT_COLUMNS);
+    }
+    $columns = [...$text, $amount];
+
+    // ---- Lignes
+    $cells = (array) ($_POST['cell'] ?? []);
+    $cellAligns = (array) ($_POST['cell_align'] ?? []);
+    $rowCount = 0;
+    foreach ($columns as $c) {
+        $rowCount = max($rowCount, count((array) ($cells[$c['key']] ?? [])));
+    }
+    $rowCount = min($rowCount, CINV_MAX_LINES + 50);
     $items = [];
-    $desc  = (array) ($_POST['item_description'] ?? []);
-    $qty   = (array) ($_POST['item_quantity'] ?? []);
-    $price = (array) ($_POST['item_price'] ?? []);
-    $count = min(count($desc), CINV_MAX_LINES + 50);
-    // Même nettoyage que post() : texte UTF-8 garanti (une saisie Windows-1252 est convertie)
-    $clean = function ($v): string {
-        $v = trim(is_scalar($v) ? (string) $v : '');
-        return mb_check_encoding($v, 'UTF-8') ? $v : mb_convert_encoding($v, 'UTF-8', 'Windows-1252');
-    };
-    for ($i = 0; $i < $count; $i++) {
-        $label = $clean($desc[$i] ?? '');
-        $q     = $clean($qty[$i] ?? '');
-        $p     = $clean($price[$i] ?? '');
-        if ($label === '' && ($q === '' || $q === '1') && $p === '') {
+    for ($i = 0; $i < $rowCount; $i++) {
+        $row = [];
+        $filled = false;
+        foreach ($text as $c) {
+            $v = cinv_text(((array) ($cells[$c['key']] ?? []))[$i] ?? '');
+            $row[$c['key']] = $v;
+            $filled = $filled || $v !== '';
+        }
+        $rawAmount = cinv_text(((array) ($cells['amount'] ?? []))[$i] ?? '');
+        if (!$filled && $rawAmount === '') {
             continue;   // ligne vide
         }
         $line = count($items) + 1;
-        $qn = cinv_number($q === '' ? '1' : $q);
-        $pn = cinv_number($p === '' ? '0' : $p);
-        if ($label === '' || mb_strlen($label) > 500) {
-            $e['items'][] = "Ligne {$line} : indiquez la désignation (500 caractères au plus).";
+        foreach ($text as $c) {
+            if (mb_strlen($row[$c['key']]) > CINV_MAX_CELL) {
+                $e['items'][] = "Ligne {$line}, « {$c['label']} » : " . CINV_MAX_CELL . ' caractères au plus.';
+            }
         }
-        if ($qn === null || $qn <= 0 || $qn > 1e9) {
-            $e['items'][] = "Ligne {$line} : quantité invalide.";
-            $qn = 0.0;
+        $value = null;
+        if ($rawAmount !== '') {
+            $value = cinv_number($rawAmount);
+            if ($value === null || abs($value) > 1e12) {
+                $e['items'][] = "Ligne {$line} : montant invalide.";
+                $value = null;
+            } else {
+                $value = cinv_round($value, $d['currency']);
+            }
         }
-        if ($pn === null || $pn < 0 || $pn > 1e12) {
-            $e['items'][] = "Ligne {$line} : prix unitaire invalide.";
-            $pn = 0.0;
+        $row['amount'] = $value;   // null : ligne de texte (titre, commentaire) sans montant
+        // Alignement choisi pour une cellule (différent de celui de sa colonne)
+        foreach ($columns as $c) {
+            $a = cinv_text(((array) ($cellAligns[$c['key']] ?? []))[$i] ?? '');
+            if (in_array($a, CINV_ALIGNS, true) && $a !== $c['align']) {
+                $row['_align'][$c['key']] = $a;
+            }
         }
-        $items[] = ['description' => $label, 'quantity' => round($qn, 3), 'unit_price' => cinv_round($pn, $d['currency'])];
+        $items[] = $row;
     }
     if (!$items) {
-        $e['items'][] = 'Ajoutez au moins une ligne (désignation, quantité, prix unitaire).';
+        $e['items'][] = 'Ajoutez au moins une ligne au tableau.';
     } elseif (count($items) > CINV_MAX_LINES) {
-        $e['items'][] = 'Une facture compte au plus ' . CINV_MAX_LINES . ' lignes.';
+        $e['items'][] = 'Le tableau compte au plus ' . CINV_MAX_LINES . ' lignes.';
     }
 
-    return [$d, cinv_totals($items, $d['tax_rate'], $d['currency']), $e];
+    $calc = cinv_totals($items, $d['tax_rate'], $d['currency']);
+    if ($items && $calc['subtotal'] < 0) {
+        $e['items'][] = 'Le total ne peut pas être négatif (vérifiez les remises).';
+    }
+    $calc['columns'] = $columns;
+    return [$d, $calc, $e];
 }
 
-/** Montants des lignes et totaux : ['items' => …, 'subtotal', 'tax_amount', 'total']. */
+/** Totaux : somme de la colonne des montants (lignes sans montant ignorées), TVA, total. */
 function cinv_totals(array $items, float $taxRate, string $currency): array
 {
-    $subtotal = 0.0;
-    foreach ($items as &$item) {
-        $item['line_total'] = cinv_round($item['quantity'] * $item['unit_price'], $currency);
-        $subtotal += $item['line_total'];
-    }
-    unset($item);
-    $subtotal = cinv_round($subtotal, $currency);
+    $subtotal = cinv_round(array_sum(array_map(fn ($r) => (float) ($r['amount'] ?? 0), $items)), $currency);
     $tax      = cinv_round($subtotal * $taxRate / 100, $currency);
     return ['items' => $items, 'subtotal' => $subtotal, 'tax_amount' => $tax, 'total' => cinv_round($subtotal + $tax, $currency)];
 }
@@ -278,7 +377,7 @@ function cinv_next_number(string $type, string $issueDate): string
 }
 
 /**
- * Enregistre une facture (création si $id est null) avec ses lignes. Retourne l'identifiant.
+ * Enregistre une facture (création si $id est null) avec ses colonnes et ses lignes. Retourne l'identifiant.
  * Le numéro est attribué à la création et conservé ensuite (même si la date ou le type change).
  */
 function cinv_save(array $d, array $calc, array $user, ?int $id = null): int
@@ -292,7 +391,8 @@ function cinv_save(array $d, array $calc, array $user, ?int $id = null): int
             'client_address' => $d['client_address'] ?: null, 'client_niu' => $d['client_niu'] ?: null,
             'issue_date' => $d['issue_date'], 'due_date' => $d['due_date'] ?: null, 'currency' => $d['currency'],
             'tax_rate' => $d['tax_rate'], 'subtotal' => $calc['subtotal'], 'tax_amount' => $calc['tax_amount'],
-            'total' => $calc['total'], 'notes' => $d['notes'] ?: null, 'updated_at' => db_now(),
+            'total' => $calc['total'], 'notes' => $d['notes'] ?: null,
+            'columns_json' => json_encode($calc['columns'], JSON_UNESCAPED_UNICODE), 'updated_at' => db_now(),
         ];
         if ($id === null) {
             $fields += ['invoice_number' => cinv_next_number($d['doc_type'], $d['issue_date']),
@@ -305,9 +405,11 @@ function cinv_save(array $d, array $calc, array $user, ?int $id = null): int
             db_query("UPDATE commercial_invoices SET {$set} WHERE id = ?", [...array_values($fields), $id]);
             db_query('DELETE FROM commercial_invoice_items WHERE invoice_id = ?', [$id]);
         }
-        $insert = $pdo->prepare('INSERT INTO commercial_invoice_items (invoice_id, position, description, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?, ?)');
-        foreach ($calc['items'] as $i => $item) {
-            $insert->execute([$id, $i + 1, $item['description'], $item['quantity'], $item['unit_price'], $item['line_total']]);
+        $firstText = $calc['columns'][0]['key'];
+        $insert = $pdo->prepare('INSERT INTO commercial_invoice_items (invoice_id, position, description, line_total, cells_json) VALUES (?, ?, ?, ?, ?)');
+        foreach ($calc['items'] as $i => $row) {
+            $insert->execute([$id, $i + 1, mb_substr((string) ($row[$firstText] ?? ''), 0, 500), (float) ($row['amount'] ?? 0),
+                json_encode($row, JSON_UNESCAPED_UNICODE)]);
         }
         $pdo->commit();
         return $id;
@@ -317,14 +419,19 @@ function cinv_save(array $d, array $calc, array $user, ?int $id = null): int
     }
 }
 
-/** Facture et ses lignes, ou null. */
+/** Facture avec ses colonnes ('columns') et ses lignes ('items' : cellules par clé, 'amount' null ou nombre), ou null. */
 function cinv_find(int $id): ?array
 {
     $inv = db_one('SELECT * FROM commercial_invoices WHERE id = ?', [$id]);
     if (!$inv) {
         return null;
     }
-    $inv['items'] = db_all('SELECT * FROM commercial_invoice_items WHERE invoice_id = ? ORDER BY position, id', [$id]);
+    $inv['columns'] = cinv_columns($inv['columns_json'] ?? null);
+    $inv['items'] = [];
+    foreach (db_all('SELECT * FROM commercial_invoice_items WHERE invoice_id = ? ORDER BY position, id', [$id]) as $item) {
+        $cells = json_decode((string) ($item['cells_json'] ?? ''), true);
+        $inv['items'][] = is_array($cells) ? $cells + ['amount' => null] : ['c1' => $item['description'], 'amount' => (float) $item['line_total']];
+    }
     return $inv;
 }
 
@@ -337,13 +444,7 @@ function cinv_delete(int $id): void
     db()->commit();
 }
 
-/** Quantité lisible : 3 / 2,5 / 0,125. */
-function cinv_qty(float $q): string
-{
-    return str_replace('.', ',', rtrim(rtrim(number_format($q, 3, '.', ''), '0'), '.'));
-}
-
-/** Montant sans devise, au format français : 1 250 000 / 99,50. */
+/** Montant sans devise, au format français : 1 250 000 / 99,50 / -10 000. */
 function cinv_amount(float $value, string $currency): string
 {
     return number_format($value, DASH_CURRENCIES[$currency]['decimals'] ?? 2, ',', "\u{202F}");

@@ -28,26 +28,67 @@ p, h1, dl, dd { margin: 0; }
 .ci-btn--primary:hover { background: var(--blue); color: #fff; }
 
 /* Feuille A4 */
-.ci-sheet { width: 210mm; min-height: 297mm; margin: 18px auto; padding: 12mm 13mm 10mm; background: #fff; box-shadow: 0 8px 30px rgba(15, 23, 42, 0.12); display: flex; flex-direction: column; }
-.ci-sheet--empty { min-height: 0; text-align: center; gap: 12px; }
+.ci-sheet { position: relative; width: 210mm; min-height: 297mm; margin: 18px auto; padding: 0; background: #fff; box-shadow: 0 8px 30px rgba(15, 23, 42, 0.12); }
+.ci-sheet--empty { min-height: 0; padding: 12mm; text-align: center; display: grid; gap: 12px; }
 
-/* En-tête officiel */
-.ci-head { display: flex; justify-content: space-between; gap: 8mm; padding-bottom: 4mm; border-bottom: 3px solid var(--navy); }
-.ci-head__brand { display: flex; align-items: center; gap: 4mm; min-width: 0; }
-.ci-head__logo { width: 42mm; height: auto; flex-shrink: 0; }
-.ci-head__name { font-size: 17px; font-weight: 800; letter-spacing: 0.02em; color: var(--navy); }
-.ci-head__activities { margin-top: 1.5mm; max-width: 95mm; font-size: 10px; font-weight: 600; line-height: 1.55; color: var(--gold); }
-.ci-head__activities span { color: var(--line); margin: 0 1px; }
-.ci-head__contact { display: flex; flex-direction: column; align-items: flex-end; gap: 0.6mm; font-style: normal; font-size: 10.5px; white-space: nowrap; color: var(--ink); text-align: right; }
-.ci-head__contact strong { color: var(--navy); font-weight: 700; }
+/* ==========================================================================
+   Papier à en-tête officiel (« Papier_entete_GTC final version.pdf ») — cotes relevées sur le PDF
+   Haut : bandeau 22 mm, secteurs d'activité (filet vert), logo · Bas : rayures 12,2 mm, bandeau 27 mm, filet 5,1 mm
+   ========================================================================== */
+.lh { position: absolute; left: 0; width: 210mm; z-index: 0; font-family: Arial, Helvetica, sans-serif; }
+.lh img { display: block; }
+.lh--top { top: 0; height: 50mm; }
+.lh__band { position: absolute; top: 0; left: 0; width: 210mm; height: 22mm; }
+.lh__activities {
+  position: absolute;
+  top: 22.7mm;
+  left: 21.8mm;
+  height: 25.1mm;
+  margin: 0;
+  padding: 3.6mm 0 0 3.6mm;
+  border-left: 0.35mm solid #009647;
+  list-style: none;
+  font-size: 8.5pt;
+  line-height: 4.55mm;
+  letter-spacing: 0.01em;
+  color: #3A4A63;
+  white-space: nowrap;
+}
+.lh__dot { margin: 0 1.6mm; font-weight: 700; color: #009647; }
+.lh__logo { position: absolute; top: 25.5mm; left: 110.7mm; width: 74mm; height: auto; }
 
-.ci-legal { margin-top: 2.5mm; padding: 2mm 3mm; border-radius: 4px; background: var(--soft); font-size: 9.5px; color: var(--muted); }
-.ci-legal p { display: flex; flex-wrap: wrap; justify-content: center; gap: 1mm 4mm; }
-.ci-legal p + p { margin-top: 0.8mm; }
-.ci-legal strong { color: var(--ink); font-weight: 600; }
+.lh--bottom { bottom: 0; height: 44.3mm; }
+.lh__stripes { position: absolute; left: 0; bottom: 32.1mm; width: 210mm; height: 12.2mm; }
+.lh__band-bottom {
+  position: absolute;
+  left: 0;
+  bottom: 5.1mm;
+  width: 210mm;
+  height: 27mm;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #10344C;
+  color: #fff;
+  font-size: 7.5pt;
+  line-height: 4.55mm;
+  text-align: center;
+}
+.lh__band-bottom p { margin: 0; white-space: nowrap; }
+.lh__band-bottom span { margin: 0 1.6mm; opacity: 0.85; }
+.lh__line { position: absolute; left: 0; bottom: 0; width: 210mm; height: 5.1mm; }
+
+/* Zone d'écriture au centre : place réservée au papier à en-tête en haut et en bas de chaque page */
+.ci-page { position: relative; z-index: 1; width: 100%; border-collapse: collapse; }
+.ci-page > thead > tr > td,
+.ci-page > tfoot > tr > td { padding: 0; }
+.ci-page__top { height: 54mm; }
+.ci-page__bottom { height: 49mm; }
+.ci-page__body { padding: 0 18mm; vertical-align: top; }
 
 /* Document et client */
-.ci-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; margin-top: 7mm; }
+.ci-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; margin-top: 0; }
 .ci-doc { position: relative; }
 .ci-doc__title { font-size: 24px; font-weight: 800; letter-spacing: 0.04em; color: var(--navy); }
 .ci-doc dl { display: grid; gap: 1mm; margin-top: 3mm; }
@@ -63,27 +104,75 @@ p, h1, dl, dd { margin: 0; }
 .ci-client__name { margin: 1mm 0 1.2mm; font-size: 14px; font-weight: 700; }
 .ci-client p + p { font-size: 11.5px; }
 
-/* Articles */
-.ci-items { width: 100%; margin-top: 7mm; border-collapse: collapse; }
-.ci-items th { padding: 2.2mm 2.5mm; background: var(--navy); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-align: left; text-transform: uppercase; }
-.ci-items td { padding: 2.2mm 2.5mm; border-bottom: 1px solid var(--line); vertical-align: top; }
-.ci-items tbody tr:nth-child(even) td { background: #FAFBFD; }
-.ci-items__n { width: 11mm; text-align: center !important; color: var(--muted); }
-.ci-items__num { text-align: right !important; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.ci-items th.ci-items__num { width: 30mm; }
-.ci-items__desc { overflow-wrap: anywhere; }
+/* Tableau style Excel : quadrillage complet, en-tête bleu, lignes alternées */
+.ci-items {
+  --grid: #CBD5E1;
+  --head: #0F2C59;
+  width: 100%;
+  margin-top: 7mm;
+  border-collapse: collapse;
+  border: 1px solid var(--grid);
+  font-size: 12px;
+}
+.ci-items th,
+.ci-items td { padding: 10px 12px; border: 1px solid var(--grid); }
+.ci-items th {
+  background: var(--head);
+  border-color: var(--head) var(--head) #000;
+  border-bottom: 2px solid #000;
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-align: left;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.ci-items th + th { border-left-color: rgba(255, 255, 255, 0.28); }
+.ci-items td { vertical-align: top; background: #fff; }
+.ci-items tbody tr:nth-child(even) td { background: #F8FAFC; }
+.ci-items__n { width: 12mm; text-align: center !important; }
+.ci-items td.ci-items__n { color: var(--muted); font-variant-numeric: tabular-nums; }
+.ci-items__text { text-align: left; overflow-wrap: anywhere; }
+.ci-items__num { width: 34mm; text-align: right; white-space: nowrap; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* Alignements choisis dans le mini-tableur (colonne ou cellule) */
+.ci-items .al-left { text-align: left; }
+.ci-items .al-center { text-align: center; }
+.ci-items .al-right { text-align: right; }
+.ci-items__cur { font-weight: 500; opacity: 0.8; text-transform: none; letter-spacing: 0; }
+/* Ligne sans montant : titre de section ou commentaire */
+.ci-items tr.ci-items__note td { background: #EEF3FA; font-weight: 700; color: var(--navy); }
 .ci-items tr { break-inside: avoid; }
+.ci-items thead { display: table-header-group; }   /* en-tête répété sur chaque page */
 
-/* Totaux */
-.ci-summary { display: grid; grid-template-columns: minmax(0, 1fr) 74mm; gap: 6mm; margin-top: 5mm; break-inside: avoid; }
+/* Zone du total : prolongement du tableau, en bas à droite (colonne des valeurs = colonne des montants) */
+.ci-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6mm;
+  align-items: start;
+  break-inside: avoid;
+}
+.ci-words { padding-top: 3mm; }
 .ci-words__label { font-size: 10.5px; color: var(--muted); }
 .ci-words__text { margin-top: 1mm; font-size: 12.5px; font-weight: 700; font-style: italic; }
 .ci-notes { margin-top: 4mm; font-size: 10.5px; color: var(--muted); }
-.ci-totals { width: 100%; border-collapse: collapse; }
-.ci-totals th, .ci-totals td { padding: 2mm 3mm; border-bottom: 1px solid var(--line); }
-.ci-totals th { text-align: left; font-weight: 500; color: var(--muted); }
-.ci-totals td { text-align: right; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.ci-totals__grand th, .ci-totals__grand td { border-bottom: 0; background: var(--navy); color: #fff; font-size: 13.5px; font-weight: 800; }
+.ci-totals { border-collapse: collapse; font-size: 12px; }
+.ci-totals th,
+.ci-totals td { padding: 10px 12px; border: 1px solid #CBD5E1; border-top: 0; }
+.ci-totals th { min-width: 40mm; background: #F1F5F9; text-align: left; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.ci-totals td { width: 34mm; background: #fff; text-align: right; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* Total général : cellule de fin mise en valeur, double encadrement */
+.ci-totals__grand th,
+.ci-totals__grand td {
+  background: #0F2C59 !important;
+  color: #fff !important;
+  font-size: 13.5px;
+  font-weight: 800;
+  border-color: #0F2C59;
+  border-top: 3px double #0F2C59;
+}
+.ci-totals__grand { outline: 3px double #0F2C59; outline-offset: 1px; }
 
 /* Signatures */
 .ci-signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 10mm; margin-top: 10mm; break-inside: avoid; }
@@ -91,18 +180,18 @@ p, h1, dl, dd { margin: 0; }
 .ci-sign { display: flex; align-items: flex-end; justify-content: center; height: 24mm; margin-top: 2mm; border-bottom: 1px dashed #9AA4B2; font-size: 9px; color: #9AA4B2; }
 .ci-sign--stamp { border: 1px dashed #9AA4B2; border-radius: 4px; padding-bottom: 2mm; }
 
-.ci-foot { margin-top: auto; padding-top: 6mm; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2mm; border-top: 1px solid var(--line); font-size: 9px; color: var(--muted); }
+.ci-foot { margin: 6mm 0 0; font-size: 8.5px; color: var(--muted); text-align: right; }
 
 /* Impression */
 @page { size: A4; margin: 0; }
 @media print {
-  body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { background: #fff; }
+  *, *::before, *::after { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .ci-toolbar { display: none; }
-  .ci-sheet { margin: 0; box-shadow: none; width: 210mm; min-height: 297mm; }
+  .ci-sheet { margin: 0; box-shadow: none; width: 210mm; min-height: 0; }
+  .lh { position: fixed; }   /* fixe = reproduit en haut et en bas de chaque page imprimée */
 }
 @media screen and (max-width: 820px) {
-  .ci-sheet { width: auto; min-height: 0; margin: 10px; padding: 16px; }
-  .ci-head, .ci-meta, .ci-summary { display: block; }
-  .ci-head__contact { align-items: flex-start; text-align: left; margin-top: 10px; white-space: normal; }
-  .ci-client, .ci-totals { margin-top: 12px; }
+  body { overflow-x: auto; }
+  .ci-sheet { margin: 10px; }
 }

@@ -57,36 +57,33 @@ $curLbl  = currency_label($cur);
 <?php else: ?>
 <main class="ci-sheet">
 
-    <!-- ==================== EN-TÊTE OFFICIEL ==================== -->
-    <header class="ci-head">
-        <div class="ci-head__brand">
-            <img src="<?= e(settings_logo_url('../')) ?>" alt="<?= e($name) ?>" class="ci-head__logo">
-            <div>
-                <p class="ci-head__name"><?= e(mb_strtoupper($name)) ?></p>
-                <p class="ci-head__activities"><?= implode(' <span aria-hidden="true">•</span> ', array_map('e', GTC_ACTIVITIES)) ?></p>
-            </div>
-        </div>
-        <address class="ci-head__contact">
-            <span><?= e(GTC_PO_BOX) ?></span>
-            <span><strong>Mob.</strong> <?= e(GTC_PHONE_2) ?></span>
-            <span><strong>Bur.</strong> <?= e(GTC_PHONE) ?></span>
-            <span><strong>Site web</strong> <?= e(GTC_OFFICIAL_WEBSITE) ?></span>
-            <span><strong>Email</strong> <?= e(GTC_EMAIL) ?></span>
-        </address>
+    <!-- ==================== PAPIER À EN-TÊTE OFFICIEL (assets/img/letterhead/, d'après « Papier_entete_GTC final version.pdf ») ==================== -->
+    <!-- Répété sur chaque page à l'impression (position fixe) ; la facture s'écrit au centre -->
+    <header class="lh lh--top">
+        <img src="<?= e(asset_url('assets/img/letterhead/header.png', '../')) ?>" alt="" class="lh__band">
+        <ul class="lh__activities">
+            <?php foreach (array_chunk(GTC_ACTIVITIES, 2) as $pair): ?>
+                <li><?= implode(' <span class="lh__dot" aria-hidden="true">·</span> ', array_map('e', $pair)) ?></li>
+            <?php endforeach; ?>
+        </ul>
+        <img src="<?= e(asset_url('assets/img/letterhead/logo.png', '../')) ?>" alt="<?= e($name) ?>" class="lh__logo">
     </header>
-    <div class="ci-legal">
-        <p>
-            <span><strong>N° de contribuable :</strong> <?= e(GTC_NIU) ?></span>
-            <span><strong>RCCM :</strong> <?= e(GTC_RCCM) ?></span>
-            <span><strong>N° matricule CNPS :</strong> <?= e(GTC_CNPS) ?></span>
-        </p>
-        <p>
-            <span><strong>Banque :</strong> <?= e(GTC_BANK['name']) ?></span>
-            <span><strong>Code banque :</strong> <?= e(GTC_BANK['bank_code']) ?></span>
-            <span><strong>Code guichet :</strong> <?= e(GTC_BANK['branch_code']) ?></span>
-            <span><strong>N° compte :</strong> <?= e(GTC_BANK['account']) ?></span>
-        </p>
-    </div>
+    <footer class="lh lh--bottom">
+        <img src="<?= e(asset_url('assets/img/letterhead/footer-stripes.png', '../')) ?>" alt="" class="lh__stripes">
+        <div class="lh__band-bottom">
+            <p>N° de contribuable : <?= e(GTC_NIU) ?> <span>|</span> RCCM : <?= e(GTC_RCCM) ?> <span>|</span> N° matricule CNPS : <?= e(GTC_CNPS) ?></p>
+            <p>Banque : <?= e(GTC_BANK['name']) ?> <span>|</span> Code banque : <?= e(GTC_BANK['bank_code']) ?> <span>|</span> Code guichet : <?= e(GTC_BANK['branch_code']) ?> <span>|</span> N° compte : <?= e(GTC_BANK['account']) ?></p>
+            <p><?= e(GTC_PO_BOX) ?> <span>|</span> Mob. : <?= e(GTC_PHONE_2) ?> <span>|</span> Bur. : <?= e(GTC_PHONE) ?></p>
+            <p>Site web : <?= e(GTC_OFFICIAL_WEBSITE) ?> <span>|</span> Email : <?= e(GTC_EMAIL) ?></p>
+        </div>
+        <img src="<?= e(asset_url('assets/img/letterhead/footer-line.png', '../')) ?>" alt="" class="lh__line">
+    </footer>
+
+    <!-- Zone d'écriture : les cellules d'en-tête et de pied du tableau réservent la place du papier à en-tête sur chaque page -->
+    <table class="ci-page" role="presentation">
+        <thead><tr><td><div class="ci-page__top"></div></td></tr></thead>
+        <tfoot><tr><td><div class="ci-page__bottom"></div></td></tr></tfoot>
+        <tbody><tr><td class="ci-page__body">
 
     <!-- ==================== DOCUMENT & CLIENT ==================== -->
     <section class="ci-meta">
@@ -112,25 +109,27 @@ $curLbl  = currency_label($cur);
         </div>
     </section>
 
-    <!-- ==================== ARTICLES ==================== -->
+    <!-- ==================== TABLEAU (colonnes, contenus et alignements définis dans le mini-tableur) ==================== -->
     <table class="ci-items">
         <thead>
             <tr>
                 <th class="ci-items__n">N°</th>
-                <th>Désignation</th>
-                <th class="ci-items__num">Quantité</th>
-                <th class="ci-items__num">Prix unitaire</th>
-                <th class="ci-items__num">Montant</th>
+                <?php foreach ($inv["columns"] as $col): ?>
+                    <th class="<?= $col["type"] === "amount" ? "ci-items__num ci-items__amount" : "" ?> al-<?= e($col["align"]) ?>"><?= e($col["label"]) ?><?= $col["type"] === "amount" ? " <span class=\"ci-items__cur\">(" . e($curLbl) . ")</span>" : "" ?></th>
+                <?php endforeach; ?>
             </tr>
         </thead>
         <tbody>
-        <?php foreach ($inv['items'] as $i => $item): ?>
-            <tr>
+        <?php foreach ($inv["items"] as $i => $row): ?>
+            <tr class="<?= $row["amount"] === null ? "ci-items__note" : "" ?>">
                 <td class="ci-items__n"><?= $i + 1 ?></td>
-                <td class="ci-items__desc"><?= nl2br(e($item['description'])) ?></td>
-                <td class="ci-items__num"><?= e(cinv_qty((float) $item['quantity'])) ?></td>
-                <td class="ci-items__num"><?= e(cinv_amount((float) $item['unit_price'], $cur)) ?></td>
-                <td class="ci-items__num"><strong><?= e(cinv_amount((float) $item['line_total'], $cur)) ?></strong></td>
+                <?php foreach ($inv["columns"] as $col): ?>
+                    <?php if ($col["type"] === "amount"): ?>
+                        <td class="ci-items__num al-<?= e(cinv_cell_align($row, $col)) ?>"><?= $row["amount"] === null ? "" : "<strong>" . e(cinv_amount((float) $row["amount"], $cur)) . "</strong>" ?></td>
+                    <?php else: ?>
+                        <td class="ci-items__text al-<?= e(cinv_cell_align($row, $col)) ?>"><?= nl2br(e((string) ($row[$col["key"]] ?? ""))) ?></td>
+                    <?php endif; ?>
+                <?php endforeach; ?>
             </tr>
         <?php endforeach; ?>
         </tbody>
@@ -147,11 +146,11 @@ $curLbl  = currency_label($cur);
         </div>
         <table class="ci-totals">
             <?php if ((float) $inv['tax_rate'] > 0): ?>
-                <tr><th>Total HT</th><td><?= e(cinv_amount((float) $inv['subtotal'], $cur)) ?> <?= e($curLbl) ?></td></tr>
-                <tr><th>TVA (<?= e(str_replace('.', ',', rtrim(rtrim(number_format((float) $inv['tax_rate'], 2, '.', ''), '0'), '.'))) ?> %)</th><td><?= e(cinv_amount((float) $inv['tax_amount'], $cur)) ?> <?= e($curLbl) ?></td></tr>
-                <tr class="ci-totals__grand"><th>Total TTC</th><td><?= e(cinv_amount((float) $inv['total'], $cur)) ?> <?= e($curLbl) ?></td></tr>
+                <tr><th>Total HT (<?= e($curLbl) ?>)</th><td><?= e(cinv_amount((float) $inv['subtotal'], $cur)) ?></td></tr>
+                <tr><th>TVA <?= e(str_replace('.', ',', rtrim(rtrim(number_format((float) $inv['tax_rate'], 2, '.', ''), '0'), '.'))) ?> %</th><td><?= e(cinv_amount((float) $inv['tax_amount'], $cur)) ?></td></tr>
+                <tr class="ci-totals__grand"><th>Total TTC (<?= e($curLbl) ?>)</th><td><?= e(cinv_amount((float) $inv['total'], $cur)) ?></td></tr>
             <?php else: ?>
-                <tr class="ci-totals__grand"><th>Total</th><td><?= e(cinv_amount((float) $inv['total'], $cur)) ?> <?= e($curLbl) ?></td></tr>
+                <tr class="ci-totals__grand"><th>Total (<?= e($curLbl) ?>)</th><td><?= e(cinv_amount((float) $inv['total'], $cur)) ?></td></tr>
             <?php endif; ?>
         </table>
     </section>
@@ -162,10 +161,10 @@ $curLbl  = currency_label($cur);
         <div><p>Pour <?= e($name) ?> — La Direction</p><span class="ci-sign ci-sign--stamp">Cachet et signature</span></div>
     </section>
 
-    <footer class="ci-foot">
-        <?= e($name) ?> · <?= e(GTC_PO_BOX) ?> · NIU <?= e(GTC_NIU) ?> · RCCM <?= e(GTC_RCCM) ?> · <?= e(GTC_EMAIL) ?>
-        <span>Document établi le <?= e(fdate($inv['created_at'] ?: $inv['issue_date'])) ?> par <?= e($inv['created_by_name'] ?? $user['name']) ?></span>
-    </footer>
+    <p class="ci-foot">Document établi le <?= e(fdate($inv['created_at'] ?: $inv['issue_date'])) ?> par <?= e($inv['created_by_name'] ?? $user['name']) ?></p>
+
+        </td></tr></tbody>
+    </table>
 </main>
 <?php endif; ?>
 

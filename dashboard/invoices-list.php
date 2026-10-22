@@ -85,16 +85,26 @@ if ($action === 'new' || $action === 'edit') {
             'client_name' => '', 'client_phone' => '', 'client_email' => '', 'client_address' => '', 'client_niu' => '',
             'issue_date' => date('Y-m-d'), 'due_date' => '', 'currency' => 'XAF', 'tax_rate' => 0, 'notes' => '',
         ];
-        $items = $existing['items'] ?? [];
+        $items   = $existing['items'] ?? [];
+        $columns = $existing['columns'] ?? CINV_DEFAULT_COLUMNS;
     } else {
-        $items = $calc['items'];
+        $items   = $calc['items'];
+        $columns = $calc['columns'];
     }
     $currency = $form['currency'];
     $dec      = DASH_CURRENCIES[$currency]['decimals'] ?? 0;
     // Champ numérique pré-rempli : nombre brut avec virgule (1250000 / 12,5)
-    $num = fn ($v, int $d) => $v === '' || $v === null ? '' : str_replace('.', ',', rtrim(rtrim(number_format((float) $v, $d, '.', ''), '0'), '.'));
-    // 5 lignes au minimum (saisie possible sans JavaScript)
-    $rows = array_pad($items, max(5, count($items) + 1), ['description' => '', 'quantity' => '', 'unit_price' => '', 'line_total' => '']);
+    // (zéros retirés seulement après la virgule : 3500000 reste 3500000, 12.50 devient 12,5)
+    $num = function ($v, int $d): string {
+        if ($v === '' || $v === null) {
+            return '';
+        }
+        $s = number_format((float) $v, $d, '.', '');
+        return str_replace('.', ',', str_contains($s, '.') ? rtrim(rtrim($s, '0'), '.') : $s);
+    };
+    // 5 lignes au minimum (saisie possible sans JavaScript ; le script n'en garde qu'une vide en bas)
+    $rows = array_pad($items, max(5, count($items) + 1), ['amount' => null]);
+    $nextKey = 1 + max(array_map(fn ($c) => $c['key'] === 'amount' ? 0 : (int) substr($c['key'], 1), $columns));
     $err  = fn (string $k) => isset($errors[$k]) && is_string($errors[$k]) ? '<p class="field__error">' . e($errors[$k]) . '</p>' : '';
     $inv  = fn (string $k) => isset($errors[$k]) ? ' aria-invalid="true"' : '';
 
@@ -114,7 +124,9 @@ if ($action === 'new' || $action === 'edit') {
     <form method="post" class="panel form cinv-form" id="cinv-form" novalidate
           data-currency-words="<?= e(json_encode(CINV_CURRENCY_WORDS, JSON_UNESCAPED_UNICODE)) ?>"
           data-decimals="<?= e(json_encode(array_map(fn ($c) => $c['decimals'], DASH_CURRENCIES))) ?>"
-          data-max-lines="<?= CINV_MAX_LINES ?>">
+          data-max-lines="<?= CINV_MAX_LINES ?>"
+          data-max-columns="<?= CINV_MAX_TEXT_COLUMNS ?>"
+          data-next-key="<?= (int) $nextKey ?>">
         <?= csrf_field() ?>
         <input type="hidden" name="op" value="save">
         <?php if ($existing): ?><input type="hidden" name="id" value="<?= (int) $existing['id'] ?>"><?php endif; ?>
@@ -201,37 +213,68 @@ if ($action === 'new' || $action === 'edit') {
         </fieldset>
 
         <fieldset class="form-section">
-            <legend>Articles / prestations</legend>
-            <div class="sheet-wrap">
-                <table class="sheet" data-cinv-sheet>
-                    <thead>
-                        <tr>
-                            <th class="sheet__n">N°</th>
-                            <th>Désignation / Description</th>
-                            <th class="sheet__qty">Quantité</th>
-                            <th class="sheet__price">Prix unitaire</th>
-                            <th class="sheet__total">Montant</th>
-                            <th class="sheet__del"><span class="visually-hidden">Supprimer</span></th>
-                        </tr>
-                    </thead>
-                    <tbody data-cinv-rows>
-                    <?php foreach ($rows as $i => $row): ?>
-                        <tr data-cinv-row>
-                            <td class="sheet__n" data-cinv-n><?= $i + 1 ?></td>
-                            <td><textarea name="item_description[]" rows="1" maxlength="500" aria-label="Désignation, ligne <?= $i + 1 ?>" data-cinv-desc><?= e((string) $row['description']) ?></textarea></td>
-                            <td class="sheet__qty"><input name="item_quantity[]" inputmode="decimal" aria-label="Quantité, ligne <?= $i + 1 ?>" value="<?= e($num($row['quantity'], 3)) ?>" placeholder="1" data-cinv-qty></td>
-                            <td class="sheet__price"><input name="item_price[]" inputmode="decimal" aria-label="Prix unitaire, ligne <?= $i + 1 ?>" value="<?= e($num($row['unit_price'], $dec)) ?>" placeholder="0" data-cinv-price></td>
-                            <td class="sheet__total" data-cinv-line><?= $row['line_total'] !== '' ? e(cinv_amount((float) $row['line_total'], $currency)) : '—' ?></td>
-                            <td class="sheet__del"><button type="button" class="icon-btn icon-btn--danger" title="Supprimer la ligne" data-cinv-remove><?= icon('trash') ?><span class="visually-hidden">Supprimer la ligne</span></button></td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
+            <legend>Tableau de la facture</legend>
+
+            <!-- Mini-tableur : cellules modifiables directement, barre d'outils (assets/js/commercial-invoice.js) -->
+            <div class="xl" data-cinv-xl>
+                <div class="xl-toolbar" role="toolbar" aria-label="Outils du tableau">
+                    <div class="xl-namebox" data-cinv-namebox aria-live="polite" title="Cellule active">—</div>
+                    <div class="xl-group" role="group" aria-label="Lignes et colonnes">
+                        <button type="button" class="xl-btn" data-xl="row-add" title="Ajouter une ligne sous la cellule active"><?= icon('row-add') ?><span>Ligne</span></button>
+                        <button type="button" class="xl-btn" data-xl="row-del" title="Supprimer la ligne active" disabled><?= icon('row-del') ?><span>Supprimer la ligne</span></button>
+                        <button type="button" class="xl-btn" data-xl="col-add" title="Ajouter une colonne à droite de la colonne active"><?= icon('col-add') ?><span>Colonne</span></button>
+                        <button type="button" class="xl-btn" data-xl="col-del" title="Supprimer la colonne active" disabled><?= icon('col-del') ?><span>Supprimer la colonne</span></button>
+                    </div>
+                    <div class="xl-group" role="group" aria-label="Alignement">
+                        <button type="button" class="xl-btn xl-btn--icon" data-xl-align="left" title="Aligner à gauche" aria-pressed="false" disabled><?= icon('align-left') ?><span class="visually-hidden">Aligner à gauche</span></button>
+                        <button type="button" class="xl-btn xl-btn--icon" data-xl-align="center" title="Centrer" aria-pressed="false" disabled><?= icon('align-center') ?><span class="visually-hidden">Centrer</span></button>
+                        <button type="button" class="xl-btn xl-btn--icon" data-xl-align="right" title="Aligner à droite" aria-pressed="false" disabled><?= icon('align-right') ?><span class="visually-hidden">Aligner à droite</span></button>
+                        <span class="xl-scope" role="radiogroup" aria-label="Appliquer l'alignement à">
+                            <button type="button" class="xl-scope__btn is-active" data-xl-scope="cell" role="radio" aria-checked="true">Cellule</button>
+                            <button type="button" class="xl-scope__btn" data-xl-scope="column" role="radio" aria-checked="false">Colonne</button>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="sheet-wrap">
+                    <table class="sheet sheet--xl" data-cinv-sheet>
+                        <thead>
+                            <tr data-cinv-head>
+                                <th class="sheet__n" scope="col">N°</th>
+                                <?php foreach ($columns as $col): $isAmount = $col['type'] === 'amount'; ?>
+                                    <th class="sheet__col<?= $isAmount ? ' sheet__col--amount' : '' ?> is-<?= e($col['align']) ?>" scope="col"
+                                        data-col="<?= e($col['key']) ?>" data-align="<?= e($col['align']) ?>">
+                                        <div class="sheet__head">
+                                            <?php if ($isAmount): ?><span class="sheet__sigma" title="Colonne additionnée dans le total">Σ</span><?php endif; ?>
+                                            <div class="xl-cell xl-cell--head" contenteditable="true" spellcheck="false" role="textbox"
+                                                 aria-label="Titre de la colonne" data-cinv-label data-placeholder="<?= $isAmount ? 'Montant' : 'Titre de colonne' ?>"><?= e($col['label']) ?></div>
+                                        </div>
+                                    </th>
+                                <?php endforeach; ?>
+                            </tr>
+                        </thead>
+                        <tbody data-cinv-rows>
+                        <?php foreach ($rows as $i => $row): ?>
+                            <tr data-cinv-row>
+                                <td class="sheet__n" data-cinv-n><?= $i + 1 ?></td>
+                                <?php foreach ($columns as $col):
+                                    $align = cinv_cell_align($row, $col);
+                                    $own   = isset($row['_align'][$col['key']]) ? ' data-align="' . e($align) . '"' : '';
+                                    $value = $col['type'] === 'amount' ? $num($row['amount'] ?? null, $dec) : (string) ($row[$col['key']] ?? ''); ?>
+                                    <td class="is-<?= e($align) ?><?= $col['type'] === 'amount' ? ' sheet__amount' : '' ?>" data-col="<?= e($col['key']) ?>"<?= $own ?>>
+                                        <div class="xl-cell" contenteditable="true" role="textbox" data-cinv-cell<?= $col['type'] === 'amount' ? ' inputmode="decimal" data-cinv-amount' : ' aria-multiline="true"' ?>><?= e($value) ?></div>
+                                    </td>
+                                <?php endforeach; ?>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <!-- Contenu du tableau transmis au serveur à l'enregistrement (col_key[], col_label[], col_align[], cell[clé][], cell_align[clé][]) -->
+                <div data-cinv-payload hidden></div>
+                <noscript><p class="field__error">Le tableau de la facture nécessite JavaScript (activez-le dans votre navigateur).</p></noscript>
             </div>
-            <div class="sheet-actions">
-                <button type="button" class="btn btn--ghost btn--sm" data-cinv-add hidden><?= icon('plus') ?> Ajouter une ligne</button>
-                <small class="field__hint">Entrée : ligne suivante · ↑ ↓ : se déplacer dans la colonne · une ligne est ajoutée automatiquement en bas. Les lignes vides sont ignorées.</small>
-            </div>
+            <small class="field__hint xl-hint">Cliquez dans une cellule pour écrire · Entrée : cellule du dessous · Maj + Entrée : retour à la ligne · ↑ ↓ : changer de ligne · une ligne vide est ajoutée automatiquement en bas · seule la colonne Σ est additionnée · ligne sans montant : titre ou commentaire · montant négatif : remise.</small>
         </fieldset>
 
         <div class="cinv-bottom">
