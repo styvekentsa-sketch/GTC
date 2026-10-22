@@ -1,0 +1,108 @@
+/* ==========================================================================
+   Global Trading Corporation — Impression des factures commerciales (A4)
+   dashboard/print-commercial-invoice.php
+   ========================================================================== */
+:root {
+  --ink: #111827;
+  --muted: #5B6575;
+  --line: #D6DCE4;
+  --navy: #0B2F6B;
+  --blue: #1263B7;
+  --gold: #B8860B;
+  --soft: #F3F6FA;
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: #E5E9EF; font: 400 12.5px/1.45 var(--font); color: var(--ink); }
+p, h1, dl, dd { margin: 0; }
+
+.icon { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Barre d'outils (écran uniquement) */
+.ci-toolbar { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 12px; background: #fff; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; }
+.ci-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font: 600 13px var(--font); color: var(--ink); text-decoration: none; cursor: pointer; }
+.ci-btn:hover { border-color: var(--blue); color: var(--blue); }
+.ci-btn--primary { background: var(--navy); border-color: var(--navy); color: #fff; }
+.ci-btn--primary:hover { background: var(--blue); color: #fff; }
+
+/* Feuille A4 */
+.ci-sheet { width: 210mm; min-height: 297mm; margin: 18px auto; padding: 12mm 13mm 10mm; background: #fff; box-shadow: 0 8px 30px rgba(15, 23, 42, 0.12); display: flex; flex-direction: column; }
+.ci-sheet--empty { min-height: 0; text-align: center; gap: 12px; }
+
+/* En-tête officiel */
+.ci-head { display: flex; justify-content: space-between; gap: 8mm; padding-bottom: 4mm; border-bottom: 3px solid var(--navy); }
+.ci-head__brand { display: flex; align-items: center; gap: 4mm; min-width: 0; }
+.ci-head__logo { width: 42mm; height: auto; flex-shrink: 0; }
+.ci-head__name { font-size: 17px; font-weight: 800; letter-spacing: 0.02em; color: var(--navy); }
+.ci-head__activities { margin-top: 1.5mm; max-width: 95mm; font-size: 10px; font-weight: 600; line-height: 1.55; color: var(--gold); }
+.ci-head__activities span { color: var(--line); margin: 0 1px; }
+.ci-head__contact { display: flex; flex-direction: column; align-items: flex-end; gap: 0.6mm; font-style: normal; font-size: 10.5px; white-space: nowrap; color: var(--ink); text-align: right; }
+.ci-head__contact strong { color: var(--navy); font-weight: 700; }
+
+.ci-legal { margin-top: 2.5mm; padding: 2mm 3mm; border-radius: 4px; background: var(--soft); font-size: 9.5px; color: var(--muted); }
+.ci-legal p { display: flex; flex-wrap: wrap; justify-content: center; gap: 1mm 4mm; }
+.ci-legal p + p { margin-top: 0.8mm; }
+.ci-legal strong { color: var(--ink); font-weight: 600; }
+
+/* Document et client */
+.ci-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; margin-top: 7mm; }
+.ci-doc { position: relative; }
+.ci-doc__title { font-size: 24px; font-weight: 800; letter-spacing: 0.04em; color: var(--navy); }
+.ci-doc dl { display: grid; gap: 1mm; margin-top: 3mm; }
+.ci-doc dl div { display: flex; gap: 3mm; }
+.ci-doc dt { width: 30mm; color: var(--muted); }
+.ci-doc dd { font-weight: 700; }
+.ci-stamp { position: absolute; top: 2mm; right: 0; padding: 1mm 3mm; border: 2px solid currentColor; border-radius: 4px; font-size: 13px; font-weight: 800; letter-spacing: 0.1em; transform: rotate(-8deg); }
+.ci-stamp--paid { color: #047857; }
+.ci-stamp--cancelled { color: #B91C1C; }
+
+.ci-client { padding: 3.5mm 4mm; border: 1px solid var(--line); border-left: 3px solid var(--gold); border-radius: 4px; }
+.ci-client__label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.ci-client__name { margin: 1mm 0 1.2mm; font-size: 14px; font-weight: 700; }
+.ci-client p + p { font-size: 11.5px; }
+
+/* Articles */
+.ci-items { width: 100%; margin-top: 7mm; border-collapse: collapse; }
+.ci-items th { padding: 2.2mm 2.5mm; background: var(--navy); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-align: left; text-transform: uppercase; }
+.ci-items td { padding: 2.2mm 2.5mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+.ci-items tbody tr:nth-child(even) td { background: #FAFBFD; }
+.ci-items__n { width: 11mm; text-align: center !important; color: var(--muted); }
+.ci-items__num { text-align: right !important; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ci-items th.ci-items__num { width: 30mm; }
+.ci-items__desc { overflow-wrap: anywhere; }
+.ci-items tr { break-inside: avoid; }
+
+/* Totaux */
+.ci-summary { display: grid; grid-template-columns: minmax(0, 1fr) 74mm; gap: 6mm; margin-top: 5mm; break-inside: avoid; }
+.ci-words__label { font-size: 10.5px; color: var(--muted); }
+.ci-words__text { margin-top: 1mm; font-size: 12.5px; font-weight: 700; font-style: italic; }
+.ci-notes { margin-top: 4mm; font-size: 10.5px; color: var(--muted); }
+.ci-totals { width: 100%; border-collapse: collapse; }
+.ci-totals th, .ci-totals td { padding: 2mm 3mm; border-bottom: 1px solid var(--line); }
+.ci-totals th { text-align: left; font-weight: 500; color: var(--muted); }
+.ci-totals td { text-align: right; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ci-totals__grand th, .ci-totals__grand td { border-bottom: 0; background: var(--navy); color: #fff; font-size: 13.5px; font-weight: 800; }
+
+/* Signatures */
+.ci-signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 10mm; margin-top: 10mm; break-inside: avoid; }
+.ci-signatures p { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.ci-sign { display: flex; align-items: flex-end; justify-content: center; height: 24mm; margin-top: 2mm; border-bottom: 1px dashed #9AA4B2; font-size: 9px; color: #9AA4B2; }
+.ci-sign--stamp { border: 1px dashed #9AA4B2; border-radius: 4px; padding-bottom: 2mm; }
+
+.ci-foot { margin-top: auto; padding-top: 6mm; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2mm; border-top: 1px solid var(--line); font-size: 9px; color: var(--muted); }
+
+/* Impression */
+@page { size: A4; margin: 0; }
+@media print {
+  body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .ci-toolbar { display: none; }
+  .ci-sheet { margin: 0; box-shadow: none; width: 210mm; min-height: 297mm; }
+}
+@media screen and (max-width: 820px) {
+  .ci-sheet { width: auto; min-height: 0; margin: 10px; padding: 16px; }
+  .ci-head, .ci-meta, .ci-summary { display: block; }
+  .ci-head__contact { align-items: flex-start; text-align: left; margin-top: 10px; white-space: normal; }
+  .ci-client, .ci-totals { margin-top: 12px; }
+}

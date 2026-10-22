@@ -217,10 +217,15 @@ function cinv_input(): array
     $qty   = (array) ($_POST['item_quantity'] ?? []);
     $price = (array) ($_POST['item_price'] ?? []);
     $count = min(count($desc), CINV_MAX_LINES + 50);
+    // Même nettoyage que post() : texte UTF-8 garanti (une saisie Windows-1252 est convertie)
+    $clean = function ($v): string {
+        $v = trim(is_scalar($v) ? (string) $v : '');
+        return mb_check_encoding($v, 'UTF-8') ? $v : mb_convert_encoding($v, 'UTF-8', 'Windows-1252');
+    };
     for ($i = 0; $i < $count; $i++) {
-        $label = trim((string) ($desc[$i] ?? ''));
-        $q     = trim((string) ($qty[$i] ?? ''));
-        $p     = trim((string) ($price[$i] ?? ''));
+        $label = $clean($desc[$i] ?? '');
+        $q     = $clean($qty[$i] ?? '');
+        $p     = $clean($price[$i] ?? '');
         if ($label === '' && ($q === '' || $q === '1') && $p === '') {
             continue;   // ligne vide
         }

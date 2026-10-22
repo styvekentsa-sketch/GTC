@@ -617,6 +617,71 @@ code {
   .mail-view__actions .btn--danger { margin-left: 0; }
 }
 
+/* Factures commerciales : saisie style tableur (dashboard/invoices-list.php) */
+.sheet-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.sheet { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 0.875rem; }
+.sheet th {
+  padding: 0.5rem 0.625rem;
+  background: var(--surface-hi);
+  border-bottom: 1px solid var(--line);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.sheet td { padding: 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.sheet td + td, .sheet th + th { border-left: 1px solid var(--line); }
+.sheet tbody tr:last-child td { border-bottom: 0; }
+.sheet textarea, .sheet input {
+  display: block;
+  width: 100%;
+  min-height: 34px;
+  padding: 0.4375rem 0.625rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font: inherit;
+  line-height: 1.35;
+  resize: none;
+  overflow: hidden;
+}
+/* Cellules du tableur : priorité sur le style général des champs de formulaire */
+.form .sheet textarea, .form .sheet input:not([type="checkbox"]):not([type="hidden"]) { border: 0; border-radius: 0; background: transparent; box-shadow: none; min-height: 34px; }
+.sheet th.sheet__qty, .sheet th.sheet__price, .sheet th.sheet__total { text-align: right; }
+.form .sheet textarea:focus, .form .sheet input:focus, .sheet textarea:focus, .sheet input:focus { outline: 2px solid var(--blue); outline-offset: -2px; background: #F5F9FF; box-shadow: none; }
+.sheet [aria-invalid="true"] { background: var(--red-soft); }
+.sheet__n { width: 44px; padding: 0.5rem 0.5rem !important; text-align: center; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.sheet__qty { width: 100px; }
+.sheet__price { width: 150px; }
+.sheet__qty input, .sheet__price input { text-align: right; font-variant-numeric: tabular-nums; }
+.sheet__total { width: 160px; padding: 0.5rem 0.625rem !important; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sheet__del { width: 46px; text-align: center; }
+.sheet__del .icon-btn { margin: 0.125rem auto 0; }
+.sheet tbody tr:hover td { background: #FAFBFD; }
+.sheet-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin-top: 0.75rem; }
+.sheet-actions .field__hint { margin: 0; }
+
+.cinv-bottom { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 400px); gap: 1.5rem; align-items: start; margin-top: 1.5rem; }
+.cinv-totals { padding: 1rem 1.25rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-hi); }
+.cinv-totals dl div { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.5rem 0; border-bottom: 1px solid var(--line); font-size: 0.875rem; }
+.cinv-totals dt { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; color: var(--text-muted); }
+.cinv-totals dd { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cinv-tax { display: inline-flex; align-items: center; gap: 0.375rem; }
+.cinv-tax input { width: 68px; padding: 0.3125rem 0.5rem; text-align: right; }
+.cinv-tax .chip { cursor: pointer; background: var(--surface); }
+.cinv-totals__grand { border-bottom: 0 !important; }
+.cinv-totals__grand dt { color: var(--text); font-weight: 700; }
+.cinv-totals__grand dd { font-size: 1.25rem; color: var(--blue-dark); }
+.cinv-words { margin-top: 0.5rem; font-size: 0.8125rem; font-style: italic; line-height: 1.5; color: var(--text-muted); }
+.cinv-words:empty { display: none; }
+.cinv-actions { justify-content: flex-end; margin-top: 1.5rem; }
+.cinv-stats { margin-bottom: 1.25rem; }
+@media (max-width: 860px) {
+  .cinv-bottom { grid-template-columns: 1fr; }
+}
+
 /* Application installable (assets/js/pwa-install.js) */
 .sidebar__link--install { color: #FCD34D; }
 .sidebar__link--install:hover { color: #fff; }
