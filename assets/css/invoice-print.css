@@ -89,6 +89,10 @@ body {
 
 .pt-btn.is-active { background: #ECFDF5; color: var(--accent); }
 .pt-btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Téléchargement du PDF (pdf.php) : bouton mis en avant, utile surtout sur téléphone */
+.pt-btn--pdf { background: #0B4EA2; border-color: #0B4EA2; color: #fff; }
+.pt-btn--pdf:hover { background: #083B7A; color: #fff; }
+.pt-btn[hidden] { display: none; }
 
 /* Imprimante cible */
 .pt-printer { display: inline-flex; align-items: center; gap: 8px; font: 600 13px var(--font); color: var(--ink); }

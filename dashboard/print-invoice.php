@@ -108,6 +108,10 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
         <?php endif; ?>
         <button type="button" class="pt-btn pt-btn--primary" data-print><?= $direct ? "Envoyer à l'imprimante" : 'Imprimer à nouveau' ?></button>
         <?php if ($direct): ?><button type="button" class="pt-btn" data-print-browser>Boîte d'impression</button><?php endif; ?>
+        <?php $pdfUrl = 'pdf.php?type=receipt&id=' . (int) $inv['id'] . '&format=' . ($format === 'a4' ? 'a4' : 'a5'); ?>
+        <!-- PDF téléchargé directement (téléphones : contourne les limites d'impression de Chrome Android et Safari iOS) -->
+        <a href="<?= e($pdfUrl) ?>" class="pt-btn pt-btn--pdf" download><?= icon('download') ?> Télécharger le PDF</a>
+        <button type="button" class="pt-btn" data-pdf-share data-pdf-url="<?= e($pdfUrl) ?>" data-pdf-title="Reçu <?= e($inv['invoice_number']) ?>" hidden><?= icon('share') ?> Partager</button>
         <?php if ($printers): ?><p class="printer-picker__status pt-printer__status" data-printer-status aria-live="polite"></p><?php endif; ?>
     <?php endif; ?>
 </nav>
@@ -230,6 +234,7 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
 
 <script src="<?= e(asset_url('assets/js/custom-select.js', '../')) ?>"></script>
 <script src="<?= e(asset_url('assets/js/printers.js', '../')) ?>"></script>
+<script src="<?= e(asset_url('assets/js/pdf-share.js', '../')) ?>" defer></script>
 <script>
     // Impression automatique à l'arrivée sur la page (une fois le logo chargé) :
     // envoi direct à l'imprimante si elle l'accepte, sinon boîte d'impression du navigateur

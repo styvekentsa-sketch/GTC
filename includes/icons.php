@@ -64,6 +64,7 @@ function icon(string $name): string
         'col-add'      => '<rect width="14" height="18" x="3" y="3" rx="2"/><path d="M10 3v18"/><path d="M18 12h4"/><path d="M20 10v4"/>',
         'row-del'      => '<rect width="18" height="14" x="3" y="3" rx="2"/><path d="M3 10h18"/><path d="M10 20h4"/>',
         'col-del'      => '<rect width="14" height="18" x="3" y="3" rx="2"/><path d="M10 3v18"/><path d="M18 12h4"/>',
+        'share'    => '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98"/><path d="m15.41 6.51-6.82 3.98"/>',
         'archive'  => '<rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>',
         'reply'    => '<path d="m9 17-5-5 5-5"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>',
         'inbox'    => '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',

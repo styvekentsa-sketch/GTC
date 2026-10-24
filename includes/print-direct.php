@@ -70,7 +70,8 @@ function print_thanks(string $copy): string
 }
 
 /* ==========================================================================
-   Générateur PDF minimal (polices standard Helvetica, une page, logo JPEG)
+   Générateur PDF minimal : polices standard Helvetica, pages multiples, images JPEG, couleurs RVB
+   (reçus de caisse : impression directe et téléchargement ; factures commerciales : includes/commercial_invoice_pdf.php)
    ========================================================================== */
 
 final class GtcPdf
@@ -84,9 +85,39 @@ final class GtcPdf
         'û' => 'u', 'ü' => 'u', 'ý' => 'y', 'ÿ' => 'y', 'À' => 'A', 'Â' => 'A', 'Ä' => 'A', 'Á' => 'A', 'Ç' => 'C', 'È' => 'E', 'É' => 'E', 'Ê' => 'E',
         'Ë' => 'E', 'Î' => 'I', 'Ï' => 'I', 'Ô' => 'O', 'Ö' => 'O', 'Ù' => 'U', 'Û' => 'U', 'Ü' => 'U', 'Ÿ' => 'Y'];
 
-    private array $ops = [];
-    private ?array $image = null;
+    private array $pages = [[]];      // instructions de dessin, page par page
+    private int $page = 0;
+    private array $images = [];       // nom (/ImN) => [données JPEG, largeur, hauteur, canaux]
     private static array $widths = [];
+
+    /** Ajoute une page et y dirige les dessins suivants. */
+    public function addPage(): void
+    {
+        $this->pages[] = [];
+        $this->page = count($this->pages) - 1;
+    }
+
+    /** Revient sur une page déjà créée (ex. numéros de page ajoutés à la fin). */
+    public function setPage(int $index): void
+    {
+        $this->page = max(0, min($index, count($this->pages) - 1));
+    }
+
+    public function pageCount(): int
+    {
+        return count($this->pages);
+    }
+
+    private function op(string $op): void
+    {
+        $this->pages[$this->page][] = $op;
+    }
+
+    /** Couleur RVB (0-255) → opérateur PDF (rg : remplissage, RG : contour). */
+    private static function rgb(array $c, string $op): string
+    {
+        return sprintf('%s %s %s %s', self::f($c[0] / 255), self::f($c[1] / 255), self::f($c[2] / 255), $op);
+    }
 
     public function __construct(private float $wMm, private float $hMm)
     {
@@ -167,74 +198,125 @@ final class GtcPdf
         }
         // Couleur : niveau de gris, ou couleur RVB [r, v, b] (0 à 255)
         $color = $rgb ? sprintf('%s %s %s rg', self::f($rgb[0] / 255), self::f($rgb[1] / 255), self::f($rgb[2] / 255)) : self::f($gray) . ' g';
-        $this->ops[] = sprintf('BT /%s %s Tf %s %s %s Td (%s) Tj ET', $bold ? 'F2' : 'F1', self::f($size), $color,
-            self::f($x * self::K), self::f(($this->hMm - $y) * self::K), self::encode($s));
+        $this->op(sprintf('BT /%s %s Tf %s %s %s Td (%s) Tj ET', $bold ? 'F2' : 'F1', self::f($size), $color,
+            self::f($x * self::K), self::f(($this->hMm - $y) * self::K), self::encode($s)));
     }
 
     /** Ciseaux (police ZapfDingbats, caractère a2). */
     public function scissors(float $x, float $y, float $size, float $gray = 0): void
     {
-        $this->ops[] = sprintf('BT /F3 %s Tf %s g %s %s Td (") Tj ET', self::f($size), self::f($gray), self::f($x * self::K), self::f(($this->hMm - $y) * self::K));
+        $this->op(sprintf('BT /F3 %s Tf %s g %s %s Td (") Tj ET', self::f($size), self::f($gray), self::f($x * self::K), self::f(($this->hMm - $y) * self::K)));
     }
 
     public function line(float $x1, float $y1, float $x2, float $y2, float $lw = 0.2, float $gray = 0, ?array $dash = null): void
     {
-        $this->ops[] = sprintf('q %s G %s w [%s] 0 d %s %s m %s %s l S Q', self::f($gray), self::f($lw * self::K),
+        $this->op(sprintf('q %s G %s w [%s] 0 d %s %s m %s %s l S Q', self::f($gray), self::f($lw * self::K),
             $dash ? implode(' ', array_map(fn ($d) => self::f($d * self::K), $dash)) : '',
-            self::f($x1 * self::K), self::f(($this->hMm - $y1) * self::K), self::f($x2 * self::K), self::f(($this->hMm - $y2) * self::K));
+            self::f($x1 * self::K), self::f(($this->hMm - $y1) * self::K), self::f($x2 * self::K), self::f(($this->hMm - $y2) * self::K)));
     }
 
     /** Rectangle (haut-gauche en mm) : remplissage et/ou contour en niveaux de gris. */
     public function rect(float $x, float $y, float $w, float $h, ?float $fill = null, ?float $stroke = null, float $lw = 0.2, ?array $dash = null): void
     {
         $op = $fill !== null && $stroke !== null ? 'B' : ($fill !== null ? 'f' : 'S');
-        $this->ops[] = sprintf('q %s%s%s w [%s] 0 d %s %s %s %s re %s Q',
+        $this->op(sprintf('q %s%s%s w [%s] 0 d %s %s %s %s re %s Q',
             $fill !== null ? self::f($fill) . ' g ' : '', $stroke !== null ? self::f($stroke) . ' G ' : '', self::f($lw * self::K),
             $dash ? implode(' ', array_map(fn ($d) => self::f($d * self::K), $dash)) : '',
-            self::f($x * self::K), self::f(($this->hMm - $y - $h) * self::K), self::f($w * self::K), self::f($h * self::K), $op);
+            self::f($x * self::K), self::f(($this->hMm - $y - $h) * self::K), self::f($w * self::K), self::f($h * self::K), $op));
     }
 
-    /** Logo JPEG (le même image peut être placé plusieurs fois). */
+    /** Image JPEG [données, largeur, hauteur, canaux] ; une même image placée plusieurs fois n'est stockée qu'une fois. */
     public function image(array $jpeg, float $x, float $y, float $w, float $h): void
     {
-        $this->image = $jpeg;
-        $this->ops[] = sprintf('q %s 0 0 %s %s %s cm /Im1 Do Q', self::f($w * self::K), self::f($h * self::K),
-            self::f($x * self::K), self::f(($this->hMm - $y - $h) * self::K));
+        $name = 'Im' . substr(md5($jpeg[0]), 0, 10);
+        $this->images[$name] = $jpeg;
+        $this->op(sprintf('q %s 0 0 %s %s %s cm /%s Do Q', self::f($w * self::K), self::f($h * self::K),
+            self::f($x * self::K), self::f(($this->hMm - $y - $h) * self::K), $name));
+    }
+
+    /** Image JPEG d'un fichier (null si absent). */
+    public static function jpegFile(string $file): ?array
+    {
+        $info = is_file($file) ? @getimagesize($file) : false;
+        return $info && $info[2] === IMAGETYPE_JPEG ? [file_get_contents($file), $info[0], $info[1], $info['channels'] ?? 3] : null;
+    }
+
+    /** Texte en couleur RVB ; $font : 'regular', 'bold' ou 'bolditalic'. */
+    public function textColor(float $x, float $y, string $s, float $size, string $font = 'regular', string $align = 'left', array $rgb = [0, 0, 0]): void
+    {
+        $bold = $font !== 'regular';
+        if ($align !== 'left') {
+            $w = $this->width($s, $size, $bold);
+            $x -= $align === 'right' ? $w : $w / 2;
+        }
+        $this->op(sprintf('BT /%s %s Tf %s %s %s Td (%s) Tj ET', ['regular' => 'F1', 'bold' => 'F2', 'bolditalic' => 'F4'][$font] ?? 'F1',
+            self::f($size), self::rgb($rgb, 'rg'), self::f($x * self::K), self::f(($this->hMm - $y) * self::K), self::encode($s)));
+    }
+
+    /** Rectangle en couleurs RVB : remplissage et/ou contour (null = aucun). */
+    public function rectColor(float $x, float $y, float $w, float $h, ?array $fill = null, ?array $stroke = null, float $lw = 0.2, ?array $dash = null): void
+    {
+        $op = $fill && $stroke ? 'B' : ($fill ? 'f' : 'S');
+        $this->op(sprintf('q %s%s%s w [%s] 0 d %s %s %s %s re %s Q',
+            $fill ? self::rgb($fill, 'rg') . ' ' : '', $stroke ? self::rgb($stroke, 'RG') . ' ' : '', self::f($lw * self::K),
+            $dash ? implode(' ', array_map(fn ($d) => self::f($d * self::K), $dash)) : '',
+            self::f($x * self::K), self::f(($this->hMm - $y - $h) * self::K), self::f($w * self::K), self::f($h * self::K), $op));
+    }
+
+    /** Trait en couleur RVB. */
+    public function lineColor(float $x1, float $y1, float $x2, float $y2, float $lw, array $rgb, ?array $dash = null): void
+    {
+        $this->op(sprintf('q %s %s w [%s] 0 d %s %s m %s %s l S Q', self::rgb($rgb, 'RG'), self::f($lw * self::K),
+            $dash ? implode(' ', array_map(fn ($d) => self::f($d * self::K), $dash)) : '',
+            self::f($x1 * self::K), self::f(($this->hMm - $y1) * self::K), self::f($x2 * self::K), self::f(($this->hMm - $y2) * self::K)));
     }
 
     public function output(string $title): string
     {
-        $content = gzcompress(implode("\n", $this->ops));
+        // 1 catalogue · 2 pages · 3 infos · 4-7 polices · images · puis (page, contenu) pour chaque page
         $objects = [
             1 => '<< /Type /Catalog /Pages 2 0 R >>',
-            2 => '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-            3 => sprintf('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %s %s] /Resources << /Font << /F1 4 0 R /F2 5 0 R /F3 6 0 R >>%s >> /Contents 7 0 R >>',
-                self::f($this->wMm * self::K), self::f($this->hMm * self::K), $this->image ? ' /XObject << /Im1 9 0 R >>' : ''),
+            3 => '<< /Title (' . self::encode($title) . ') /Producer (GTC Dashboard) >>',
             4 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
             5 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
             6 => '<< /Type /Font /Subtype /Type1 /BaseFont /ZapfDingbats >>',
-            7 => "<< /Length " . strlen($content) . " /Filter /FlateDecode >>\nstream\n{$content}\nendstream",
-            8 => '<< /Title (' . self::encode($title) . ') /Producer (GTC Dashboard) >>',
+            7 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-BoldOblique /Encoding /WinAnsiEncoding >>',
         ];
-        if ($this->image) {
-            [$data, $w, $h, $channels] = $this->image;
-            $objects[9] = sprintf("<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /%s /BitsPerComponent 8%s /Filter /DCTDecode /Length %d >>\nstream\n%s\nendstream",
+        $n = 8;
+        $xobjects = [];
+        foreach ($this->images as $name => [$data, $w, $h, $channels]) {
+            $objects[$n] = sprintf("<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /%s /BitsPerComponent 8%s /Filter /DCTDecode /Length %d >>\nstream\n%s\nendstream",
                 $w, $h, $channels === 4 ? 'DeviceCMYK' : ($channels === 1 ? 'DeviceGray' : 'DeviceRGB'),
                 $channels === 4 ? ' /Decode [1 0 1 0 1 0 1 0]' : '', strlen($data), $data);
+            $xobjects[] = "/{$name} {$n} 0 R";
+            $n++;
         }
+        $resources = '<< /Font << /F1 4 0 R /F2 5 0 R /F3 6 0 R /F4 7 0 R >>' . ($xobjects ? ' /XObject << ' . implode(' ', $xobjects) . ' >>' : '') . ' >>';
+        $kids = [];
+        foreach ($this->pages as $ops) {
+            $content = gzcompress(implode("\n", $ops));
+            $objects[$n] = sprintf('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %s %s] /Resources %s /Contents %d 0 R >>',
+                self::f($this->wMm * self::K), self::f($this->hMm * self::K), $resources, $n + 1);
+            $objects[$n + 1] = "<< /Length " . strlen($content) . " /Filter /FlateDecode >>\nstream\n{$content}\nendstream";
+            $kids[] = "{$n} 0 R";
+            $n += 2;
+        }
+        $objects[2] = '<< /Type /Pages /Kids [' . implode(' ', $kids) . '] /Count ' . count($kids) . ' >>';
+        ksort($objects);
+
         $pdf = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
         $offsets = [];
-        foreach ($objects as $n => $body) {
-            $offsets[$n] = strlen($pdf);
-            $pdf .= "{$n} 0 obj\n{$body}\nendobj\n";
+        foreach ($objects as $num => $body) {
+            $offsets[$num] = strlen($pdf);
+            $pdf .= "{$num} 0 obj\n{$body}\nendobj\n";
         }
         $xref = strlen($pdf);
         $count = max(array_keys($objects)) + 1;
         $pdf .= "xref\n0 {$count}\n0000000000 65535 f \n";
-        for ($n = 1; $n < $count; $n++) {
-            $pdf .= isset($offsets[$n]) ? sprintf("%010d 00000 n \n", $offsets[$n]) : "0000000000 65535 f \n";
+        for ($i = 1; $i < $count; $i++) {
+            $pdf .= isset($offsets[$i]) ? sprintf("%010d 00000 n \n", $offsets[$i]) : "0000000000 65535 f \n";
         }
-        return $pdf . "trailer\n<< /Size {$count} /Root 1 0 R /Info 8 0 R >>\nstartxref\n{$xref}\n%%EOF\n";
+        return $pdf . "trailer\n<< /Size {$count} /Root 1 0 R /Info 3 0 R >>\nstartxref\n{$xref}\n%%EOF\n";
     }
 }
 

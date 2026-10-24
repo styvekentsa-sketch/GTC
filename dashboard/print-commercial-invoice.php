@@ -44,7 +44,10 @@ $curLbl  = currency_label($cur);
     <a href="invoices-list.php" class="ci-btn"><?= icon('arrow-left') ?> Retour aux factures</a>
     <?php if ($inv): ?>
         <a href="invoices-list.php?action=edit&amp;id=<?= (int) $inv['id'] ?>" class="ci-btn"><?= icon('edit') ?> Modifier</a>
-        <button type="button" class="ci-btn ci-btn--primary" onclick="window.print()"><?= icon('printer') ?> Imprimer / PDF</button>
+        <button type="button" class="ci-btn ci-btn--primary" onclick="window.print()"><?= icon('printer') ?> Imprimer</button>
+        <!-- PDF téléchargé directement (téléphones : contourne les limites d'impression de Chrome Android et Safari iOS) -->
+        <a href="pdf.php?type=invoice&amp;id=<?= (int) $inv['id'] ?>" class="ci-btn ci-btn--pdf" download><?= icon('download') ?> Télécharger le PDF</a>
+        <button type="button" class="ci-btn" data-pdf-share data-pdf-url="pdf.php?type=invoice&amp;id=<?= (int) $inv['id'] ?>" data-pdf-title="<?= e($type['label'] . ' ' . $inv['invoice_number']) ?>" hidden><?= icon('share') ?> Partager</button>
     <?php endif; ?>
 </nav>
 
@@ -171,5 +174,6 @@ $curLbl  = currency_label($cur);
 <?php if ($inv && $auto): ?>
 <script>window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 400); });</script>
 <?php endif; ?>
+<script src="<?= e(asset_url('assets/js/pdf-share.js', '../')) ?>" defer></script>
 </body>
 </html>

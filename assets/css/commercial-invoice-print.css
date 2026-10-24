@@ -26,6 +26,10 @@ p, h1, dl, dd { margin: 0; }
 .ci-btn:hover { border-color: var(--blue); color: var(--blue); }
 .ci-btn--primary { background: var(--navy); border-color: var(--navy); color: #fff; }
 .ci-btn--primary:hover { background: var(--blue); color: #fff; }
+/* Téléchargement du PDF (pdf.php) : bouton mis en avant, utile surtout sur téléphone */
+.ci-btn--pdf { background: #047857; border-color: #047857; color: #fff; }
+.ci-btn--pdf:hover { background: #065F46; color: #fff; }
+.ci-btn[hidden] { display: none; }
 
 /* Feuille A4 */
 .ci-sheet { position: relative; width: 210mm; min-height: 297mm; margin: 18px auto; padding: 0; background: #fff; box-shadow: 0 8px 30px rgba(15, 23, 42, 0.12); }
