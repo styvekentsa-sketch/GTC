@@ -1799,97 +1799,6 @@ font[style] {
   align-items: start;
 }
 
-/* ---- Cartes de service ---- */
-.svc-card {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background-color: var(--color-white);
-  border: 1px solid var(--color-slate-200);
-  border-radius: var(--radius-lg);
-  transition: border-color var(--transition);
-}
-
-.svc-card:hover {
-  border-color: var(--color-accent);
-}
-
-.svc-card__media {
-  aspect-ratio: 16 / 9;
-  overflow: hidden;
-  background-color: var(--color-slate-100);
-}
-
-.svc-card__media img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.svc-card__body {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  padding: var(--space-6);
-}
-
-.svc-card__icon {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  margin-bottom: var(--space-4);
-  border-radius: var(--radius);
-  background-color: var(--color-accent-light);
-  color: var(--color-accent-dark);
-  font-size: 1.25rem;
-}
-
-.svc-card__title {
-  font-size: var(--fs-xl);
-}
-
-.svc-card__tagline {
-  margin-top: var(--space-2);
-  font-weight: 600;
-  color: var(--color-accent-dark);
-}
-
-.svc-card__text {
-  margin-top: var(--space-3);
-  font-size: var(--fs-sm);
-  line-height: 1.7;
-  color: var(--color-text-muted);
-}
-
-.svc-list {
-  display: grid;
-  gap: var(--space-2);
-  margin: var(--space-5) 0 var(--space-6);
-  padding-top: var(--space-5);
-  border-top: 1px solid var(--color-slate-200);
-}
-
-.svc-list li {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  font-size: var(--fs-sm);
-  color: var(--color-navy-800);
-}
-
-.svc-list .icon {
-  margin-top: 0.2em;
-  color: var(--color-accent);
-}
-
-.svc-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin-top: auto;
-}
-
 /* ---- Boutons du hero ---- */
 .page-hero__actions {
   display: flex;
@@ -3495,14 +3404,9 @@ a.social__link--twitter:hover,   a.social__link--twitter:focus-visible   { backg
     font-size: var(--fs-xs);
   }
 
-  .svc-card__body,
   .fx,
   .svc-contact {
     padding: var(--space-5);
-  }
-
-  .svc-card__actions .btn {
-    flex: 1 1 100%;
   }
 
   .page-hero__actions .btn {
@@ -3627,4 +3531,169 @@ a.social__link--twitter:hover,   a.social__link--twitter:focus-visible   { backg
   *::after {
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ==========================================================================
+   Bandeau défilant des services (includes/services-carousel.php)
+   index.php (aperçu) et services.php (avec boutons) : mêmes cartes,
+   aux couleurs du logo (bleu, vert, magenta en alternance)
+   ========================================================================== */
+.svc-carousel {
+  --brand-blue:    #0B4EA2;
+  --brand-green:   #009A44;
+  --brand-magenta: #A3197C;
+  overflow: hidden;
+  padding-block: var(--space-3) var(--space-5);   /* place pour l'élévation au survol */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+
+.svc-carousel__track {
+  display: flex;
+  width: max-content;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  animation: svc-scroll 50s linear infinite;
+}
+
+.svc-carousel:hover .svc-carousel__track,
+.svc-carousel:focus-within .svc-carousel__track {
+  animation-play-state: paused;
+}
+
+@keyframes svc-scroll {
+  to { transform: translateX(-50%); }
+}
+
+.svc-slide {
+  --tone: var(--brand-blue);
+  --tone-soft: rgba(11, 78, 162, 0.08);
+  position: relative;
+  flex: 0 0 270px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-right: var(--space-5);   /* marge (et non gap) : boucle sans saut à -50 % */
+  padding: var(--space-6) var(--space-5);
+  text-align: center;
+  background-color: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+}
+
+.svc-slide:nth-child(3n + 2) { --tone: var(--brand-green);   --tone-soft: rgba(0, 154, 68, 0.08); }
+.svc-slide:nth-child(3n + 3) { --tone: var(--brand-magenta); --tone-soft: rgba(163, 25, 124, 0.08); }
+
+/* Liseré de couleur qui se déploie au survol */
+.svc-slide::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background-color: var(--tone);
+  transform: scaleX(0.25);
+  transition: transform 0.3s ease;
+}
+
+.svc-slide:hover,
+.svc-slide:focus-within {
+  transform: translateY(-6px);
+  border-color: var(--tone);
+  box-shadow: 0 14px 30px -12px rgba(31, 38, 48, 0.25);
+}
+
+.svc-slide:hover::before,
+.svc-slide:focus-within::before { transform: scaleX(1); }
+
+/* Aperçu (index.php) : toute la carte est cliquable */
+.svc-slide__link {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+}
+
+.svc-slide__link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.svc-slide__icon {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  margin-bottom: var(--space-4);
+  border-radius: 50%;
+  background-color: var(--tone-soft);
+  color: var(--tone);
+  font-size: 1.75rem;
+  transition: background-color var(--transition), color var(--transition);
+}
+
+.svc-slide:hover .svc-slide__icon,
+.svc-slide:focus-within .svc-slide__icon {
+  background-color: var(--tone);
+  color: var(--color-white);
+}
+
+.svc-slide__title {
+  font-size: var(--fs-lg);
+  margin-bottom: var(--space-1);
+}
+
+.svc-slide__text {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+.svc-slide__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-5);
+}
+
+.svc-carousel__more {
+  margin-top: var(--space-4);
+  text-align: center;
+}
+
+/* Téléphones : cartes plus étroites */
+@media (max-width: 575.98px) {
+  .svc-slide {
+    flex-basis: 250px;
+    margin-right: var(--space-3);
+    padding: var(--space-5) var(--space-4);
+  }
+  .svc-slide__icon { width: 52px; height: 52px; font-size: 1.5rem; }
+  .svc-slide__title { font-size: var(--fs-base); }
+  .svc-slide__actions .btn { white-space: nowrap; padding-inline: var(--space-3); }
+}
+
+/* Moins d'animations demandé : grille fixe, sans la copie de la boucle */
+@media (prefers-reduced-motion: reduce) {
+  .svc-carousel { -webkit-mask-image: none; mask-image: none; }
+  .svc-carousel__track {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-4);
+    width: auto;
+    padding-inline: var(--space-5);
+    animation: none;
+  }
+  .svc-slide { margin-right: 0; transition: none; }
+  .svc-slide::before { transition: none; }
+  .svc-slide:hover, .svc-slide:focus-within { transform: none; }
+  .svc-carousel__track [aria-hidden="true"] { display: none; }
 }

@@ -73,58 +73,6 @@ $hero = [
     ],
 ];
 
-$services = [
-    [
-        'icon'    => 'exchange',
-        'image'   => 'exchange',
-        'alt'     => 'Billets en euros et en dollars : change de devises FCFA, EUR, USD',
-        'title'   => 'Change de devises',
-        'tagline' => 'Vos devises au taux du jour, sans détour.',
-        'text'    => "Particuliers, voyageurs ou commerçants : changez vos billets en toute sécurité, avec un taux annoncé clairement avant chaque opération.",
-        'points'  => [
-            'Taux compétitifs, communiqués avant l\'opération',
-            '7 devises : EUR, USD, CAD, FCFA, NGN, AED, CNY',
-            'Échange immédiat au guichet',
-            'Remise en espèces à Douala, rue Paul Soppo Priso',
-        ],
-        'cta'     => 'Demander un change',
-        'simulate' => true,
-        'message' => 'Bonjour GTC, je souhaite effectuer un change de devises. Quel est votre taux du jour ?',
-    ],
-    [
-        'icon'    => 'transfer',
-        'image'   => 'transfer',
-        'alt'     => "Paiement par carte bancaire pour un transfert d'argent international",
-        'title'   => 'Transfert de fonds international',
-        'tagline' => 'Votre argent arrive là où il doit arriver.',
-        'text'    => "Envoyez ou recevez des fonds entre le Cameroun et l'étranger, par virement bancaire ou en espèces — même sans compte bancaire à l'étranger.",
-        'points'  => [
-            'Traitement rapide de chaque dépôt',
-            'Virement bancaire ou remise en espèces',
-            'Bénéficiaire prévenu par appel dès le dépôt',
-            'Afrique, Europe, Amérique, Chine, Dubaï, Inde',
-        ],
-        'cta'     => 'Demander un transfert',
-        'message' => "Bonjour GTC, je souhaite effectuer un transfert d'argent international.",
-    ],
-    [
-        'icon'    => 'box',
-        'image'   => 'port',
-        'alt'     => 'Port de commerce et conteneurs : import-export et commerce international',
-        'title'   => 'Import / Export',
-        'tagline' => "Vos marchandises, de l'achat à la livraison.",
-        'text'    => "Née du négoce et du transit, GTC accompagne vos projets d'importation et d'exportation et règle vos fournisseurs à l'étranger.",
-        'points'  => [
-            'Négoce, transit et import-export',
-            'Paiement de vos fournisseurs à l\'étranger',
-            'Suivi à chaque étape de la démarche',
-            'Étude de votre besoin et devis sur demande',
-        ],
-        'cta'     => 'Demander un devis',
-        'message' => "Bonjour GTC, j'ai un projet d'import-export et je souhaite un devis.",
-    ],
-];
-
 $availabilityText = [
     'available' => 'Guichet et transfert',
     'request'   => 'Sur demande — nous contacter',
@@ -157,40 +105,11 @@ include __DIR__ . '/includes/hero.php';
         <div class="container">
             <header class="section__header">
                 <span class="section__eyebrow">Ce que nous faisons</span>
-                <h2>Trois services, une seule exigence : la fiabilité</h2>
+                <h2>Nos services, une seule exigence : la fiabilité</h2>
             </header>
-
-            <div class="grid grid--3">
-                <?php foreach ($services as $s): ?>
-                    <article class="svc-card">
-                        <div class="svc-card__media">
-                            <?= unsplash_img($s['image'], $s['alt'], ['sizes' => '(max-width: 640px) 100vw, (max-width: 992px) 50vw, 33vw']) ?>
-                        </div>
-                        <div class="svc-card__body">
-                            <span class="svc-card__icon"><?= icon($s['icon']) ?></span>
-                            <h3 class="svc-card__title"><?= e($s['title']) ?></h3>
-                            <p class="svc-card__tagline"><?= e($s['tagline']) ?></p>
-                            <p class="svc-card__text"><?= e($s['text']) ?></p>
-
-                            <ul class="svc-list">
-                                <?php foreach ($s['points'] as $point): ?>
-                                    <li><?= icon('check') ?><span><?= e($point) ?></span></li>
-                                <?php endforeach; ?>
-                            </ul>
-
-                            <div class="svc-card__actions">
-                                <a href="<?= e(wa_link($s['message'])) ?>" class="btn btn--accent" target="_blank" rel="noopener">
-                                    <?= icon('whatsapp') ?> <?= e($s['cta']) ?>
-                                </a>
-                                <?php if (!empty($s['simulate'])): ?>
-                                    <a href="#simulateur" class="btn btn--outline open-calculator"><?= icon('calc') ?> Simuler</a>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </article>
-                <?php endforeach; ?>
-            </div>
         </div>
+
+        <?php $carouselFull = true; include __DIR__ . '/includes/services-carousel.php'; ?>
     </section>
 
     <!-- ==================== DEVISES ==================== -->

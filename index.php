@@ -112,54 +112,12 @@ $isOpen = gtc_is_open();
             <span class="section__eyebrow">Nos services</span>
             <h2>Services en vedette</h2>
         </header>
+    </div>
 
-        <div class="grid grid--2">
-            <!-- Transfert de fonds -->
-            <article class="card card--media">
-                <div class="card__media">
-                    <?= unsplash_img('transfer', "Transfert d'argent international : paiement par carte bancaire sur ordinateur portable", ['sizes' => '(max-width: 640px) 100vw, 50vw']) ?>
-                </div>
-                <span class="card__icon"><?= icon('transfer') ?></span>
-                <h3 class="card__title">Transfert de fonds international</h3>
-                <ul class="feature-list">
-                    <li class="feature-list__item">
-                        <span class="feature-list__icon"><?= icon('bank') ?></span>
-                        <span>Banque locale vers internationale</span>
-                    </li>
-                    <li class="feature-list__item">
-                        <span class="feature-list__icon"><?= icon('hand') ?></span>
-                        <span>Remise d'espèces main à main</span>
-                    </li>
-                </ul>
-                <div class="card__footer">
-                    <a href="services.php" class="card__link">En savoir plus <?= icon('arrow') ?></a>
-                </div>
-            </article>
+    <?php $carouselFull = false; include __DIR__ . '/includes/services-carousel.php'; ?>
 
-            <!-- Change -->
-            <article class="card card--media">
-                <div class="card__media">
-                    <?= unsplash_img('exchange', 'Billets en euros et en dollars pour le change de devises à Douala', ['sizes' => '(max-width: 640px) 100vw, 50vw']) ?>
-                </div>
-                <span class="card__icon"><?= icon('exchange') ?></span>
-                <h3 class="card__title">Change / Échange de devises</h3>
-                <ul class="currency-grid">
-                    <?php foreach ($currencies as $c): ?>
-                        <li class="currency-grid__item">
-                            <?= currency_badge($c['code']) ?>
-                            <span class="currency-grid__text">
-                                <span class="currency-grid__code"><?= e($c['code']) ?></span>
-                                <span class="currency-grid__label"><?= e($c['label']) ?></span>
-                            </span>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-                <div class="card__footer card__footer--split">
-                    <a href="services.php" class="card__link">En savoir plus <?= icon('arrow') ?></a>
-                    <a href="services.php#simulateur" class="card__link card__link--accent open-calculator"><?= icon('calc') ?> Simuler un change</a>
-                </div>
-            </article>
-        </div>
+    <div class="container svc-carousel__more">
+        <a href="services.php" class="btn btn--primary">Voir tous nos services <?= icon('arrow') ?></a>
     </div>
 </section>
 
