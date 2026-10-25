@@ -204,6 +204,11 @@ function db_ensure_schema(PDO $pdo): void
         // Version de session : augmentée à chaque changement de mot de passe, elle ferme les sessions ouvertes ailleurs
         $pdo->exec('ALTER TABLE users ADD COLUMN session_version INT NOT NULL DEFAULT 1');
     }
+    if (!db_column_exists($pdo, 'users', 'remember_token')) {
+        // « Se souvenir de moi » : empreinte SHA-256 du jeton du cookie et date de fin de validité
+        $pdo->exec('ALTER TABLE users ADD COLUMN remember_token VARCHAR(64) NULL');
+        $pdo->exec('ALTER TABLE users ADD COLUMN remember_expires ' . db_types()['dt'] . ' NULL');
+    }
     if (!db_table_exists($pdo, 'partners')) {
         db_install_partners($pdo);
     }
@@ -895,6 +900,8 @@ function db_users_table_sql(string $table): string
             status {$status} NOT NULL DEFAULT 'actif',
             must_change_password SMALLINT NOT NULL DEFAULT 0,
             session_version INT NOT NULL DEFAULT 1,
+            remember_token VARCHAR(64) NULL,
+            remember_expires {$dt} NULL,
             phone VARCHAR(50) NULL,
             last_login_at {$dt} NULL,
             last_login_ip VARCHAR(45) NULL,

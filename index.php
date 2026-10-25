@@ -114,7 +114,7 @@ $isOpen = gtc_is_open();
         </header>
     </div>
 
-    <?php $carouselFull = false; include __DIR__ . '/includes/services-carousel.php'; ?>
+    <?php include __DIR__ . '/includes/services-carousel.php'; ?>
 
     <div class="container svc-carousel__more">
         <a href="services.php" class="btn btn--primary">Voir tous nos services <?= icon('arrow') ?></a>

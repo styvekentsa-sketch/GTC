@@ -17,12 +17,6 @@ require_once __DIR__ . '/includes/rates.php';
 require_once __DIR__ . '/includes/settings.php';   // taux de la grille de l'entreprise (includes/company_rates.php)
 include __DIR__ . '/includes/header.php';
 
-/** Lien WhatsApp avec message prérempli. */
-function wa_link(string $message = ''): string
-{
-    return 'https://wa.me/' . GTC_WHATSAPP . ($message !== '' ? '?text=' . rawurlencode($message) : '');
-}
-
 /** Taux formaté à la française, au dix-millième près (« 655,957 », « 3,6941 »). */
 function fx_rate_format(float $rate, string $code): string
 {
@@ -57,7 +51,7 @@ function flag(string $code, int $width = 32): string
 
 $hero = [
     'crumb'   => 'Services',
-    'image'   => 'buildings',
+    'image'   => 'af-harbour',
     'eyebrow' => 'Nos services',
     'title'   => 'Nos Solutions Financières & Commerciales',
     'lead'    => "Change de devises, transferts internationaux et import-export : GTC traite vos opérations "
@@ -109,7 +103,7 @@ include __DIR__ . '/includes/hero.php';
             </header>
         </div>
 
-        <?php $carouselFull = true; include __DIR__ . '/includes/services-carousel.php'; ?>
+        <?php include __DIR__ . '/includes/services-carousel.php'; ?>
     </section>
 
     <!-- ==================== DEVISES ==================== -->

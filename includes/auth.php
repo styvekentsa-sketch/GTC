@@ -18,6 +18,8 @@ const AUTH_ABSOLUTE_LIMIT = 8 * 3600;  // 8 h maximum par session
 const AUTH_REGEN_INTERVAL = 900;       // nouvel identifiant de session toutes les 15 min
 const AUTH_MAX_ATTEMPTS   = 5;         // tentatives échouées autorisées PAR ADRESSE E-MAIL…
 const AUTH_LOCK_MINUTES   = 15;        // …par fenêtre de 15 minutes (au-delà, seule cette adresse est verrouillée)
+const AUTH_REMEMBER_COOKIE = 'GTC_REMEMBER';  // « Se souvenir de moi » : cookie « id:jeton »…
+const AUTH_REMEMBER_DAYS   = 30;              // …valable 30 jours
 
 if (!function_exists('e')) {
     /** Échappement HTML */
@@ -67,7 +69,10 @@ function auth_session_start(): void
         if ($idle > AUTH_IDLE_TIMEOUT || $elapsed > AUTH_ABSOLUTE_LIMIT) {
             auth_logout();
             auth_session_start();
-            flash('warning', 'Votre session a expiré. Merci de vous reconnecter.');
+            // Avec « Se souvenir de moi », current_user() rouvre aussitôt une session : pas de message
+            if (!isset($_COOKIE[AUTH_REMEMBER_COOKIE])) {
+                flash('warning', 'Votre session a expiré. Merci de vous reconnecter.');
+            }
             return;
         }
     }
@@ -109,8 +114,9 @@ function current_user(): ?array
     if ($user !== false) {
         return $user;
     }
-    // Session authentifiée : identifiant ET drapeau de connexion posés par auth_attempt()
-    if (empty($_SESSION['user_id']) || ($_SESSION['logged_in'] ?? false) !== true) {
+    // Session authentifiée : identifiant ET drapeau de connexion posés par auth_open_session().
+    // À défaut, reconnexion automatique par le cookie « Se souvenir de moi ».
+    if ((empty($_SESSION['user_id']) || ($_SESSION['logged_in'] ?? false) !== true) && !auth_remember_login()) {
         return $user = null;
     }
     $user = auth_session_user();
@@ -156,7 +162,8 @@ function auth_session_user(): ?array
 /** Ferme les sessions ouvertes d'un compte (elles seront refusées à leur prochaine requête). */
 function auth_revoke_sessions(int $userId): int
 {
-    db_query('UPDATE users SET session_version = session_version + 1 WHERE id = ?', [$userId]);
+    // Le jeton « Se souvenir de moi » est annulé lui aussi : pas de reconnexion automatique
+    db_query('UPDATE users SET session_version = session_version + 1, remember_token = NULL, remember_expires = NULL WHERE id = ?', [$userId]);
     return (int) db_value('SELECT session_version FROM users WHERE id = ?', [$userId]);
 }
 
@@ -291,7 +298,7 @@ function auth_unlock(string $email): void
  * Tente une connexion. Retourne true en cas de succès.
  * Temps de réponse constant que le compte existe ou non (pas d'énumération des e-mails).
  */
-function auth_attempt(string $email, string $password): bool
+function auth_attempt(string $email, string $password, bool $remember = false): bool
 {
     $email = mb_strtolower(trim($email));
     $user  = db_one('SELECT id, name, role, password, status, session_version FROM users WHERE email = ?', [$email]);
@@ -316,6 +323,17 @@ function auth_attempt(string $email, string $password): bool
     }
 
     auth_unlock($email);   // compteur de cette adresse remis à zéro (les autres adresses ne sont pas concernées)
+    auth_open_session($user);
+    if ($remember) {
+        auth_remember_issue((int) $user['id']);
+    }
+
+    return true;
+}
+
+/** Ouvre la session du compte $user (connexion par mot de passe ou par le cookie « Se souvenir de moi »). */
+function auth_open_session(array $user): void
+{
     // Historique : la connexion « actuelle » devient la « précédente », puis on enregistre la nouvelle
     db_query(
         'UPDATE users SET previous_login_at = last_login_at, previous_login_ip = last_login_ip,
@@ -336,8 +354,76 @@ function auth_attempt(string $email, string $password): bool
     $_SESSION['last_activity']  = time();
     $_SESSION['regenerated_at'] = time();
     unset($_SESSION['csrf_token']);
+}
 
+/* ==========================================================================
+   « Se souvenir de moi »
+   --------------------------------------------------------------------------
+   - Cookie GTC_REMEMBER = « id:jeton » (jeton aléatoire de 256 bits), HttpOnly, SameSite=Lax,
+     Secure en HTTPS, valable AUTH_REMEMBER_DAYS jours.
+   - En base (users.remember_token) : uniquement l'empreinte SHA-256 du jeton ; une fuite de la base
+     ne permet donc pas de se connecter.
+   - Un jeton par compte : cocher la case sur un nouvel appareil remplace celui de l'appareil précédent.
+   - Jeton annulé à la déconnexion, au changement / à la réinitialisation du mot de passe
+     et à la désactivation du compte (auth_revoke_sessions()).
+   ========================================================================== */
+
+/** Crée un nouveau jeton pour le compte et le dépose dans le navigateur. */
+function auth_remember_issue(int $userId): void
+{
+    $token = bin2hex(random_bytes(32));
+    db_query('UPDATE users SET remember_token = ?, remember_expires = ? WHERE id = ?',
+        [hash('sha256', $token), auth_time(AUTH_REMEMBER_DAYS * 86400), $userId]);
+    auth_remember_cookie($userId . ':' . $token, time() + AUTH_REMEMBER_DAYS * 86400);
+}
+
+/** Dépose (ou efface, avec une date passée) le cookie « Se souvenir de moi ». */
+function auth_remember_cookie(string $value, int $expires): void
+{
+    setcookie(AUTH_REMEMBER_COOKIE, $value, [
+        'expires'  => $expires,
+        'path'     => '/',
+        'secure'   => is_https(),
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+    if ($value === '') {
+        unset($_COOKIE[AUTH_REMEMBER_COOKIE]);
+    }
+}
+
+/**
+ * Reconnexion automatique : cookie valide (jeton identique, non expiré, compte actif) → nouvelle session.
+ * Cookie invalide → il est effacé du navigateur. Les requêtes de fond n'ouvrent jamais de session.
+ */
+function auth_remember_login(): bool
+{
+    $cookie = (string) ($_COOKIE[AUTH_REMEMBER_COOKIE] ?? '');
+    if ($cookie === '' || session_status() !== PHP_SESSION_ACTIVE || (defined('GTC_PASSIVE_REQUEST') && GTC_PASSIVE_REQUEST)) {
+        return false;
+    }
+    [$id, $token] = array_pad(explode(':', $cookie, 2), 2, '');
+    $user = ctype_digit($id) && preg_match('/^[a-f0-9]{64}$/', $token)
+        ? db_one("SELECT id, name, role, session_version, remember_token, remember_expires FROM users WHERE id = ? AND status = 'actif'", [(int) $id])
+        : null;
+    if (!$user || !$user['remember_token'] || !hash_equals($user['remember_token'], hash('sha256', $token))
+        || (string) $user['remember_expires'] < auth_time()) {
+        auth_remember_cookie('', time() - 42000);
+        return false;
+    }
+    auth_open_session($user);
     return true;
+}
+
+/** Annule le jeton du compte en base et efface le cookie du navigateur (déconnexion). */
+function auth_remember_forget(?int $userId): void
+{
+    if ($userId) {
+        db_query('UPDATE users SET remember_token = NULL, remember_expires = NULL WHERE id = ?', [$userId]);
+    }
+    if (isset($_COOKIE[AUTH_REMEMBER_COOKIE])) {
+        auth_remember_cookie('', time() - 42000);
+    }
 }
 
 /** Détruit complètement la session. */

@@ -2594,6 +2594,42 @@ select.fx__select {
   gap: var(--space-3);
 }
 
+/* Variante photo : image du port en fond, voile sombre pour la lisibilité */
+.about-cta--image {
+  position: relative;
+  overflow: hidden;
+  padding: var(--space-7) var(--space-6);
+  background-color: var(--color-navy-900);
+  border: 0;
+}
+
+.about-cta__bg {
+  position: absolute;
+  inset: 0;
+}
+
+.about-cta__bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.about-cta__bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(31, 38, 48, 0.92) 0%, rgba(31, 38, 48, 0.7) 60%, rgba(31, 38, 48, 0.45) 100%);
+}
+
+.about-cta--image > :not(.about-cta__bg) {
+  position: relative;
+}
+
+.about-cta--image h2,
+.about-cta--image p {
+  color: var(--color-white);
+}
+
 
 /* ==========================================================================
    10i. Réseaux sociaux
@@ -3535,17 +3571,13 @@ a.social__link--twitter:hover,   a.social__link--twitter:focus-visible   { backg
 
 /* ==========================================================================
    Bandeau défilant des services (includes/services-carousel.php)
-   index.php (aperçu) et services.php (avec boutons) : mêmes cartes,
-   aux couleurs du logo (bleu, vert, magenta en alternance)
+   index.php et services.php : cartes avec image, accroche, points clés et boutons
    ========================================================================== */
 .svc-carousel {
-  --brand-blue:    #0B4EA2;
-  --brand-green:   #009A44;
-  --brand-magenta: #A3197C;
   overflow: hidden;
-  padding-block: var(--space-3) var(--space-5);   /* place pour l'élévation au survol */
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  padding-block: var(--space-2) var(--space-4);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
 }
 
 .svc-carousel__track {
@@ -3554,7 +3586,7 @@ a.social__link--twitter:hover,   a.social__link--twitter:focus-visible   { backg
   margin: 0;
   padding: 0;
   list-style: none;
-  animation: svc-scroll 50s linear infinite;
+  animation: svc-scroll 80s linear infinite;
 }
 
 .svc-carousel:hover .svc-carousel__track,
@@ -3566,102 +3598,99 @@ a.social__link--twitter:hover,   a.social__link--twitter:focus-visible   { backg
   to { transform: translateX(-50%); }
 }
 
-.svc-slide {
-  --tone: var(--brand-blue);
-  --tone-soft: rgba(11, 78, 162, 0.08);
-  position: relative;
-  flex: 0 0 270px;
+/* ---- Carte de service ---- */
+.svc-card {
+  flex: 0 0 400px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  margin-right: var(--space-5);   /* marge (et non gap) : boucle sans saut à -50 % */
-  padding: var(--space-6) var(--space-5);
-  text-align: center;
-  background-color: var(--color-white);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  margin-right: var(--space-6);   /* marge (et non gap) : boucle sans saut à -50 % */
   overflow: hidden;
-  transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+  background-color: var(--color-white);
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-lg);
+  transition: border-color var(--transition);
 }
 
-.svc-slide:nth-child(3n + 2) { --tone: var(--brand-green);   --tone-soft: rgba(0, 154, 68, 0.08); }
-.svc-slide:nth-child(3n + 3) { --tone: var(--brand-magenta); --tone-soft: rgba(163, 25, 124, 0.08); }
-
-/* Liseré de couleur qui se déploie au survol */
-.svc-slide::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: 4px;
-  background-color: var(--tone);
-  transform: scaleX(0.25);
-  transition: transform 0.3s ease;
+.svc-card:hover,
+.svc-card:focus-within {
+  border-color: var(--color-accent);
 }
 
-.svc-slide:hover,
-.svc-slide:focus-within {
-  transform: translateY(-6px);
-  border-color: var(--tone);
-  box-shadow: 0 14px 30px -12px rgba(31, 38, 48, 0.25);
+.svc-card__media {
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background-color: var(--color-slate-100);
 }
 
-.svc-slide:hover::before,
-.svc-slide:focus-within::before { transform: scaleX(1); }
+.svc-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
-/* Aperçu (index.php) : toute la carte est cliquable */
-.svc-slide__link {
+.svc-card__body {
   display: flex;
   flex: 1;
   flex-direction: column;
-  align-items: center;
-  color: inherit;
-  text-decoration: none;
+  padding: var(--space-6) 2.5rem 2.5rem;
 }
 
-.svc-slide__link::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-}
-
-.svc-slide__icon {
+.svc-card__icon {
   display: grid;
   place-items: center;
-  width: 60px;
-  height: 60px;
-  margin-bottom: var(--space-4);
-  border-radius: 50%;
-  background-color: var(--tone-soft);
-  color: var(--tone);
-  font-size: 1.75rem;
-  transition: background-color var(--transition), color var(--transition);
+  width: 54px;
+  height: 54px;
+  margin-bottom: var(--space-5);
+  border-radius: var(--radius);
+  background-color: var(--color-accent-light);
+  color: var(--color-accent-dark);
+  font-size: 1.35rem;
 }
 
-.svc-slide:hover .svc-slide__icon,
-.svc-slide:focus-within .svc-slide__icon {
-  background-color: var(--tone);
-  color: var(--color-white);
+.svc-card__title {
+  font-size: var(--fs-2xl);
 }
 
-.svc-slide__title {
+.svc-card__tagline {
+  margin-top: var(--space-2);
   font-size: var(--fs-lg);
-  margin-bottom: var(--space-1);
+  font-weight: 600;
+  color: var(--color-accent-dark);
 }
 
-.svc-slide__text {
-  margin: 0;
+.svc-card__text {
+  margin-top: var(--space-3);
+  line-height: 1.75;
   color: var(--color-text-muted);
-  font-size: var(--fs-sm);
-  line-height: 1.45;
 }
 
-.svc-slide__actions {
+.svc-list {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-6) 0 var(--space-7);
+  padding: var(--space-6) 0 0;
+  list-style: none;
+  border-top: 1px solid var(--color-slate-200);
+}
+
+.svc-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  color: var(--color-navy-800);
+}
+
+.svc-list .icon {
+  flex-shrink: 0;
+  margin-top: 0.25em;
+  color: var(--color-accent);
+}
+
+.svc-card__actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-2);
+  gap: var(--space-4);
   margin-top: auto;
-  padding-top: var(--space-5);
 }
 
 .svc-carousel__more {
@@ -3671,14 +3700,15 @@ a.social__link--twitter:hover,   a.social__link--twitter:focus-visible   { backg
 
 /* Téléphones : cartes plus étroites */
 @media (max-width: 575.98px) {
-  .svc-slide {
-    flex-basis: 250px;
-    margin-right: var(--space-3);
-    padding: var(--space-5) var(--space-4);
+  .svc-card {
+    flex-basis: 300px;
+    margin-right: var(--space-4);
   }
-  .svc-slide__icon { width: 52px; height: 52px; font-size: 1.5rem; }
-  .svc-slide__title { font-size: var(--fs-base); }
-  .svc-slide__actions .btn { white-space: nowrap; padding-inline: var(--space-3); }
+  .svc-card__body { padding: var(--space-6) var(--space-5); }
+  .svc-card__title { font-size: var(--fs-xl); }
+  .svc-card__tagline { font-size: var(--fs-base); }
+  .svc-card__text,
+  .svc-list li { font-size: var(--fs-sm); }
 }
 
 /* Moins d'animations demandé : grille fixe, sans la copie de la boucle */
@@ -3687,13 +3717,11 @@ a.social__link--twitter:hover,   a.social__link--twitter:focus-visible   { backg
   .svc-carousel__track {
     flex-wrap: wrap;
     justify-content: center;
-    gap: var(--space-4);
+    gap: var(--space-6);
     width: auto;
     padding-inline: var(--space-5);
     animation: none;
   }
-  .svc-slide { margin-right: 0; transition: none; }
-  .svc-slide::before { transition: none; }
-  .svc-slide:hover, .svc-slide:focus-within { transform: none; }
+  .svc-card { margin-right: 0; }
   .svc-carousel__track [aria-hidden="true"] { display: none; }
 }

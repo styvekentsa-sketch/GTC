@@ -8,6 +8,8 @@ auth_session_start();
 
 if (is_post()) {
     csrf_verify();
+    // Jeton « Se souvenir de moi » du titulaire de la session (l'administrateur lors d'une prise de contrôle)
+    auth_remember_forget((int) ($_SESSION['original_admin_id'] ?? $_SESSION['user_id'] ?? 0) ?: null);
     auth_logout();
     auth_session_start();
     flash('success', 'Vous êtes déconnecté.');

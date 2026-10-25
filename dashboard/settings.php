@@ -218,6 +218,9 @@ if (is_post()) {
             db_query('UPDATE users SET password = ?, must_change_password = 0 WHERE id = ?', [password_hash($new, PASSWORD_DEFAULT), $user['id']]);
             // Sessions ouvertes sur les autres appareils fermées ; celle-ci reste active
             $_SESSION['auth_version'] = auth_revoke_sessions((int) $user['id']);
+            if (isset($_COOKIE[AUTH_REMEMBER_COOKIE])) {
+                auth_remember_issue((int) $user['id']);   // cet appareil reste mémorisé, les autres sont oubliés
+            }
             session_regenerate_id(true);
             $_SESSION['regenerated_at'] = time();
             flash('success', 'Mot de passe modifié. Vos autres sessions ouvertes (autres appareils) ont été fermées.');

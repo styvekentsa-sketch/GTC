@@ -17,6 +17,19 @@ const GTC_IMAGES = [
     'office'    => '1497366811353-6870744d04b2', // Salle de réunion
     'handshake' => '1521791136064-7986c2920216', // Poignée de main
     'desk'      => '1520607162513-77705c0f0d4a', // Bureau, téléphone, ordinateur
+    // Visuels africains (lieu vérifié sur la page Unsplash de chaque photo, licence Unsplash gratuite)
+    'af-naira'     => '1678693361474-d9aa8a7a96cc', // Billets de naira (Banque centrale du Nigeria)
+    'af-laptop'    => '1739289671660-b1155422c7b4', // Deux professionnels sur un ordinateur — Lagos, Nigeria
+    'af-terminal'  => '1775301147431-2255e85bf693', // Portiques du terminal à conteneurs — Le Cap, Afrique du Sud
+    'af-cranes'    => '1775301147438-822e02b49b0f', // Portiques du terminal à conteneurs (autre vue) — Le Cap
+    'af-trucks'    => '1738507869660-b44ea20ab037', // Camions de marchandises sur la route — Kenya
+    'af-ship'      => '1790597548977-e7cd606018f6', // Navire à quai, V&A Waterfront — Le Cap
+    'af-stacker'   => '1790597549053-f3aa2154ab9b', // Chariot gerbeur devant des conteneurs — port du Cap
+    'af-durban'    => '1737273697907-62bd30bb6be7', // Porte-conteneurs à l'entrée du port de Durban, Afrique du Sud
+    'af-deal'      => '1739285452618-0b7b3d04f953', // Poignée de main d'affaires — Lagos, Nigeria
+    'af-meeting'   => '1739287088753-73a9b8b771bc', // Réunion d'équipe — Lagos, Nigeria
+    'af-harbour'   => '1664541487952-a6a74289c480', // Port et grue du V&A Waterfront — Le Cap
+    'af-lagos'     => '1618828665011-0abd973f7bb8', // Civic Towers, Lekki — Lagos, Nigeria
 ];
 
 /** URL optimisée d'une image Unsplash. */
@@ -88,6 +101,12 @@ function local_picture(string $name, array $opts = []): string
          . '<img src="' . $url(1600, 'jpg') . '" srcset="' . $set('jpg') . '" sizes="100vw" alt=""'
          . ' width="' . (int) ($opts['width'] ?? 1600) . '" height="' . (int) ($opts['height'] ?? 900) . '"'
          . ' loading="eager" fetchpriority="high" decoding="async"' . $class . '></picture>';
+}
+
+/** Lien WhatsApp avec message prérempli. */
+function wa_link(string $message = ''): string
+{
+    return 'https://wa.me/' . GTC_WHATSAPP . ($message !== '' ? '?text=' . rawurlencode($message) : '');
 }
 
 /** Badge visuel d'une devise (symbole dans une pastille colorée). */

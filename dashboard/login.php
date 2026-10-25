@@ -35,7 +35,7 @@ if (is_post()) {
         $minutes = max(1, (int) ceil(($until - time()) / 60));
         $error = 'Trop de tentatives échouées pour cette adresse e-mail. Réessayez dans ' . $minutes
                . ' minute' . ($minutes > 1 ? 's' : '') . ', ou demandez à un administrateur de débloquer le compte.';
-    } elseif (auth_attempt($email, (string) ($_POST['password'] ?? ''))) {
+    } elseif (auth_attempt($email, (string) ($_POST['password'] ?? ''), !empty($_POST['remember']))) {
         redirect($next);
     } elseif ($until = auth_locked_until($email)) {
         $error = 'Identifiants incorrects. Trop de tentatives pour cette adresse e-mail : elle est verrouillée pendant '
@@ -61,6 +61,10 @@ auth_layout_open('Connexion', 'Espace de gestion réservé au personnel de Globa
     <div class="field">
         <label for="password">Mot de passe</label>
         <input id="password" name="password" type="password" required autocomplete="current-password">
+    </div>
+    <div class="field">
+        <label class="check"><input type="checkbox" name="remember" value="1"<?= !empty($_POST['remember']) ? ' checked' : '' ?>> Se souvenir de moi</label>
+        <small class="field__hint">Reste connecté <?= AUTH_REMEMBER_DAYS ?> jours sur cet appareil. À éviter sur un ordinateur partagé.</small>
     </div>
     <button type="submit" class="btn btn--primary btn--block"><?= icon('lock') ?> Se connecter</button>
 </form>

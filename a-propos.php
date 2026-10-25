@@ -24,7 +24,7 @@ $waLink = 'https://wa.me/' . GTC_WHATSAPP . '?text=' . rawurlencode('Bonjour GTC
 
 $hero = [
     'crumb'   => 'À propos',
-    'image'   => 'office',
+    'image'   => 'af-lagos',
     'eyebrow' => 'Qui sommes-nous',
     'title'   => 'À propos de Global Trading Corporation',
     'lead'    => "Votre partenaire de confiance pour le change, le transfert de fonds et l'import/export à Douala.",
@@ -87,7 +87,7 @@ include __DIR__ . '/includes/hero.php';
 
         <aside class="about-agency" aria-label="Notre agence">
             <div class="about-agency__photo">
-                <?= unsplash_img('handshake', 'Poignée de main entre deux partenaires', ['ratio' => 16 / 10, 'sizes' => '(max-width: 992px) 100vw, 40vw']) ?>
+                <?= unsplash_img('af-meeting', "Réunion d'équipe dans un bureau de Lagos", ['ratio' => 16 / 10, 'sizes' => '(max-width: 992px) 100vw, 40vw']) ?>
             </div>
             <div class="about-agency__body">
                 <h3 class="about-agency__title">Notre agence à Douala</h3>
@@ -165,7 +165,10 @@ include __DIR__ . '/includes/hero.php';
 <!-- ==================== APPEL À L'ACTION ==================== -->
 <section class="section section--white about-section">
     <div class="container">
-        <div class="about-cta">
+        <div class="about-cta about-cta--image">
+            <div class="about-cta__bg" aria-hidden="true">
+                <?= unsplash_img('af-cranes', '', ['ratio' => 3, 'sizes' => '(max-width: 1200px) 100vw, 1200px']) ?>
+            </div>
             <div>
                 <h2>Passez nous voir ou écrivez-nous</h2>
                 <p>Notre équipe vous reçoit à l'agence, rue Paul Soppo Priso, et répond à vos questions sur WhatsApp.</p>
@@ -174,7 +177,7 @@ include __DIR__ . '/includes/hero.php';
                 <a href="<?= e($waLink) ?>" class="btn btn--accent btn--lg" target="_blank" rel="noopener">
                     <?= icon('whatsapp') ?> WhatsApp
                 </a>
-                <a href="contact.php" class="btn btn--outline btn--lg"><?= icon('mail') ?> Nous contacter</a>
+                <a href="contact.php" class="btn btn--outline-light btn--lg"><?= icon('mail') ?> Nous contacter</a>
             </div>
         </div>
     </div>
