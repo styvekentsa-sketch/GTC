@@ -412,14 +412,92 @@ body {
 @media screen and (max-width: 860px) {
   .print-page--a4 .receipt,
   .print-page--a5 .receipt { width: auto; margin: 12px; padding: 20px; }
-  .receipt-sheet--a4.receipt-sheet--double { width: auto; height: auto; margin: 12px; padding: 20px; }
+  /* Colonne bornée à l'écran : le contenu insécable (date, « Exemplaire client ») ne l'élargit plus */
+  .receipt-sheet--a4.receipt-sheet--double { grid-template-columns: minmax(0, 1fr); width: auto; height: auto; margin: 12px; padding: 20px; }
   .receipt-sheet--a4.receipt-sheet--double .receipt { overflow: visible; }
-  .receipt-sheet--a4 .receipt__head { flex-wrap: wrap; }
+  .receipt-sheet--a4 .receipt__head,
+  .receipt-sheet--a4 .receipt__ref { flex-wrap: wrap; }
   .print-target,
   .print-direct { margin: 12px 12px 0; }
   .pt-printer { flex-wrap: wrap; justify-content: center; }
   .pt-printer select,
   .pt-printer .cselect { max-width: 100%; }
+}
+
+/* Très petits téléphones : aperçu plus serré pour que le tableau des montants tienne dans l'écran */
+@media screen and (max-width: 400px) {
+  .print-page--a4 .receipt,
+  .print-page--a5 .receipt { margin: 8px; padding: 14px 12px; }
+  .receipt-sheet--a4.receipt-sheet--double { margin: 8px; padding: 14px 12px; }
+  .print-page--a4 .receipt__table,
+  .print-page--a5 .receipt__table { font-size: 12px; }
+  .receipt-sheet--a4 .receipt__table th { white-space: normal; padding-right: 10px; }   /* « Montant net à remettre » peut passer à la ligne */
+  .print-target,
+  .print-direct { margin: 8px 8px 0; }
+}
+
+/* Retour visuel au toucher / au clic (tous écrans) */
+.pt-btn { transition: transform 0.12s ease, background-color 0.15s ease, box-shadow 0.15s ease; -webkit-tap-highlight-color: transparent; }
+.pt-btn:active { transform: scale(0.95); }
+.pt-btn:focus-visible { outline: 3px solid rgba(11, 78, 162, 0.35); outline-offset: 2px; }
+.pt-btn.is-busy { opacity: 0.6; cursor: progress; }
+
+/* ---------- Téléphones (< 768 px) : barre d'outils façon application ----------
+   1re ligne : Retour à gauche · Imprimer / PDF / Partager à droite, en boutons icônes
+   (couleurs du logo : vert, bleu, magenta) ; texte conservé pour les lecteurs d'écran (aria-label)
+   et en infobulle (title). 2e ligne : format de papier et imprimante cible. */
+@media screen and (max-width: 767.98px) {
+  .print-toolbar {
+    --gtc-blue: #0B4EA2;
+    --gtc-green: #009A44;
+    --gtc-magenta: #A3197C;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.92);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border-bottom: 0;
+    box-shadow: 0 1px 0 var(--line), 0 6px 18px -10px rgba(31, 38, 48, 0.35);
+  }
+  /* Le texte des boutons principaux est masqué visuellement (lu par les lecteurs d'écran via aria-label) */
+  .print-toolbar .pt-btn__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .pt-btn--back,
+  .pt-btn--print,
+  .pt-btn--pdf,
+  .pt-btn--share {
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    gap: 0;
+    border-radius: 14px;
+  }
+  .pt-btn--back .icon,
+  .pt-btn--print .icon,
+  .pt-btn--pdf .icon,
+  .pt-btn--share .icon { width: 20px; height: 20px; }
+  .pt-btn--back { order: -1; margin-right: auto; background: #EEF4FC; border-color: #D3E2F6; color: var(--gtc-blue); }
+  .pt-btn--print { background: var(--gtc-green); border-color: var(--gtc-green); color: #fff; box-shadow: 0 4px 12px -4px rgba(0, 154, 68, 0.55); }
+  .pt-btn--pdf { background: var(--gtc-blue); border-color: var(--gtc-blue); color: #fff; box-shadow: 0 4px 12px -4px rgba(11, 78, 162, 0.55); }
+  .pt-btn--share { background: var(--gtc-magenta); border-color: var(--gtc-magenta); color: #fff; box-shadow: 0 4px 12px -4px rgba(163, 25, 124, 0.55); }
+  .pt-btn--back:active { background: #DCE8F8; }
+  .pt-btn--print:active { background: #007F38; }
+  .pt-btn--pdf:active { background: #083B7A; }
+  .pt-btn--share:active { background: #861464; }
+  /* 2e ligne : format de papier et imprimante, sur toute la largeur */
+  .print-toolbar .pt-group { order: 2; flex: 1 1 100%; }
+  .print-toolbar .pt-group .pt-btn { flex: 1; justify-content: center; min-height: 40px; }
+  .print-toolbar .pt-printer { order: 3; flex: 1 1 100%; }
+  .print-toolbar .pt-printer__status { order: 4; }
+  .print-toolbar [data-print-browser] { order: 1; min-height: 44px; }
 }
 
 /* ---------- Impression : uniquement la facture ---------- */

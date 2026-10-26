@@ -227,6 +227,7 @@ function dash_header(string $title, string $active = ''): void
             'index'    => ['href' => 'index.php',    'icon' => 'grid',    'label' => 'Tableau de bord'],
             'invoices' => ['href' => 'invoices.php', 'icon' => 'receipt', 'label' => 'Reçus de caisse'],
             'commercial' => ['href' => 'invoices-list.php', 'icon' => 'file', 'label' => 'Factures'],
+            'courriers' => ['href' => 'courriers.php', 'icon' => 'letter', 'label' => 'Courriers'],
             'simulator' => ['href' => 'simulator.php', 'icon' => 'calc',   'label' => 'Simulateur Avancé'],
             'rates'    => ['href' => 'rates.php',    'icon' => 'exchange', 'label' => 'Taux de change'],
             'printing' => ['href' => 'printing.php', 'icon' => 'printer', 'label' => 'Impression réseau'],

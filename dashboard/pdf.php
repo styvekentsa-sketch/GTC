@@ -4,6 +4,7 @@
  *
  *   pdf.php?type=receipt&id=12[&format=a4|a5]   Reçu de caisse : A4 (exemplaire client + caisse) ou A5 (un exemplaire)
  *   pdf.php?type=invoice&id=7                   Facture / proforma / devis sur le papier à en-tête officiel
+ *   pdf.php?type=courrier&id=3                  Courrier officiel sur le papier à en-tête (includes/courrier_pdf.php)
  *   &inline=1                                   affichage dans le navigateur au lieu du téléchargement (partage)
  *
  * PDF généré à la volée par GtcPdf (includes/print-direct.php), sans dépendance externe : le fichier est
@@ -13,6 +14,7 @@ require_once __DIR__ . '/../includes/dashboard.php';
 require_once __DIR__ . '/../includes/settings.php';
 require_once __DIR__ . '/../includes/print-direct.php';
 require_once __DIR__ . '/../includes/commercial_invoice_pdf.php';
+require_once __DIR__ . '/../includes/courrier_pdf.php';
 
 $user = require_login();
 require_roles(OPERATION_ROLES);
@@ -60,6 +62,16 @@ if ($type === 'invoice') {
     }
     $label = ['invoice' => 'Facture', 'proforma' => 'Proforma', 'quote' => 'Devis'][$inv['doc_type']] ?? 'Facture';
     pdf_send(cinv_pdf($inv, $user['name']), pdf_filename($label, $inv['invoice_number'], $inv['client_name']), $inline);
+}
+
+if ($type === 'courrier') {
+    $c = courrier_find($id);
+    if (!$c) {
+        http_response_code(404);
+        exit('Courrier introuvable.');
+    }
+    $company = settings_all()['company_name'] ?: GTC_NAME;
+    pdf_send(courrier_pdf($c, $company), pdf_filename('Courrier', $c['reference'], $c['recipient_company'] ?: $c['recipient_name']), $inline);
 }
 
 http_response_code(400);

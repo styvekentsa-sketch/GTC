@@ -20,8 +20,12 @@
     button.addEventListener('click', function () {
       var url = button.getAttribute('data-pdf-url');
       var label = button.innerHTML;
+      // Bouton avec étiquette (icône seule sur téléphone) : seul le texte change, l'icône reste en place
+      var text = button.querySelector('.pt-btn__label');
       button.disabled = true;
-      button.textContent = 'Préparation…';
+      button.classList.add('is-busy');
+      if (text) text.textContent = 'Préparation…';
+      else button.textContent = 'Préparation…';
       fetch(url + '&inline=1', { credentials: 'same-origin' })
         .then(function (r) {
           if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -33,7 +37,7 @@
           // Partage annulé par l'utilisateur : rien à faire ; autre erreur : téléchargement classique
           if (!err || err.name !== 'AbortError') window.location.href = url;
         })
-        .then(function () { button.disabled = false; button.innerHTML = label; });
+        .then(function () { button.disabled = false; button.classList.remove('is-busy'); button.innerHTML = label; });
     });
   });
 })();

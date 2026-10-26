@@ -85,7 +85,8 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
 
 <!-- ==================== BARRE D'OUTILS (écran uniquement) ==================== -->
 <nav class="print-toolbar" aria-label="Actions"<?= $inv && $printers ? ' data-printer-picker data-compact data-api="printers-api.php"' : '' ?>>
-    <a href="invoices.php" class="pt-btn" data-href="invoices.php"><?= icon('arrow-left') ?> Retour aux reçus</a>
+    <!-- Sur téléphone (< 768 px), les boutons principaux n'affichent que leur icône (texte dans title / aria-label) -->
+    <a href="invoices.php" class="pt-btn pt-btn--back" data-href="invoices.php" title="Retour aux reçus" aria-label="Retour aux reçus"><?= icon('arrow-left') ?> <span class="pt-btn__label">Retour aux reçus</span></a>
     <?php if ($inv): ?>
         <div class="pt-group" role="group" aria-label="Format de papier">
             <a href="<?= e($formatUrl('a4')) ?>" class="pt-btn<?= $format === 'a4' ? ' is-active' : '' ?>">A4</a>
@@ -106,12 +107,13 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
                 <noscript><button type="submit" class="pt-btn">OK</button></noscript>
             </form>
         <?php endif; ?>
-        <button type="button" class="pt-btn pt-btn--primary" data-print><?= $direct ? "Envoyer à l'imprimante" : 'Imprimer à nouveau' ?></button>
+        <?php $printLabel = $direct ? "Envoyer à l'imprimante" : 'Imprimer à nouveau'; ?>
+        <button type="button" class="pt-btn pt-btn--primary pt-btn--print" data-print title="<?= e($printLabel) ?>" aria-label="<?= e($printLabel) ?>"><?= icon('printer') ?> <span class="pt-btn__label"><?= e($printLabel) ?></span></button>
         <?php if ($direct): ?><button type="button" class="pt-btn" data-print-browser>Boîte d'impression</button><?php endif; ?>
         <?php $pdfUrl = 'pdf.php?type=receipt&id=' . (int) $inv['id'] . '&format=' . ($format === 'a4' ? 'a4' : 'a5'); ?>
         <!-- PDF téléchargé directement (téléphones : contourne les limites d'impression de Chrome Android et Safari iOS) -->
-        <a href="<?= e($pdfUrl) ?>" class="pt-btn pt-btn--pdf" download><?= icon('download') ?> Télécharger le PDF</a>
-        <button type="button" class="pt-btn" data-pdf-share data-pdf-url="<?= e($pdfUrl) ?>" data-pdf-title="Reçu <?= e($inv['invoice_number']) ?>" hidden><?= icon('share') ?> Partager</button>
+        <a href="<?= e($pdfUrl) ?>" class="pt-btn pt-btn--pdf" download title="Télécharger le PDF" aria-label="Télécharger le PDF"><?= icon('download') ?> <span class="pt-btn__label">Télécharger le PDF</span></a>
+        <button type="button" class="pt-btn pt-btn--share" data-pdf-share data-pdf-url="<?= e($pdfUrl) ?>" data-pdf-title="Reçu <?= e($inv['invoice_number']) ?>" title="Partager le reçu" aria-label="Partager le reçu" hidden><?= icon('share') ?> <span class="pt-btn__label">Partager</span></button>
         <?php if ($printers): ?><p class="printer-picker__status pt-printer__status" data-printer-status aria-live="polite"></p><?php endif; ?>
     <?php endif; ?>
 </nav>

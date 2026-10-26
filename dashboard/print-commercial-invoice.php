@@ -11,6 +11,7 @@
 require_once __DIR__ . '/../includes/dashboard.php';
 require_once __DIR__ . '/../includes/settings.php';
 require_once __DIR__ . '/../includes/commercial_invoices.php';
+require_once __DIR__ . '/../includes/letterhead.php';
 
 $user = require_login();
 require_roles(OPERATION_ROLES);
@@ -62,25 +63,7 @@ $curLbl  = currency_label($cur);
 
     <!-- ==================== PAPIER À EN-TÊTE OFFICIEL (assets/img/letterhead/, d'après « Papier_entete_GTC final version.pdf ») ==================== -->
     <!-- Répété sur chaque page à l'impression (position fixe) ; la facture s'écrit au centre -->
-    <header class="lh lh--top">
-        <img src="<?= e(asset_url('assets/img/letterhead/header.png', '../')) ?>" alt="" class="lh__band">
-        <ul class="lh__activities">
-            <?php foreach (array_chunk(GTC_ACTIVITIES, 2) as $pair): ?>
-                <li><?= implode(' <span class="lh__dot" aria-hidden="true">·</span> ', array_map('e', $pair)) ?></li>
-            <?php endforeach; ?>
-        </ul>
-        <img src="<?= e(asset_url('assets/img/letterhead/logo.png', '../')) ?>" alt="<?= e($name) ?>" class="lh__logo">
-    </header>
-    <footer class="lh lh--bottom">
-        <img src="<?= e(asset_url('assets/img/letterhead/footer-stripes.png', '../')) ?>" alt="" class="lh__stripes">
-        <div class="lh__band-bottom">
-            <p>N° de contribuable : <?= e(GTC_NIU) ?> <span>|</span> RCCM : <?= e(GTC_RCCM) ?> <span>|</span> N° matricule CNPS : <?= e(GTC_CNPS) ?></p>
-            <p>Banque : <?= e(GTC_BANK['name']) ?> <span>|</span> Code banque : <?= e(GTC_BANK['bank_code']) ?> <span>|</span> Code guichet : <?= e(GTC_BANK['branch_code']) ?> <span>|</span> N° compte : <?= e(GTC_BANK['account']) ?></p>
-            <p><?= e(GTC_PO_BOX) ?> <span>|</span> Mob. : <?= e(GTC_PHONE_2) ?> <span>|</span> Bur. : <?= e(GTC_PHONE) ?></p>
-            <p>Site web : <?= e(GTC_OFFICIAL_WEBSITE) ?> <span>|</span> Email : <?= e(GTC_EMAIL) ?></p>
-        </div>
-        <img src="<?= e(asset_url('assets/img/letterhead/footer-line.png', '../')) ?>" alt="" class="lh__line">
-    </footer>
+    <?= letterhead_html($name) ?>
 
     <!-- Zone d'écriture : les cellules d'en-tête et de pied du tableau réservent la place du papier à en-tête sur chaque page -->
     <table class="ci-page" role="presentation">

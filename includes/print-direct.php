@@ -79,7 +79,7 @@ final class GtcPdf
     private const K = 72 / 25.4;   // mm → points
     private const W_REGULAR = '278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584';
     private const W_BOLD    = '278,333,474,556,556,889,722,238,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,333,333,584,584,584,611,975,722,722,722,722,667,611,778,722,278,556,722,611,833,722,778,667,778,722,667,611,722,667,944,667,667,611,333,278,333,584,556,333,556,611,556,611,556,333,611,611,278,278,556,278,889,611,611,611,611,389,556,333,611,556,778,556,556,500,389,280,389,584';
-    private const SPECIAL = ['—' => 1000, '–' => 556, '·' => 278, '×' => 584, '÷' => 584, '€' => 556, '«' => 556, '»' => 556, '’' => 222, 'œ' => 944, 'Œ' => 1000, 'æ' => 889, 'Æ' => 1000];
+    private const SPECIAL = ['•' => 350, '—' => 1000, '–' => 556, '·' => 278, '×' => 584, '÷' => 584, '€' => 556, '«' => 556, '»' => 556, '’' => 222, 'œ' => 944, 'Œ' => 1000, 'æ' => 889, 'Æ' => 1000];
     private const BASE = ['à' => 'a', 'â' => 'a', 'ä' => 'a', 'á' => 'a', 'ã' => 'a', 'å' => 'a', 'ç' => 'c', 'è' => 'e', 'é' => 'e', 'ê' => 'e', 'ë' => 'e',
         'ì' => 'i', 'í' => 'i', 'î' => 'i', 'ï' => 'i', 'ñ' => 'n', 'ò' => 'o', 'ó' => 'o', 'ô' => 'o', 'ö' => 'o', 'õ' => 'o', 'ù' => 'u', 'ú' => 'u',
         'û' => 'u', 'ü' => 'u', 'ý' => 'y', 'ÿ' => 'y', 'À' => 'A', 'Â' => 'A', 'Ä' => 'A', 'Á' => 'A', 'Ç' => 'C', 'È' => 'E', 'É' => 'E', 'Ê' => 'E',
@@ -241,15 +241,15 @@ final class GtcPdf
         return $info && $info[2] === IMAGETYPE_JPEG ? [file_get_contents($file), $info[0], $info[1], $info['channels'] ?? 3] : null;
     }
 
-    /** Texte en couleur RVB ; $font : 'regular', 'bold' ou 'bolditalic'. */
+    /** Texte en couleur RVB ; $font : 'regular', 'bold', 'italic' ou 'bolditalic' (l'italique a la chasse du romain). */
     public function textColor(float $x, float $y, string $s, float $size, string $font = 'regular', string $align = 'left', array $rgb = [0, 0, 0]): void
     {
-        $bold = $font !== 'regular';
+        $bold = $font === 'bold' || $font === 'bolditalic';
         if ($align !== 'left') {
             $w = $this->width($s, $size, $bold);
             $x -= $align === 'right' ? $w : $w / 2;
         }
-        $this->op(sprintf('BT /%s %s Tf %s %s %s Td (%s) Tj ET', ['regular' => 'F1', 'bold' => 'F2', 'bolditalic' => 'F4'][$font] ?? 'F1',
+        $this->op(sprintf('BT /%s %s Tf %s %s %s Td (%s) Tj ET', ['regular' => 'F1', 'bold' => 'F2', 'bolditalic' => 'F4', 'italic' => 'F5'][$font] ?? 'F1',
             self::f($size), self::rgb($rgb, 'rg'), self::f($x * self::K), self::f(($this->hMm - $y) * self::K), self::encode($s)));
     }
 
@@ -273,7 +273,7 @@ final class GtcPdf
 
     public function output(string $title): string
     {
-        // 1 catalogue · 2 pages · 3 infos · 4-7 polices · images · puis (page, contenu) pour chaque page
+        // 1 catalogue · 2 pages · 3 infos · 4-8 polices · images · puis (page, contenu) pour chaque page
         $objects = [
             1 => '<< /Type /Catalog /Pages 2 0 R >>',
             3 => '<< /Title (' . self::encode($title) . ') /Producer (GTC Dashboard) >>',
@@ -281,8 +281,9 @@ final class GtcPdf
             5 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
             6 => '<< /Type /Font /Subtype /Type1 /BaseFont /ZapfDingbats >>',
             7 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-BoldOblique /Encoding /WinAnsiEncoding >>',
+            8 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>',
         ];
-        $n = 8;
+        $n = 9;
         $xobjects = [];
         foreach ($this->images as $name => [$data, $w, $h, $channels]) {
             $objects[$n] = sprintf("<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /%s /BitsPerComponent 8%s /Filter /DCTDecode /Length %d >>\nstream\n%s\nendstream",
@@ -291,7 +292,7 @@ final class GtcPdf
             $xobjects[] = "/{$name} {$n} 0 R";
             $n++;
         }
-        $resources = '<< /Font << /F1 4 0 R /F2 5 0 R /F3 6 0 R /F4 7 0 R >>' . ($xobjects ? ' /XObject << ' . implode(' ', $xobjects) . ' >>' : '') . ' >>';
+        $resources = '<< /Font << /F1 4 0 R /F2 5 0 R /F3 6 0 R /F4 7 0 R /F5 8 0 R >>' . ($xobjects ? ' /XObject << ' . implode(' ', $xobjects) . ' >>' : '') . ' >>';
         $kids = [];
         foreach ($this->pages as $ops) {
             $content = gzcompress(implode("\n", $ops));

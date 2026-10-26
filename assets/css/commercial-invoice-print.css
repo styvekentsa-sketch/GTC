@@ -186,6 +186,67 @@ p, h1, dl, dd { margin: 0; }
 
 .ci-foot { margin: 6mm 0 0; font-size: 8.5px; color: var(--muted); text-align: right; }
 
+/* ==========================================================================
+   Courriers officiels (dashboard/print-courrier.php) — même papier à en-tête
+   Références à gauche · lieu et date à droite · destinataire à droite · objet · corps justifié · signature à droite
+   ========================================================================== */
+/* Police professionnelle des correspondances : Arial (Helvetica dans le PDF, même chasse) */
+.lt { font-family: Arial, Helvetica, "Liberation Sans", sans-serif; font-size: 13px; line-height: 1.6; color: var(--ink); }
+.lt-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8mm; }
+.lt-refs { display: grid; gap: 0.8mm; font-size: 11.5px; }
+.lt-refs div { display: flex; gap: 2mm; }
+.lt-refs dt { color: var(--muted); }
+.lt-refs dd { font-weight: 700; color: var(--navy); }
+.lt-date { white-space: nowrap; }
+.lt-to {
+  display: flex;
+  flex-direction: column;
+  width: 82mm;
+  margin: 7mm 0 0 auto;
+  font-style: normal;
+  line-height: 1.5;
+}
+.lt-to__first { font-weight: 700; }
+.lt-object { display: grid; gap: 1mm; margin-top: 8mm; }
+.lt-object div { display: flex; gap: 2mm; }
+.lt-object dt { flex-shrink: 0; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.lt-object dd { font-weight: 700; }
+.lt-object__pj dt,
+.lt-object__pj dd { font-weight: 400; text-decoration: none; }
+.lt-salutation { margin-top: 6mm; }
+/* Corps justifié, sans coupure de mots (lettre officielle) ; une chaîne très longue (lien, référence) peut passer à la ligne */
+.lt-body { margin-top: 4mm; text-align: justify; hyphens: manual; overflow-wrap: break-word; }
+.lt-body p { margin: 0 0 3.2mm; orphans: 3; widows: 3; }
+/* Texte enrichi de l'éditeur : listes, gras / italique / souligné ; un alignement choisi (style en ligne) prime sur le justifié */
+.lt-body ul, .lt-body ol { margin: 0 0 3.2mm; padding-left: 7mm; }
+.lt-body li { margin: 0 0 1.2mm; padding-left: 1mm; text-align: justify; orphans: 2; widows: 2; }
+.lt-body strong { font-weight: 700; }
+.lt-body u { text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.lt-end { margin-top: 4mm; break-inside: avoid; page-break-inside: avoid; }
+.lt-closing { text-align: justify; overflow-wrap: break-word; }
+.lt-sign { display: flex; flex-direction: column; align-items: center; width: 76mm; margin: 6mm 0 0 auto; text-align: center; }
+.lt-sign__for { font-size: 11.5px; color: var(--muted); }
+.lt-sign__title { font-weight: 700; }
+.lt-sign__space { display: block; width: 100%; height: 20mm; }   /* cachet et signature manuscrite */
+.lt-sign__name { font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+
+/* Conseil d'impression (écran uniquement) */
+.ci-hint { flex-basis: 100%; margin: 0; font-size: 11.5px; color: var(--muted); text-align: center; }
+
+/* ---------- Impression du courrier : aucun bloc coupé, hauteur adaptée au contenu ---------- */
+@media print {
+  html, body { height: auto !important; overflow: visible !important; }
+  .ci-sheet { height: auto; overflow: visible; }
+  .ci-hint { display: none; }
+  /* En-tête de la lettre (références, destinataire, objet) d'un seul tenant ; l'appel reste avec le 1er paragraphe */
+  .lt-top, .lt-to, .lt-object { break-inside: avoid; page-break-inside: avoid; }
+  .lt-salutation { break-after: avoid; page-break-after: avoid; }
+  /* Paragraphes : coupure possible entre deux lignes, jamais une ligne isolée en bas ou en haut de page */
+  .lt-body p { break-inside: auto; orphans: 3; widows: 3; }
+  /* Fin de lettre : formule de politesse + signature passent ensemble sur la page suivante si nécessaire */
+  .lt-end { break-inside: avoid; page-break-inside: avoid; }
+}
+
 /* Impression */
 @page { size: A4; margin: 0; }
 @media print {

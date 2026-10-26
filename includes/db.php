@@ -188,6 +188,10 @@ function db_ensure_schema(PDO $pdo): void
         // Tableau personnalisable : colonnes propres à chaque facture, cellules de chaque ligne en JSON
         db_upgrade_commercial_invoices_flexible($pdo);
     }
+    if (!db_table_exists($pdo, 'courriers')) {
+        // Courriers officiels sur papier à en-tête (dashboard/courriers.php, includes/courriers.php)
+        db_install_courriers($pdo);
+    }
     if (!db_table_exists($pdo, 'exchange_rates')) {
         // Grille des taux de l'entreprise (achat / vente), remplie par includes/company_rates.php
         db_install_company_rates($pdo);
@@ -817,6 +821,49 @@ function db_install_commercial_invoices(PDO $pdo): void
         'CREATE INDEX idx_cinv_date ON commercial_invoices (issue_date)',
         'CREATE INDEX idx_cinv_client ON commercial_invoices (client_name)',
         'CREATE INDEX idx_citems_invoice ON commercial_invoice_items (invoice_id, position)',
+    ] as $sql) {
+        try {
+            $pdo->exec($sql);
+        } catch (PDOException) {
+            // index déjà présent
+        }
+    }
+}
+
+/** Courriers officiels : destinataire, références, objet, corps, formule de politesse, signataire. */
+function db_install_courriers(PDO $pdo): void
+{
+    ['pk' => $pk, 'fk' => $fk, 'dt' => $dt, 'suffix' => $suffix] = db_types();
+    $ts     = DB_DRIVER === 'mysql' ? 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' : 'TEXT DEFAULT CURRENT_TIMESTAMP';
+    $status = db_enum_type('status', ['draft', 'sent']);
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS courriers (
+            id {$pk},
+            reference VARCHAR(40) NOT NULL UNIQUE,
+            status {$status} NOT NULL DEFAULT 'draft',
+            recipient_company VARCHAR(150) NULL,
+            recipient_name VARCHAR(150) NULL,
+            recipient_role VARCHAR(150) NULL,
+            recipient_address VARCHAR(255) NULL,
+            recipient_city VARCHAR(100) NULL,
+            recipient_country VARCHAR(100) NULL,
+            place VARCHAR(100) NOT NULL DEFAULT 'Douala',
+            letter_date DATE NOT NULL,
+            subject VARCHAR(255) NOT NULL,
+            salutation VARCHAR(150) NULL,
+            body TEXT NOT NULL,
+            closing VARCHAR(500) NULL,
+            signatory_name VARCHAR(100) NOT NULL,
+            signatory_title VARCHAR(100) NULL,
+            attachments VARCHAR(255) NULL,
+            created_by {$fk} NULL,
+            created_by_name VARCHAR(100) NULL,
+            created_at {$ts},
+            updated_at {$dt} NULL
+        ){$suffix}");
+    foreach ([
+        'CREATE INDEX idx_courriers_date ON courriers (letter_date)',
+        'CREATE INDEX idx_courriers_company ON courriers (recipient_company)',
     ] as $sql) {
         try {
             $pdo->exec($sql);
