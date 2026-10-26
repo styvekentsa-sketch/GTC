@@ -25,8 +25,8 @@
     center: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 10h10M4 14h16M7 18h10"/></svg>',
     right: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M10 10h10M4 14h16M10 18h10"/></svg>',
     justify: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>',
-    undo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7L4 12l5 5M4 12h10a6 6 0 0 1 0 12"/></svg>',
-    redo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 7l5 5-5 5M20 12H10a6 6 0 0 0 0 12"/></svg>',
+    undo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-4"/></svg>',
+    redo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h4"/></svg>',
     clear: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h12M12 5l-3 14M4 20l16-16"/></svg>'
   };
 
@@ -306,6 +306,7 @@
       var hasContent = !isEmpty() || (subject && subject.value.trim() !== '' && tpl.subject !== '');
       if (hasContent && !window.confirm('Remplacer l\'objet et le corps actuels par le modèle « ' + tpl.label + ' » ?')) {
         tplSelect.value = '';
+        tplSelect.dispatchEvent(new Event('change', { bubbles: true }));   // menu personnalisé (custom-select.js)
         return;
       }
       if (subject && tpl.subject !== '') {

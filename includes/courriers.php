@@ -27,11 +27,11 @@ const COURRIER_DEFAULTS = [
     'closing'    => "Dans l'attente de votre retour, nous vous prions d'agréer, Madame, Monsieur, l'expression de nos salutations distinguées.",
 ];
 
-/** Longueur maximale de chaque champ (caractères). */
+/** Longueur maximale de chaque champ (caractères) ; corps : HTML nettoyé (courrier_sanitize_html). */
 const COURRIER_LIMITS = [
     'recipient_company' => 150, 'recipient_name' => 150, 'recipient_role' => 150, 'recipient_address' => 255,
     'recipient_city' => 100, 'recipient_country' => 100, 'place' => 100, 'subject' => 255, 'salutation' => 150,
-    'body' => 60000, 'closing' => 500,   // corps : HTML nettoyé (courrier_sanitize_html) 'signatory_name' => 100, 'signatory_title' => 100, 'attachments' => 255,
+    'body' => 60000, 'closing' => 500, 'signatory_name' => 100, 'signatory_title' => 100, 'attachments' => 255,
 ];
 
 /** Date au format « 26 octobre 2026 » (ou « 1er octobre 2026 »). */
