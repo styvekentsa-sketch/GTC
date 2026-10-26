@@ -146,10 +146,12 @@ if (is_post()) {
             if ($existing) {
                 db_query('UPDATE team_members SET name = ?, role = ?, photo = ?, display_order = ? WHERE id = ?',
                     [$form['name'], $form['role'], $photo, (int) $form['display_order'], $form['id']]);
+                activity_log('update', 'team', (int) $existing['id'], $form['name'], ['rôle affiché' => $form['role']]);
                 flash('success', "Fiche de {$form['name']} mise à jour.");
             } else {
                 db_query('INSERT INTO team_members (name, role, photo, display_order, created_at) VALUES (?, ?, ?, ?, ?)',
                     [$form['name'], $form['role'], $photo ?? 'default-avatar.png', (int) $form['display_order'], db_now()]);
+                activity_log('create', 'team', (int) db()->lastInsertId(), $form['name'], ['rôle affiché' => $form['role']]);
                 flash('success', "{$form['name']} a été ajouté(e) à l'équipe.");
             }
             redirect('team.php');
@@ -161,6 +163,7 @@ if (is_post()) {
         if ($member) {
             team_delete_photo($member['photo']);
             db_query('DELETE FROM team_members WHERE id = ?', [$member['id']]);
+            activity_log('delete', 'team', (int) $member['id'], $member['name']);
             flash('success', "{$member['name']} a été retiré(e) de l'équipe.");
         }
         redirect('team.php');

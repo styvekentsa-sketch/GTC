@@ -20,17 +20,30 @@
   --surface-hi:    #F3F4F6;
   --anthracite:    #1F2630;
   --anthracite-2:  #2A3340;
-  --blue:          #1E4E8C;
-  --blue-dark:     #163B6B;
-  --blue-soft:     #DCE6F4;
-  --green:         #0E9F6E;
-  --green-soft:    #D7F2E7;
-  --gold:          #B8901C;
+  /* Charte Global Trading Corporation (couleurs du papier à en-tête) — mêmes valeurs dans style.css (site public).
+     Contraste WCAG AA (4,5:1) : le vert officiel #009647 n'atteint que 3,85:1 avec du texte ; il sert aux aplats,
+     icônes et bordures, et sa version foncée --green-ink (5,46:1) à tout texte vert ou blanc sur vert. */
+  --brand-blue:       #0051A5;   /* 7,7:1 avec le blanc */
+  --brand-green:      #009647;
+  --brand-magenta:    #B80080;   /* 6,3:1 avec le blanc */
+  --brand-anthracite: #1F2630;
+
+  --blue:          var(--brand-blue);
+  --blue-dark:     #003F82;
+  --blue-soft:     #E6EEF8;
+  --green:         var(--brand-green);
+  --green-ink:     #007A3A;
+  --green-light:   #33B56E;      /* texte vert sur fond anthracite (5,8:1) */
+  --green-soft:    #E3F4EA;
+  --magenta:       var(--brand-magenta);
+  --magenta-ink:   #9C006D;
+  --magenta-soft:  #F7E3F0;
+  --gold:          #B8901C;      /* hors charte : réservé aux états « attention » (badges, alertes) */
   --gold-soft:     #F5EBCC;
   --red:           #C2410C;
   --red-soft:      #FBE3D6;
   --text:          #26303C;
-  --text-muted:    #66748A;
+  --text-muted:    #5F6C80;      /* 4,84:1 sur #F3F4F6, 5,04:1 sur les lignes non lues (AA) ; était #66748A */
   --line:          #E5E7EB;
 
 
@@ -46,7 +59,7 @@
   --cs-text:     var(--text);
   --cs-muted:    var(--text-muted);
   --cs-accent:   var(--blue);
-  --cs-ring:     rgba(30, 78, 140, 0.12);
+  --cs-ring:     rgba(0, 81, 165, 0.12);
   --cs-hover:    #F1F5F9;
   --cs-selected: #EAF0F8;
   --cs-invalid:  var(--red);
@@ -159,6 +172,8 @@ code {
 /* ==========================================================================
    4. Barre latérale (anthracite)
    ========================================================================== */
+/* Hauteur de l'écran exactement (100dvh : barre d'adresse mobile déduite). Logo et pied de la barre restent
+   en place ; seule la liste des menus défile si l'écran est trop petit (très petits écrans : voir § 13). */
 .sidebar {
   position: fixed;
   inset: 0 auto 0 0;
@@ -166,18 +181,34 @@ code {
   display: flex;
   flex-direction: column;
   width: var(--sidebar-w);
-  padding: 1.25rem 1rem;
+  height: 100vh;
+  height: 100dvh;
+  padding: 1rem 0.875rem 0.875rem;
+  overflow: hidden;
   background-color: var(--anthracite);
   color: #C7D0DC;
   transition: transform var(--t);
 }
 
+/* Barre de défilement fine et discrète (visible au survol) */
+.sidebar__nav, .sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.sidebar__nav:hover, .sidebar__nav:focus-within, .sidebar:hover { scrollbar-color: rgba(255, 255, 255, 0.22) transparent; }
+.sidebar__nav::-webkit-scrollbar, .sidebar::-webkit-scrollbar { width: 6px; }
+.sidebar__nav::-webkit-scrollbar-track, .sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar__nav::-webkit-scrollbar-thumb, .sidebar::-webkit-scrollbar-thumb { border-radius: 999px; background: transparent; }
+.sidebar__nav:hover::-webkit-scrollbar-thumb, .sidebar__nav:focus-within::-webkit-scrollbar-thumb,
+.sidebar:hover::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.22); }
+
 .sidebar__brand {
   display: flex;
   flex-direction: column;   /* logo officiel (horizontal) puis la mention « Dashboard » dessous */
   align-items: flex-start;
-  gap: 0.5rem;
-  padding: 0.25rem 0.5rem 1.25rem;
+  flex-shrink: 0;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem 1rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
@@ -206,14 +237,23 @@ code {
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: var(--green-light);
 }
 
+/* Liste des menus : prend la place restante et défile seule (min-height: 0 indispensable en flexbox) */
 .sidebar__nav {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  margin-top: 1.25rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 0.125rem;
+  margin: 0 -0.375rem;              /* la barre de défilement se loge dans la marge, sans rogner les liens */
+  padding: 0.875rem 0.375rem 0.875rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;     /* le défilement ne se propage pas à la page */
+  /* Fondu en haut et en bas : signale qu'il reste des menus à faire défiler */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 0.75rem, #000 calc(100% - 0.75rem), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 0.75rem, #000 calc(100% - 0.75rem), transparent 100%);
 }
 
 .sidebar__link {
@@ -221,7 +261,8 @@ code {
   align-items: center;
   gap: 0.75rem;
   width: 100%;
-  padding: 0.6875rem 0.875rem;
+  flex-shrink: 0;
+  padding: 0.5625rem 0.875rem;
   border-radius: var(--radius-sm);
   font-size: 0.875rem;
   font-weight: 500;
@@ -242,7 +283,7 @@ code {
   min-width: 22px;
   padding: 0 0.375rem;
   border-radius: 999px;
-  background-color: var(--green);
+  background-color: var(--green-ink);
   color: #fff;
   font-size: 0.6875rem;
   font-weight: 700;
@@ -250,11 +291,16 @@ code {
   text-align: center;
 }
 
+/* Pied de la barre (installer, site, paramètres, déconnexion) : toujours visible en bas */
 .sidebar__footer {
-  margin-top: auto;
-  padding-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 0.125rem;
+  padding-top: 0.625rem;
   border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
+.sidebar__footer .sidebar__link { padding-block: 0.5rem; }
 
 .sidebar-backdrop {
   position: fixed;
@@ -348,7 +394,7 @@ code {
 }
 
 .stat__icon--blue  { color: var(--blue); }
-.stat__icon--gold  { color: var(--gold); }
+.stat__icon--gold  { color: var(--magenta); }   /* nom historique : magenta de la charte */
 .stat__icon--green { color: var(--green); }
 .stat__icon--slate { color: var(--anthracite-2); }
 
@@ -411,57 +457,145 @@ code {
 .legend__dot--paid  { background: var(--green); }
 
 
-/* Bienvenue & accès rapides */
-.welcome__title { font-size: 1.375rem; }
-.welcome__role { font-weight: 500; color: var(--text-muted); }
-
-.quick-links {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1rem;
+/* Hub d'accueil (dashboard/index.php) : grille de boutons vers chaque module, couleurs de la charte GTC */
+.dash--hub .dash-main { margin-left: 0; }
+.dash--hub .dash-content { margin-inline: auto; max-width: 1240px; }
+.topbar__brand { display: inline-flex; flex-shrink: 0; }
+.topbar__brand img { display: block; height: 36px; width: auto; }
+.dash--hub .topbar__title {   /* titre « Accueil » : redondant avec le logo, gardé pour les lecteurs d'écran */
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
 }
+.dash--hub .topbar__user { margin-left: auto; }
 
-.quick-link-form { display: flex; }
-
-.quick-link {
-  display: flex;
+/* Retour au Hub depuis un module */
+.topbar__hub {
+  display: inline-flex;
   align-items: center;
-  gap: 0.875rem;
-  width: 100%;
-  padding: 1rem 1.125rem;
+  gap: 0.375rem;
+  flex-shrink: 0;
+  padding: 0.4375rem 0.75rem 0.4375rem 0.625rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--anthracite);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  transition: border-color var(--t), color var(--t), background-color var(--t);
+}
+.topbar__hub .icon { width: 16px; height: 16px; transition: transform var(--t); }
+.topbar__hub:hover { border-color: var(--blue); color: var(--blue); background: #F5F8FC; }
+.topbar__hub:hover .icon { transform: translateX(-2px); }
+
+.hub { margin-bottom: 2.25rem; }
+.hub__head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem 1.5rem; margin-bottom: 1.5rem; }
+.hub__title { font-size: 1.5rem; line-height: 1.3; color: var(--anthracite); }
+.hub__sep { color: #C3CAD5; font-weight: 400; }
+.hub__cta { color: var(--brand-blue); }
+.hub__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.hub__actions form { display: flex; }
+
+/* Grille : 2 colonnes (mobile), 3 (tablette), 4 (ordinateur) */
+.hub__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+@media (min-width: 768px)  { .hub__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.125rem; } }
+@media (min-width: 1100px) { .hub__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.25rem; } }
+
+.hub-tile {
+  --tone: var(--brand-blue);
+  --tone-soft: #E6EEF8;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  min-height: 168px;
+  padding: 1.5rem 1rem 1.25rem;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
-  text-align: left;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(15, 23, 42, 0.05);
+  text-align: center;
   color: var(--anthracite);
-  transition: border-color var(--t), background-color var(--t);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
+.hub-tile--green   { --tone: var(--brand-green);   --tone-soft: #E3F4EA; }
+.hub-tile--magenta { --tone: var(--brand-magenta); --tone-soft: #F7E3F0; }
+/* Liseré de couleur en haut du bouton (rappel des bandes du papier à en-tête) */
+.hub-tile::before { content: ""; position: absolute; inset: 0 0 auto; height: 4px; background: var(--tone); }
+.hub-tile:hover {
+  transform: translateY(-3px) scale(1.03);
+  border-color: color-mix(in srgb, var(--tone) 35%, var(--line));
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.06);
+}
+.hub-tile:active { transform: scale(0.96); box-shadow: 0 2px 6px rgba(15, 23, 42, 0.10); transition-duration: 0.08s; }
+.hub-tile:focus-visible { outline: 3px solid color-mix(in srgb, var(--tone) 45%, transparent); outline-offset: 3px; }
 
-.quick-link:hover { border-color: var(--blue); }
-.quick-link > .icon { margin-left: auto; color: var(--text-muted); transition: transform var(--t); }
-.quick-link:hover > .icon { transform: translateX(3px); color: var(--blue); }
-
-.quick-link__icon {
+.hub-tile__icon {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  flex-shrink: 0;
-  border-radius: var(--radius-sm);
-  background: var(--surface-hi);
-  color: var(--blue);
-  font-size: 1.25rem;
+  width: 60px;
+  height: 60px;
+  margin-bottom: 0.375rem;
+  border-radius: 18px;
+  background: var(--tone-soft);
+  color: var(--tone);
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
 }
+.hub-tile__icon .icon { width: 28px; height: 28px; }
+.hub-tile:hover .hub-tile__icon { background: var(--tone); color: #fff; transform: rotate(-4deg); }
+.hub-tile__title { font-size: 1rem; font-weight: 700; line-height: 1.3; }
+.hub-tile__desc { font-size: 0.8125rem; line-height: 1.35; color: var(--text-muted); }
 
-.quick-link__text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
-.quick-link__text small { font-size: 0.8125rem; color: var(--text-muted); }
+/* Pastille des messages non lus (mise à jour en direct : assets/js/messages-live.js) */
+.hub-tile__badge {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: var(--brand-magenta);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.5;
+  box-shadow: 0 0 0 3px var(--surface);
+}
+.hub-tile__badge[hidden] { display: none; }
 
-.quick-link--primary { background: var(--blue); border-color: var(--blue); color: #fff; }
-.quick-link--primary:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
-.quick-link--primary .quick-link__icon { background: rgba(255, 255, 255, 0.15); color: #fff; }
-.quick-link--primary .quick-link__text small,
-.quick-link--primary > .icon,
-.quick-link--primary:hover > .icon { color: rgba(255, 255, 255, 0.85); }
+.panel__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; }
+.panel__title .cell-sub { display: inline; font-size: 0.8125rem; font-weight: 500; }
+
+.hub-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.hub-section-title::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+@media (max-width: 640px) {
+  .hub__title { font-size: 1.25rem; }
+  .hub__cta { display: block; }
+  .hub__sep { display: none; }
+  .hub-tile { min-height: 142px; padding: 1.25rem 0.75rem 1rem; }
+  .hub-tile__icon { width: 52px; height: 52px; border-radius: 15px; }
+  .hub-tile__icon .icon { width: 24px; height: 24px; }
+  .hub-tile__desc { display: none; }   /* écran étroit : icône + nom suffisent */
+  .topbar__hub span { display: none; }
+  .topbar__brand img { height: 30px; }
+}
+/* Pas d'animation pour qui l'a désactivée dans son système */
+@media (prefers-reduced-motion: reduce) {
+  .hub-tile, .hub-tile__icon, .topbar__hub .icon { transition: none; }
+  .hub-tile:hover, .hub-tile:active, .hub-tile:hover .hub-tile__icon { transform: none; }
+}
 
 
 /* ==========================================================================
@@ -962,6 +1096,16 @@ code {
 .search .icon { position: absolute; left: 0.875rem; color: var(--text-muted); pointer-events: none; }
 .filters .search input[type="search"] { padding-left: 2.5rem; min-width: 240px; }
 
+/* Période « Du / Au » des listes (includes/csv_export.php : list_date_inputs) */
+.filters__date { display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); }
+.filters__date input[type="date"] { width: auto; min-width: 0; padding-block: 0.5rem; }
+.list-period { display: flex; align-items: center; gap: 0.375rem; margin: -0.5rem 0 1rem; font-size: 0.875rem; }
+@media (max-width: 640px) {
+  .filters .search, .filters .search input[type="search"] { width: 100%; min-width: 0; }
+  .filters__date { flex: 1 1 140px; }
+  .filters__date input[type="date"] { flex: 1; }
+}
+
 .totals { display: flex; flex-wrap: wrap; gap: 0.75rem; }
 
 .totals__item {
@@ -974,7 +1118,7 @@ code {
   color: var(--anthracite);
 }
 
-.totals__item small { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.08em; color: var(--gold); }
+.totals__item small { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.08em; color: var(--magenta-ink); }
 
 .pagination { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 1.25rem; }
 
@@ -1018,7 +1162,26 @@ code {
 /* ==========================================================================
    8. Tableaux
    ========================================================================== */
-.table-wrap { overflow-x: auto; margin: 0 -0.25rem; padding: 0 0.25rem; }
+/* position: relative : les libellés .visually-hidden (position absolue) des cellules restent dans le cadre ;
+   sans cela, ils élargissaient toute la page sur tablette alors que le tableau défilait dans son cadre. */
+.table-wrap { position: relative; overflow-x: auto; margin: 0 -0.25rem; padding: 0 0.25rem; }
+
+/* Tablettes et ordinateurs portables avec menu latéral (768-1439 px) : cellules resserrées et colonne d'actions
+   épinglée à droite — elle reste visible même si le tableau doit défiler horizontalement. */
+@media screen and (min-width: 768px) and (max-width: 1439.98px) {   /* écran seulement : rien d'épinglé à l'impression */
+  .table-wrap .table { font-size: 0.8125rem; }
+  .table-wrap .table th, .table-wrap .table td { padding-inline: 0.5rem; }
+  .table-wrap .table th.actions, .table-wrap .table td.actions {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    box-shadow: -10px 0 10px -10px rgba(15, 23, 42, 0.18);   /* ombre : du contenu passe dessous */
+  }
+  /* Fond opaque (sinon les colonnes défilant dessous transparaissent) ; :where() laisse primer les fonds
+     propres à certaines lignes (messages non lus…) */
+  :where(.table-wrap .table) :where(th.actions, td.actions) { background: var(--surface); }
+  .table-wrap .table td.actions { padding-left: 0.625rem; }
+}
 
 .table {
   width: 100%;
@@ -1113,8 +1276,8 @@ textarea { resize: vertical; min-height: 90px; }
 
 input:focus, textarea:focus {
   outline: none;
-  border-color: rgba(30, 78, 140, 0.45);
-  box-shadow: 0 0 0 3px rgba(30, 78, 140, 0.12);
+  border-color: rgba(0, 81, 165, 0.45);
+  box-shadow: 0 0 0 3px rgba(0, 81, 165, 0.12);
 }
 select:focus {
   outline: none;
@@ -1232,7 +1395,7 @@ input::-ms-clear { display: none; }
   vertical-align: middle;
 }
 
-.badge--success { background: var(--green-soft); color: #08714E; }
+.badge--success { background: var(--green-soft); color: var(--green-ink); }
 .badge--warning { background: var(--gold-soft);  color: #7F6210; }
 .badge--danger  { background: var(--red-soft);   color: #9A3412; }
 .badge--info    { background: var(--blue-soft);  color: var(--blue-dark); }
@@ -1250,7 +1413,7 @@ input::-ms-clear { display: none; }
 
 .alert .icon { margin-top: 0.125rem; }
 .alert ul { padding-left: 1rem; list-style: disc; }
-.alert--success { background: var(--green-soft); color: #08714E; }
+.alert--success { background: var(--green-soft); color: var(--green-ink); }
 .alert--error   { background: var(--red-soft);   color: #9A3412; }
 .alert--warning { background: var(--gold-soft);  color: #7F6210; }
 .alert.is-hidden { opacity: 0; }
@@ -1347,7 +1510,7 @@ input::-ms-clear { display: none; }
   border-color: var(--green-soft);
   font-size: 0.8125rem;
   font-weight: 700;
-  color: #08714E;
+  color: var(--green-ink);
 }
 
 .table tr.is-selected td { background-color: var(--blue-soft); }
@@ -1386,6 +1549,11 @@ input[type="file"] {
   border: 0;
 }
 
+/* Un <fieldset> refuse par défaut de rétrécir sous la largeur de son contenu (min-inline-size: min-content) :
+   un contenu large (tableur de la facture) faisait déborder toute la page sur mobile. Le contenu large
+   défile désormais dans son propre cadre (.sheet-wrap, overflow-x: auto). */
+fieldset { min-width: 0; min-inline-size: 0; max-width: 100%; }
+
 .form-section + .form-section {
   padding-top: 1.25rem;
   border-top: 1px solid var(--line);
@@ -1407,7 +1575,7 @@ input[type="file"] {
 /* Facture : état du taux proposé (marché en direct, guichet, saisi par l'agent) */
 .rate-badge { display: block; min-height: 1.1em; margin-top: 0.375rem; font-size: 0.75rem; font-weight: 600; line-height: 1.4; }
 .rate-badge:empty { display: none; }
-.rate-badge--live    { color: var(--green); }
+.rate-badge--live    { color: var(--green-ink); }
 .rate-badge--stale   { color: #B45309; }
 .rate-badge--manual  { color: var(--text-muted); }
 .rate-badge--custom  { color: var(--blue-dark); }
@@ -1441,7 +1609,7 @@ input[type="file"] {
   background: var(--green-soft);
 }
 
-.net-box__label { font-size: 0.8125rem; font-weight: 600; color: #08714E; }
+.net-box__label { font-size: 0.8125rem; font-weight: 600; color: var(--green-ink); }
 .net-box__value { font-size: 1.5rem; font-weight: 700; color: #065F46; font-variant-numeric: tabular-nums; }
 .net-box__value.is-negative { color: var(--red); }
 .net-box__detail { flex-basis: 100%; font-size: 0.8125rem; color: var(--text-muted); }
@@ -1457,7 +1625,7 @@ input[type="file"] {
   border-bottom: 1px solid var(--line);
 }
 
-.detail-head__label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); }
+.detail-head__label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--magenta-ink); }
 .detail-head__number { font-size: 1.375rem; }
 
 .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem 2.5rem; }
@@ -1537,7 +1705,7 @@ input[type="file"] {
 }
 
 .sim-mode__btn small { font-size: 0.75rem; font-weight: 500; color: var(--text-muted); }
-.sim-mode__btn.is-active { border-color: var(--green); background: var(--green-soft); color: #065F46; }
+.sim-mode__btn.is-active { border-color: var(--green); background: var(--green-soft); color: var(--green-ink); }
 
 /* Sélecteur % / montant */
 .seg { display: inline-flex; flex-shrink: 0; border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
@@ -1594,7 +1762,7 @@ input[type="file"] {
   background: var(--green-soft);
 }
 
-.sim-final span { font-size: 0.8125rem; font-weight: 600; color: #08714E; }
+.sim-final span { font-size: 0.8125rem; font-weight: 600; color: var(--green-ink); }
 .sim-final strong { font-size: 1.75rem; line-height: 1.2; color: #065F46; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
 #sim-to-invoice[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
@@ -1612,7 +1780,7 @@ input[type="file"] {
   border-radius: var(--radius-sm);
 }
 
-.sim-compare__code { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; color: var(--gold); }
+.sim-compare__code { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; color: var(--magenta-ink); }
 .sim-compare__item strong { font-size: 1.25rem; color: var(--anthracite); font-variant-numeric: tabular-nums; }
 .sim-compare__item small { font-size: 0.75rem; color: var(--text-muted); }
 
@@ -1685,6 +1853,8 @@ input[type="file"] {
 .rates-import { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem 1rem; margin-bottom: 1.25rem; }
 .rates-import .field { flex: 0 1 300px; margin: 0; }
 .rates-import .field__hint { flex: 1 1 100%; margin: 0; }
+/* Téléphone : le libellé long du bouton passe à la ligne au lieu de déborder de l'écran */
+.rates-import .btn { max-width: 100%; white-space: normal; text-align: center; }
 .company-rates__table td { vertical-align: middle; }
 .company-rates__table th small { font-weight: 500; color: var(--text-muted); }
 .company-rates__symbol { font-weight: 500; color: var(--text-muted); }
@@ -1764,12 +1934,101 @@ body.auth {
 .auth-card__back a { display: inline-flex; align-items: center; gap: 0.375rem; color: var(--blue); font-weight: 600; }
 
 
+/* ---- Journal d'activité (activity.php) ---- */
+.activity-count { margin-bottom: 0.5rem; }
+.activity-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.activity-details { max-width: 38ch; font-size: 0.8125rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.activity-takeover { color: var(--magenta-ink); font-weight: 600; }
+.activity-ip { font-size: 0.75rem; color: var(--text-muted); background: none; padding: 0; }
+.activity-table .cell-stack { display: flex; flex-direction: column; gap: 0.125rem; }
+
+
+/* ---- Clôture de caisse (cash-closing.php) ---- */
+.closing-nav { gap: 0.5rem; }
+.closing-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--line);
+  border-top: 4px solid transparent;
+  border-image: linear-gradient(90deg, var(--brand-blue) 0 33.34%, var(--brand-green) 0 66.67%, var(--brand-magenta) 0) 1;   /* bande de la charte */
+  background: var(--surface);
+}
+.closing-head__company { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--blue); }
+.closing-head__title { margin: 0.25rem 0; font-size: 1.375rem; color: var(--anthracite); }
+.closing-state { display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; text-align: right; }
+.closing-state .badge { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.8125rem; padding: 0.25rem 0.625rem; }
+.closing-state .badge .icon { width: 14px; height: 14px; }
+.closing-table td, .closing-table th { white-space: nowrap; }
+.closing-table .cell-sub { text-align: right; }
+.closing-th-sub { display: block; margin-top: 0.125rem; font-size: 0.6875rem; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.closing-net.is-positive strong { color: var(--green-ink); }
+.closing-net.is-negative strong { color: var(--red); }
+.closing-note p { margin-top: 0.5rem; }
+.closing-signatures, .print-only { display: none; }
+
+@media print {
+  @page { size: A4; margin: 14mm 12mm; }
+  body.dash { background: #fff; }
+  .sidebar, .sidebar-backdrop, .topbar, .dash-footer, .no-print, .impersonation-bar, .alert, .live-toast { display: none !important; }
+  .dash-main { margin: 0 !important; min-height: 0; }
+  .dash-content { max-width: none; padding: 0; }
+  .dash-content > * + * { margin-top: 5mm; }
+  .panel { box-shadow: none; border: 1px solid #C9CED6; break-inside: avoid; padding: 4mm 5mm; }
+  .table-wrap { overflow: visible; }
+  .table { font-size: 9.5pt; }
+  .table th, .table td { padding: 1.5mm 2mm; }
+  .closing-head { padding: 4mm 5mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .closing-receipts { break-inside: auto; }
+  /* Page A4 : en-têtes sur plusieurs lignes, colonnes aérées (rien ne déborde ni ne se touche) */
+  .closing-table { table-layout: fixed; }
+  .closing-table th { white-space: normal; vertical-align: bottom; line-height: 1.3; }
+  .closing-table th:first-child, .closing-table td:first-child { width: 14%; }
+  /* .table.closing-receipts : priorité sur les règles « cartes » (< 768 px) déclarées plus loin, qui s'appliquent aussi à la page A4 */
+  .table.closing-receipts { font-size: 8.5pt; }
+  .table.closing-receipts th, .table.closing-receipts td { padding: 1.5mm 1.5mm; }
+  .table.closing-receipts th { letter-spacing: 0.02em; }
+  .table.closing-receipts td.num { white-space: nowrap; }
+  .closing-head { flex-wrap: nowrap; }
+  .closing-receipts tr { break-inside: avoid; }
+  /* Tableau des reçus imprimé en colonnes : la page A4 (≈ 718 px) passerait sinon sous le seuil des « cartes » (768 px) */
+  .closing-receipts.table--stack { display: table; width: 100%; }
+  .closing-receipts.table--stack thead { display: table-header-group; }
+  .closing-receipts.table--stack tbody { display: table-row-group; }
+  .closing-receipts.table--stack tbody tr { display: table-row; margin: 0; padding: 0; border: 0; box-shadow: none; background: none; }
+  .closing-receipts.table--stack td { display: table-cell; text-align: left; border-top: 0; border-bottom: 1px solid #DDE1E6; }
+  .closing-receipts.table--stack td.num { text-align: right; }
+  .closing-receipts.table--stack td::before { content: none; }
+  .print-only { display: block; }
+  .closing-signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 12mm; margin-top: 10mm; break-inside: avoid; }
+  .closing-signatures div { height: 28mm; border: 1px solid #9AA3AF; padding: 2mm 3mm; font-size: 9pt; color: #4B5563; }
+}
+
+
 /* ==========================================================================
    13. Responsive
    ========================================================================== */
 @media (max-width: 1200px) {
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dash-grid, .dash-grid--aside { grid-template-columns: 1fr; }
+}
+
+/* Barre latérale : écrans peu hauts (portable 13", fenêtre réduite) — menus plus serrés */
+@media (max-height: 760px) {
+  .sidebar { padding-top: 0.75rem; }
+  .sidebar__brand { padding-bottom: 0.75rem; }
+  .sidebar__logo img { height: 32px; }
+  .sidebar__nav { padding-top: 0.625rem; }
+  .sidebar__link { padding-block: 0.4375rem; }
+  .sidebar__footer .sidebar__link { padding-block: 0.375rem; }
+}
+/* Très petits écrans (téléphone à l'horizontale) : toute la barre défile, pied compris, plutôt qu'une liste minuscule */
+@media (max-height: 520px) {
+  .sidebar { overflow-y: auto; overscroll-behavior: contain; }
+  .sidebar__nav { flex: 0 0 auto; overflow: visible; -webkit-mask-image: none; mask-image: none; }
 }
 
 /* Barre latérale escamotable */
@@ -1896,7 +2155,7 @@ body.auth {
 /* Éditeur de texte enrichi du corps (assets/js/courrier-editor.js) */
 .rte { border: 1px solid #C5CCD6; border-radius: var(--radius-sm); overflow: hidden; background: #fff; }
 .rte[hidden] { display: none; }
-.rte:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(30, 78, 140, 0.12); }
+.rte:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(0, 81, 165, 0.12); }
 .rte__vars { display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem; padding: 0.5rem 0.625rem; border-bottom: 1px solid #E1E6ED; background: #FAFBFC; }
 .rte__vars-label { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .rte__var {

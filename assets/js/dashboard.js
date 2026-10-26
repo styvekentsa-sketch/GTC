@@ -38,6 +38,22 @@
     if (window.innerWidth > 1024) setSidebar(false);
   });
 
+  // Menu de la page en cours toujours visible dans la liste (qui défile sur les écrans peu hauts)
+  // (repris au chargement complet : police et logo modifient encore la hauteur des menus)
+  var activeLink = sidebar && sidebar.querySelector('.sidebar__nav .sidebar__link.is-active');
+  function revealActive() {
+    var nav = activeLink.parentNode;
+    var top = activeLink.offsetTop - nav.offsetTop;
+    if (top + activeLink.offsetHeight > nav.scrollTop + nav.clientHeight || top < nav.scrollTop) {
+      nav.scrollTop = top - (nav.clientHeight - activeLink.offsetHeight) / 2;
+    }
+  }
+  if (activeLink) {
+    revealActive();
+    window.addEventListener('load', revealActive);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(revealActive);
+  }
+
   /* ---------- 2. Confirmation ---------- */
   document.addEventListener('click', function (e) {
     var el = e.target.closest('[data-confirm]');

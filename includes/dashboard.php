@@ -211,6 +211,38 @@ function session_identity(): string
     return 'u' . (int) $_SESSION['user_id'] . (impersonation_active() ? '-par-' . (int) $_SESSION['original_admin_id'] : '');
 }
 
+/**
+ * Modules accessibles au compte connecté — source unique du menu latéral et du Hub d'accueil (dashboard/index.php).
+ * label : libellé court du menu ; title / desc : bouton du Hub ; tone : couleur de la charte (blue, green, magenta).
+ * La secrétaire / l'accueil ne voit que la messagerie (et ses paramètres).
+ */
+function dash_modules(): array
+{
+    $user    = current_user();
+    $modules = [];
+    if (in_array($user['role'] ?? '', OPERATION_ROLES, true)) {
+        $modules = [
+            'invoices'   => ['href' => 'invoices.php',      'icon' => 'receipt',  'label' => 'Reçus de caisse',   'title' => 'Reçus de caisse',            'desc' => 'Émettre et imprimer un reçu',      'tone' => 'blue'],
+            'closing'    => ['href' => 'cash-closing.php',  'icon' => 'wallet',   'label' => 'Clôture de caisse', 'title' => 'Clôture de caisse',          'desc' => 'Totaux du jour par devise et paiement', 'tone' => 'magenta'],
+            'commercial' => ['href' => 'invoices-list.php', 'icon' => 'file',     'label' => 'Factures',          'title' => 'Factures',                   'desc' => 'Proformas et factures commerciales', 'tone' => 'green'],
+            'courriers'  => ['href' => 'courriers.php',     'icon' => 'letter',   'label' => 'Courriers',         'title' => 'Courriers & Correspondances', 'desc' => 'Lettres sur papier à en-tête',     'tone' => 'magenta'],
+            'simulator'  => ['href' => 'simulator.php',     'icon' => 'calc',     'label' => 'Simulateur Avancé', 'title' => 'Simulateur Avancé',          'desc' => 'Calculer une opération de change', 'tone' => 'blue'],
+            'rates'      => ['href' => 'rates.php',         'icon' => 'exchange', 'label' => 'Taux de change',    'title' => 'Taux de change',             'desc' => 'Grille des devises du jour',       'tone' => 'green'],
+            'printing'   => ['href' => 'printing.php',      'icon' => 'printer',  'label' => 'Impression réseau', 'title' => 'Impression réseau',          'desc' => 'Imprimantes et file d\'attente',   'tone' => 'magenta'],
+        ];
+    }
+    if (can_access_messages()) {
+        $modules['messages'] = ['href' => 'messages.php', 'icon' => 'mail', 'label' => 'Messages', 'title' => 'Messages', 'desc' => 'Demandes reçues par le site', 'tone' => 'blue'];
+    }
+    if (is_admin()) {
+        $modules['team']     = ['href' => 'team.php',     'icon' => 'users',  'label' => 'Équipe',       'title' => 'Gestion d\'équipe', 'desc' => 'Membres affichés sur le site',  'tone' => 'green'];
+        $modules['partners'] = ['href' => 'partners.php', 'icon' => 'hand',   'label' => 'Partenaires',  'title' => 'Partenaires',       'desc' => 'Logos des partenaires du site', 'tone' => 'magenta'];
+        $modules['users']    = ['href' => 'users.php',    'icon' => 'shield', 'label' => 'Utilisateurs', 'title' => 'Utilisateurs',      'desc' => 'Comptes et droits d\'accès',    'tone' => 'blue'];
+        $modules['activity'] = ['href' => 'activity.php', 'icon' => 'history', 'label' => "Journal d'activité", 'title' => "Journal d'activité", 'desc' => 'Qui a fait quoi, et quand', 'tone' => 'green'];
+    }
+    return $modules;
+}
+
 function dash_header(string $title, string $active = ''): void
 {
     $user = current_user();
@@ -220,27 +252,10 @@ function dash_header(string $title, string $active = ''): void
         ? ' data-messages-api="messages-api.php" data-messages-last="' . (int) db_value('SELECT COALESCE(MAX(id), 0) FROM messages') . '"'
         : '';
 
-    // Menu selon le rôle : la secrétaire / l'accueil ne voit que la messagerie
-    $menu = [];
-    if (in_array($user['role'] ?? '', OPERATION_ROLES, true)) {
-        $menu = [
-            'index'    => ['href' => 'index.php',    'icon' => 'grid',    'label' => 'Tableau de bord'],
-            'invoices' => ['href' => 'invoices.php', 'icon' => 'receipt', 'label' => 'Reçus de caisse'],
-            'commercial' => ['href' => 'invoices-list.php', 'icon' => 'file', 'label' => 'Factures'],
-            'courriers' => ['href' => 'courriers.php', 'icon' => 'letter', 'label' => 'Courriers'],
-            'simulator' => ['href' => 'simulator.php', 'icon' => 'calc',   'label' => 'Simulateur Avancé'],
-            'rates'    => ['href' => 'rates.php',    'icon' => 'exchange', 'label' => 'Taux de change'],
-            'printing' => ['href' => 'printing.php', 'icon' => 'printer', 'label' => 'Impression réseau'],
-        ];
-    }
-    if (can_access_messages()) {
-        $menu['messages'] = ['href' => 'messages.php', 'icon' => 'mail', 'label' => 'Messages'];
-    }
-    if (is_admin()) {
-        $menu['team']  = ['href' => 'team.php',  'icon' => 'users',  'label' => 'Équipe'];
-        $menu['partners'] = ['href' => 'partners.php', 'icon' => 'hand', 'label' => 'Partenaires'];
-        $menu['users'] = ['href' => 'users.php', 'icon' => 'shield', 'label' => 'Utilisateurs'];
-    }
+    // Hub d'accueil (dashboard/index.php) : pas de barre latérale, toute la largeur pour la grille des modules
+    $hub = $active === 'index';
+    $hasHub = in_array($user['role'] ?? '', OPERATION_ROLES, true);
+    $menu = ($hasHub ? ['index' => ['href' => 'index.php', 'icon' => 'grid', 'label' => 'Accueil (Hub)']] : []) + dash_modules();
     ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -266,8 +281,9 @@ function dash_header(string $title, string $active = ''): void
     <link rel="stylesheet" href="<?= e(asset_url('assets/css/custom-select.css', '../')) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('assets/css/dashboard.css', '../')) ?>">
 </head>
-<body class="dash" data-session="<?= e(session_identity()) ?>" data-session-name="<?= e($user['name'] ?? '') ?>"<?= $liveAttrs ?>>
+<body class="dash<?= $hub ? ' dash--hub' : '' ?>" data-session="<?= e(session_identity()) ?>" data-session-name="<?= e($user['name'] ?? '') ?>"<?= $liveAttrs ?>>
 
+<?php if (!$hub): ?>
 <aside class="sidebar" id="sidebar" aria-label="Menu du dashboard">
     <div class="sidebar__brand">
         <span class="sidebar__logo"><img src="<?= e(asset_url('assets/img/logo-gtc-light.png', '../')) ?>" alt="<?= e(GTC_NAME) ?>" width="166" height="41"></span>
@@ -307,6 +323,7 @@ function dash_header(string $title, string $active = ''): void
     </div>
 </aside>
 <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
+<?php endif; ?>
 
 <div class="dash-main">
     <?php if (impersonation_active()): ?>
@@ -325,10 +342,19 @@ function dash_header(string $title, string $active = ''): void
         </div>
     <?php endif; ?>
     <header class="topbar">
-        <button class="topbar__menu" id="sidebar-toggle" type="button" aria-label="Ouvrir le menu"
-                aria-controls="sidebar" aria-expanded="false">
-            <?= icon('menu') ?>
-        </button>
+        <?php if ($hub): ?>
+            <a href="index.php" class="topbar__brand" aria-label="<?= e(GTC_NAME) ?> — Accueil du Dashboard">
+                <img src="<?= e(asset_url('assets/img/logo-gtc.png', '../')) ?>" alt="" width="166" height="41">
+            </a>
+        <?php else: ?>
+            <button class="topbar__menu" id="sidebar-toggle" type="button" aria-label="Ouvrir le menu"
+                    aria-controls="sidebar" aria-expanded="false">
+                <?= icon('menu') ?>
+            </button>
+            <?php if ($hasHub): ?>
+                <a href="index.php" class="topbar__hub" title="Retour au Hub : tous les modules"><?= icon('arrow-left') ?><span>Hub</span></a>
+            <?php endif; ?>
+        <?php endif; ?>
         <h1 class="topbar__title"><?= e($title) ?></h1>
         <div class="topbar__user">
             <span class="topbar__avatar" aria-hidden="true"><?= e(initials($user['name'] ?? '?')) ?></span>

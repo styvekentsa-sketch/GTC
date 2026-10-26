@@ -12,6 +12,7 @@
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/activity.php';   // journal d'activité (activity_log)
 
 const AUTH_IDLE_TIMEOUT   = 1800;      // 30 min d'inactivité → déconnexion
 const AUTH_ABSOLUTE_LIMIT = 8 * 3600;  // 8 h maximum par session
@@ -312,6 +313,10 @@ function auth_attempt(string $email, string $password, bool $remember = false): 
             'INSERT INTO login_attempts (ip, email, attempted_at) VALUES (?, ?, ?)',
             [client_ip(), auth_email_key($email), db_now()]
         );
+        // Journal d'activité (adresse inconnue : pas de nom, l'IP suffit à l'analyse)
+        activity_log('login_failed', 'session', $user ? (int) $user['id'] : null, $user ? $user['name'] : 'Adresse inconnue',
+            $user && $user['status'] !== 'actif' ? ['motif' => 'Compte désactivé'] : [],
+            $user ?: ['id' => null, 'name' => null, 'role' => null]);
         // Journal limité aux dernières 24 heures (l'adresse IP est conservée pour l'analyse d'une attaque)
         db_query('DELETE FROM login_attempts WHERE attempted_at < ?', [auth_time(-86400)]);
         return false;
@@ -324,6 +329,7 @@ function auth_attempt(string $email, string $password, bool $remember = false): 
 
     auth_unlock($email);   // compteur de cette adresse remis à zéro (les autres adresses ne sont pas concernées)
     auth_open_session($user);
+    activity_log('login', 'session', (int) $user['id'], $user['name'], $remember ? ['option' => 'Se souvenir de moi'] : [], $user);
     if ($remember) {
         auth_remember_issue((int) $user['id']);
     }

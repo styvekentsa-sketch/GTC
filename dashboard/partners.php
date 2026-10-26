@@ -66,9 +66,11 @@ if (is_post()) {
             $values = [$form['name'], $logo, $website ?: null, (int) $form['display_order'], $form['is_active']];
             if ($existing) {
                 db_query('UPDATE partners SET name = ?, logo = ?, website = ?, display_order = ?, is_active = ? WHERE id = ?', [...$values, $form['id']]);
+                activity_log('update', 'partner', (int) $form['id'], $form['name'], array_filter(['site' => (string) ($website ?? '')]));
                 flash('success', "Partenaire « {$form['name']} » mis à jour.");
             } else {
                 db_query('INSERT INTO partners (name, logo, website, display_order, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?)', [...$values, db_now()]);
+                activity_log('create', 'partner', (int) db()->lastInsertId(), $form['name'], array_filter(['site' => (string) ($website ?? '')]));
                 flash('success', "Partenaire « {$form['name']} » ajouté.");
             }
             redirect('partners.php');
@@ -80,6 +82,7 @@ if (is_post()) {
         if ($partner) {
             partner_delete_logo($partner['logo']);
             db_query('DELETE FROM partners WHERE id = ?', [$partner['id']]);
+            activity_log('delete', 'partner', (int) $partner['id'], $partner['name']);
             flash('success', "Partenaire « {$partner['name']} » supprimé.");
         }
         redirect('partners.php');

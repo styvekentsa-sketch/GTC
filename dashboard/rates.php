@@ -72,7 +72,20 @@ if (is_post()) {
         }
 
         if (!$errors) {
+            $previous = company_rates();   // pour le journal : ancien → nouveau taux
             $changed = company_rates_save($values, (int) $user['id']);
+            if ($changed) {
+                $diff = [];
+                foreach ($values as $code => $v) {
+                    $old = $previous[$code] ?? [];
+                    if ((float) ($old['buy'] ?? 0) !== $v['buy'] || (float) ($old['sell'] ?? 0) !== $v['sell']) {
+                        $diff[currency_label($code)] = 'achat ' . rate_format((float) ($old['buy'] ?? 0)) . ' → ' . rate_format($v['buy'])
+                            . ', vente ' . rate_format((float) ($old['sell'] ?? 0)) . ' → ' . rate_format($v['sell']);
+                    }
+                }
+                activity_log('update', 'rates', null, "Grille des taux ({$changed} modifié" . ($changed > 1 ? 's' : '') . ')',
+                    $diff + ['marge marché' => round($margin, 2) . ' %']);
+            }
             settings_save(['market_margin_percent' => (string) round($margin, 2), 'rates_updated' => date('Y-m-d')]);
             flash('success', $changed
                 ? "{$changed} taux mis à jour et appliqués à tout le site : simulateur public, simulateur avancé et reçus de caisse."

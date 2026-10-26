@@ -37,6 +37,7 @@ if (is_post()) {
         if (!$errors) {
             db_query("INSERT INTO users (name, email, password, role, status, must_change_password, created_at) VALUES (?, ?, ?, ?, 'actif', 0, ?)",
                 [$form['name'], $form['email'], auth_hash($password), $form['role'], db_now()]);
+            activity_log('create', 'user', (int) db()->lastInsertId(), $form['name'], ['e-mail' => $form['email'], 'rôle' => role_label($form['role'])]);
             flash('success', "Compte de {$form['name']} créé.");
             redirect('users.php');
         }
@@ -47,6 +48,7 @@ if (is_post()) {
         $account = db_one('SELECT name, email FROM users WHERE id = ?', [$target]);
         if ($account) {
             auth_unlock($account['email']);
+            activity_log('security', 'user', $target, $account['name'], ['action' => 'Compte débloqué']);
             flash('success', "Compte de {$account['name']} débloqué : il peut se reconnecter immédiatement.");
         }
         redirect('users.php');
@@ -60,13 +62,21 @@ if (is_post()) {
 
     if ($op === 'toggle') {
         db_query("UPDATE users SET status = CASE WHEN status = 'actif' THEN 'inactif' ELSE 'actif' END WHERE id = ?", [$target]);
+        $account = db_one('SELECT name, status FROM users WHERE id = ?', [$target]);
+        if ($account) {
+            activity_log('status', 'user', $target, $account['name'], ['statut' => $account['status'] === 'actif' ? 'Réactivé' : 'Désactivé']);
+        }
         auth_revoke_sessions($target);   // sessions ouvertes fermées (elles ne reviennent pas à la réactivation)
         flash('success', 'Statut du compte mis à jour.');
         redirect('users.php');
     }
 
     if ($op === 'role' && isset(USER_ROLES[post('role')])) {
+        $before = db_one('SELECT name, role FROM users WHERE id = ?', [$target]);
         db_query('UPDATE users SET role = ? WHERE id = ?', [post('role'), $target]);
+        if ($before && $before['role'] !== post('role')) {
+            activity_log('update', 'user', $target, $before['name'], ['rôle' => role_label($before['role']) . ' → ' . role_label(post('role'))]);
+        }
         flash('success', 'Rôle mis à jour.');
         redirect('users.php');
     }
@@ -79,6 +89,7 @@ if (is_post()) {
             db_query('UPDATE users SET password = ?, must_change_password = 0 WHERE id = ?', [auth_hash($password), $target]);
             // Sessions ouvertes avec l'ancien mot de passe fermées ; l'administrateur qui change le sien reste connecté ici
             $version = auth_revoke_sessions($target);
+            activity_log('security', 'user', $target, (string) db_value('SELECT name FROM users WHERE id = ?', [$target]), ['action' => 'Mot de passe redéfini par un administrateur']);
             if ($target === (int) $user['id']) {
                 session_regenerate_id(true);
                 $_SESSION['auth_version'] = $version;

@@ -219,6 +219,14 @@ function db_ensure_schema(PDO $pdo): void
     if (!db_table_exists($pdo, 'impersonation_log')) {
         db_install_impersonation($pdo);
     }
+    if (!db_table_exists($pdo, 'activity_log')) {
+        // Journal d'activité : qui a créé, modifié, supprimé quoi et quand (includes/activity.php)
+        db_install_activity($pdo);
+    }
+    if (!db_table_exists($pdo, 'cash_closings')) {
+        // Clôtures de caisse journalières validées (dashboard/cash-closing.php)
+        db_install_cash_closings($pdo);
+    }
     // Changement de mot de passe plus jamais imposé à la connexion : annule le statut « provisoire »
     // des comptes existants (une seule fois : plus aucun code ne remet ce champ à 1)
     if ($pdo->query('SELECT 1 FROM users WHERE must_change_password <> 0 LIMIT 1')->fetchColumn()) {
@@ -723,6 +731,51 @@ function db_install_impersonation(PDO $pdo): void
         ip VARCHAR(45) NULL,
         started_at {$dt} NOT NULL,
         ended_at {$dt} NULL
+    ){$suffix}");
+}
+
+/**
+ * Journal d'activité (includes/activity.php, dashboard/activity.php). Nom et rôle de l'auteur copiés à
+ * l'enregistrement : le journal reste lisible même si le compte est renommé ou supprimé.
+ */
+function db_install_activity(PDO $pdo): void
+{
+    ['pk' => $pk, 'fk' => $fk, 'dt' => $dt, 'suffix' => $suffix] = db_types();
+    $pdo->exec("CREATE TABLE IF NOT EXISTS activity_log (
+        id {$pk},
+        created_at {$dt} NOT NULL,
+        user_id {$fk} NULL,
+        user_name VARCHAR(100) NULL,
+        user_role VARCHAR(20) NULL,
+        acting_admin VARCHAR(100) NULL,
+        action VARCHAR(30) NOT NULL,
+        entity VARCHAR(30) NOT NULL,
+        entity_id {$fk} NULL,
+        label VARCHAR(255) NULL,
+        details TEXT NULL,
+        ip VARCHAR(45) NULL
+    ){$suffix}");
+    foreach (['CREATE INDEX idx_activity_date ON activity_log (created_at)',
+              'CREATE INDEX idx_activity_entity ON activity_log (entity, entity_id)',
+              'CREATE INDEX idx_activity_user ON activity_log (user_id)'] as $sql) {
+        $pdo->exec($sql);
+    }
+}
+
+/** Clôtures de caisse validées (dashboard/cash-closing.php) : une par journée, totaux figés au moment de la validation. */
+function db_install_cash_closings(PDO $pdo): void
+{
+    ['pk' => $pk, 'fk' => $fk, 'dt' => $dt, 'suffix' => $suffix] = db_types();
+    $pdo->exec("CREATE TABLE IF NOT EXISTS cash_closings (
+        id {$pk},
+        closing_date DATE NOT NULL UNIQUE,
+        receipts_count INT NOT NULL DEFAULT 0,
+        totals_json TEXT NOT NULL,
+        fingerprint VARCHAR(64) NOT NULL,
+        note TEXT NULL,
+        closed_by {$fk} NULL,
+        closed_by_name VARCHAR(100) NULL,
+        closed_at {$dt} NOT NULL
     ){$suffix}");
 }
 

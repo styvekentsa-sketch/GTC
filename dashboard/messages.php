@@ -69,6 +69,7 @@ if (is_post()) {
     }
     if ($op === 'thread_delete') {
         $n = db_query("DELETE FROM messages {$thread}", [$key])->rowCount();
+        activity_log('delete', 'message', $id, 'Conversation avec ' . $msg['sender_name'], ['e-mail' => $msg['sender_email'], 'messages' => $n]);
         flash('success', "Conversation avec {$msg['sender_name']} supprimée ({$n} message" . ($n > 1 ? 's' : '') . ').');
         redirect($inView ? 'messages.php' : $back);
     }
@@ -89,6 +90,7 @@ if (is_post()) {
 
     if ($op === 'delete') {
         db_query('DELETE FROM messages WHERE id = ?', [$id]);
+        activity_log('delete', 'message', $id, 'Message de ' . $msg['sender_name'], ['e-mail' => $msg['sender_email']]);
         flash('success', 'Le message de ' . $msg['sender_name'] . ' a été supprimé.');
         if ($inView) {
             // Reste sur la conversation tant qu'elle contient d'autres messages

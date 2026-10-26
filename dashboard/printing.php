@@ -57,6 +57,7 @@ if (is_post()) {
                 [$jobForm['title'], $jobForm['printer_id'] ?: null, $jobForm['copies'], $jobForm['color'], $jobForm['duplex'],
                  $jobForm['priority'], 'queued', $jobForm['notes'] ?: null, $user['id'], db_now(), db_now()]
             );
+            activity_log('create', 'print_job', (int) db()->lastInsertId(), $jobForm['title'], ['copies' => $jobForm['copies']]);
             flash('success', "Travail « {$jobForm['title']} » ajouté à la file.");
             redirect('printing.php');
         }
@@ -66,15 +67,18 @@ if (is_post()) {
         $status = post('status');
         if (isset(JOB_STATUSES[$status])) {
             db_query('UPDATE print_jobs SET status = ?, updated_at = ? WHERE id = ?', [$status, db_now(), (int) post('id')]);
+            activity_log('status', 'print_job', (int) post('id'), (string) db_value('SELECT title FROM print_jobs WHERE id = ?', [(int) post('id')]),
+                ['statut' => JOB_STATUSES[$status]['label']]);
             flash('success', 'Statut du travail mis à jour : ' . JOB_STATUSES[$status]['label'] . '.');
         }
         redirect('printing.php' . (query('status') ? '?status=' . rawurlencode(query('status')) : ''));
     }
 
     if ($op === 'job_delete') {
-        $job = db_one('SELECT requested_by FROM print_jobs WHERE id = ?', [(int) post('id')]);
+        $job = db_one('SELECT requested_by, title FROM print_jobs WHERE id = ?', [(int) post('id')]);
         if ($job && (is_admin() || (int) $job['requested_by'] === (int) $user['id'])) {
             db_query('DELETE FROM print_jobs WHERE id = ?', [(int) post('id')]);
+            activity_log('delete', 'print_job', (int) post('id'), (string) $job['title']);
             flash('success', 'Travail supprimé.');
         } else {
             flash('error', "Vous ne pouvez supprimer que vos propres travaux.");

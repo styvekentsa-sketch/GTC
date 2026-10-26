@@ -14,6 +14,7 @@
  */
 require_once __DIR__ . '/../includes/dashboard.php';
 require_once __DIR__ . '/../includes/commercial_invoices.php';
+require_once __DIR__ . '/../includes/csv_export.php';
 
 $user = require_login();
 require_roles(OPERATION_ROLES);
@@ -42,6 +43,9 @@ if (is_post()) {
         if (!$errors) {
             $savedId = cinv_save($form, $calc, $user, $editId);
             $number  = db_value('SELECT invoice_number FROM commercial_invoices WHERE id = ?', [$savedId]);
+            activity_log($editId ? 'update' : 'create', 'commercial', $savedId, $number, [
+                'type' => CINV_TYPES[$form['doc_type']]['label'], 'client' => $form['client_name'], 'total' => money($calc['total'], $form['currency']),
+            ]);
             flash('success', CINV_TYPES[$form['doc_type']]['label'] . " {$number} " . ($editId ? 'modifiée.' : 'enregistrée.'));
             redirect(post('then') === 'print' ? "print-commercial-invoice.php?id={$savedId}&autoprint=1" : 'invoices-list.php');
         }
@@ -52,7 +56,12 @@ if (is_post()) {
     if ($op === 'status') {
         $status = post('status');
         if (isset(CINV_STATUSES[$status])) {
+            $before = db_one('SELECT invoice_number, status FROM commercial_invoices WHERE id = ?', [(int) post('id')]);
             db_query('UPDATE commercial_invoices SET status = ?, updated_at = ? WHERE id = ?', [$status, db_now(), (int) post('id')]);
+            if ($before && $before['status'] !== $status) {
+                activity_log('status', 'commercial', (int) post('id'), $before['invoice_number'],
+                    ['statut' => (CINV_STATUSES[$before['status']]['label'] ?? $before['status']) . ' → ' . CINV_STATUSES[$status]['label']]);
+            }
             flash('success', 'Statut mis à jour : ' . CINV_STATUSES[$status]['label'] . '.');
         }
         redirect('invoices-list.php');
@@ -60,9 +69,14 @@ if (is_post()) {
 
     if ($op === 'delete') {
         require_role('admin');
-        $number = db_value('SELECT invoice_number FROM commercial_invoices WHERE id = ?', [(int) post('id')]);
+        $deleted = db_one('SELECT invoice_number, doc_type, client_name, total, currency FROM commercial_invoices WHERE id = ?', [(int) post('id')]);
+        $number  = $deleted['invoice_number'] ?? null;
         if ($number) {
             cinv_delete((int) post('id'));
+            activity_log('delete', 'commercial', (int) post('id'), $number, [
+                'type' => CINV_TYPES[$deleted['doc_type']]['label'] ?? $deleted['doc_type'], 'client' => $deleted['client_name'],
+                'total' => money($deleted['total'], $deleted['currency']),
+            ]);
             flash('success', "Document {$number} supprimé.");
         }
         redirect('invoices-list.php');
@@ -339,7 +353,31 @@ if ($status !== '') {
     $where[] = 'status = ?';
     $params[] = $status;
 }
+[$from, $to, $dateWhere, $dateParams] = list_date_range('issue_date');
+array_push($where, ...$dateWhere);
+array_push($params, ...$dateParams);
 $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+$filters  = array_filter(['q' => $q, 'type' => $type, 'status' => $status, 'from' => $from, 'to' => $to]);
+
+// Export Excel / CSV : toutes les lignes correspondant aux filtres affichés (includes/csv_export.php)
+if (query('export') === 'csv') {
+    activity_log('export', 'commercial', null, 'Export CSV des factures', array_filter(['filtres' => http_build_query($filters)]));
+    $stmt = db_query("SELECT * FROM commercial_invoices {$whereSql} ORDER BY issue_date DESC, id DESC", $params);
+    csv_send('factures-' . date('Ymd-His') . '.csv',
+        ['N°', 'Type', 'Statut', 'Date', 'Échéance', 'Client', 'Téléphone', 'E-mail', 'Adresse', 'NIU',
+         'Devise', 'Sous-total', 'TVA (%)', 'Montant TVA', 'Total', 'Créée par', 'Créée le'],
+        (function () use ($stmt) {
+            while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $dec = DASH_CURRENCIES[$r['currency']]['decimals'] ?? 2;
+                yield [$r['invoice_number'], CINV_TYPES[$r['doc_type']]['label'] ?? $r['doc_type'], CINV_STATUSES[$r['status']]['label'] ?? $r['status'],
+                    fdate($r['issue_date']), $r['due_date'] ? fdate($r['due_date']) : '', $r['client_name'], $r['client_phone'], $r['client_email'],
+                    $r['client_address'], $r['client_niu'], currency_label((string) $r['currency']),
+                    csv_amount($r['subtotal'], $dec), csv_amount($r['tax_rate']), csv_amount($r['tax_amount'], $dec), csv_amount($r['total'], $dec),
+                    $r['created_by_name'], fdate($r['created_at'], true)];
+            }
+        })());
+}
+
 $total    = (int) db_value("SELECT COUNT(*) FROM commercial_invoices {$whereSql}", $params);
 $page     = min($page, max(1, (int) ceil($total / $perPage)));
 $offset   = ($page - 1) * $perPage;
@@ -387,9 +425,11 @@ dash_header('Factures', 'commercial');
             <option value="">Tous les statuts</option>
             <?php foreach (CINV_STATUSES as $key => $st): ?><option value="<?= e($key) ?>" <?= $key === $status ? 'selected' : '' ?>><?= e($st['label']) ?></option><?php endforeach; ?>
         </select>
-        <?php if ($q !== '' || $type !== '' || $status !== ''): ?><a href="invoices-list.php" class="btn btn--ghost btn--sm">Réinitialiser</a><?php endif; ?>
+        <?= list_date_inputs($from, $to) ?>
+        <?php if ($q !== '' || $type !== '' || $status !== '' || $from !== '' || $to !== ''): ?><a href="invoices-list.php" class="btn btn--ghost btn--sm">Réinitialiser</a><?php endif; ?>
     </form>
     <div class="toolbar__actions">
+        <a href="invoices-list.php?<?= e(http_build_query($filters + ['export' => 'csv'])) ?>" class="btn btn--ghost" title="Télécharge les <?= $total ?> document<?= $total > 1 ? 's' : '' ?> correspondant aux filtres (fichier ouvert par Excel)"<?= $total ? '' : ' hidden' ?>><?= icon('download') ?> Exporter (Excel/CSV)</a>
         <a href="invoices-list.php?action=new&amp;type=quote" class="btn btn--ghost"><?= icon('plus') ?> Devis</a>
         <a href="invoices-list.php?action=new&amp;type=proforma" class="btn btn--ghost"><?= icon('plus') ?> Proforma</a>
         <a href="invoices-list.php?action=new" class="btn btn--primary"><?= icon('plus') ?> Nouvelle facture</a>
@@ -443,7 +483,7 @@ dash_header('Factures', 'commercial');
                 </tbody>
             </table>
         </div>
-        <?= pagination($total, $page, $perPage, array_filter(['q' => $q, 'type' => $type, 'status' => $status])) ?>
+        <?= pagination($total, $page, $perPage, $filters) ?>
     <?php endif; ?>
 </section>
 

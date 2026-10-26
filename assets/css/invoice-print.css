@@ -13,15 +13,15 @@
   --ink:    #1F2630;
   --muted:  #5B6472;
   --line:   #D9DDE3;
-  --accent: #059669;
+  --accent: #007A3A;   /* vert de la charte, version foncée (texte et fond de bouton : contraste AA) */
   --font:   "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 
   /* Menus déroulants (custom-select.css) */
   --cs-font:     var(--font);
   --cs-text:     var(--ink);
-  --cs-accent:   #059669;
-  --cs-ring:     rgba(16, 185, 129, 0.15);
-  --cs-selected: #ECFDF5;
+  --cs-accent:   #007A3A;
+  --cs-ring:     rgba(0, 150, 71, 0.15);
+  --cs-selected: #E3F4EA;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -87,7 +87,7 @@ body {
 .pt-printer label { display: inline-flex; align-items: center; gap: 6px; }
 .pt-printer label .icon { color: var(--accent); }
 
-.pt-btn.is-active { background: #ECFDF5; color: var(--accent); }
+.pt-btn.is-active { background: #E3F4EA; color: var(--accent); }
 .pt-btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* Téléchargement du PDF (pdf.php) : bouton mis en avant, utile surtout sur téléphone */
 .pt-btn--pdf { background: #0B4EA2; border-color: #0B4EA2; color: #fff; }

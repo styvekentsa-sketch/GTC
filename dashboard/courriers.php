@@ -40,6 +40,9 @@ if (is_post()) {
         if (!$errors) {
             $savedId = courrier_save($form, $user, $editId);
             $ref     = db_value('SELECT reference FROM courriers WHERE id = ?', [$savedId]);
+            activity_log($editId ? 'update' : 'create', 'courrier', $savedId, $ref, [
+                'destinataire' => $form['recipient_company'] !== '' ? $form['recipient_company'] : $form['recipient_name'], 'objet' => $form['subject'],
+            ]);
             flash('success', "Courrier {$ref} " . ($editId ? 'modifié.' : 'enregistré.'));
             $then = post('then');
             redirect(match ($then) {
@@ -55,7 +58,12 @@ if (is_post()) {
     if ($op === 'status') {
         $status = post('status');
         if (isset(COURRIER_STATUSES[$status])) {
+            $before = db_one('SELECT reference, status FROM courriers WHERE id = ?', [(int) post('id')]);
             db_query('UPDATE courriers SET status = ?, updated_at = ? WHERE id = ?', [$status, db_now(), (int) post('id')]);
+            if ($before && $before['status'] !== $status) {
+                activity_log('status', 'courrier', (int) post('id'), $before['reference'],
+                    ['statut' => (COURRIER_STATUSES[$before['status']]['label'] ?? $before['status']) . ' → ' . COURRIER_STATUSES[$status]['label']]);
+            }
             flash('success', 'Statut mis à jour : ' . COURRIER_STATUSES[$status]['label'] . '.');
         }
         redirect('courriers.php');
@@ -63,9 +71,13 @@ if (is_post()) {
 
     if ($op === 'delete') {
         require_role('admin');
-        $ref = db_value('SELECT reference FROM courriers WHERE id = ?', [(int) post('id')]);
+        $deleted = db_one('SELECT reference, recipient_company, recipient_name, subject FROM courriers WHERE id = ?', [(int) post('id')]);
+        $ref     = $deleted['reference'] ?? null;
         if ($ref) {
             db_query('DELETE FROM courriers WHERE id = ?', [(int) post('id')]);
+            activity_log('delete', 'courrier', (int) post('id'), $ref, [
+                'destinataire' => $deleted['recipient_company'] ?: $deleted['recipient_name'], 'objet' => $deleted['subject'],
+            ]);
             flash('success', "Courrier {$ref} supprimé.");
         }
         redirect('courriers.php');

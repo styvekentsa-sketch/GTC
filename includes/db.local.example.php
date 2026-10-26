@@ -27,3 +27,8 @@
 // ---------------------------------------------------------------------------
 // define('GTC_SEED_ADMIN_PASSWORD', 'choisir-un-mot-de-passe-solide');
 // define('GTC_SEED_CASHIER_PASSWORD', 'choisir-un-autre-mot-de-passe');
+
+// Sauvegardes automatiques (tools/auto-backup.php, tâche cron quotidienne) : dossier HORS de la racine web.
+// Par défaut : dossier « gtc-backups » à côté du site, sinon data/backups. Historique conservé : 30 jours.
+// define('GTC_BACKUP_DIR', '/home/COMPTE/gtc-backups');
+// define('GTC_BACKUP_KEEP_DAYS', 30);

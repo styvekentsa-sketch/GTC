@@ -41,6 +41,8 @@ if (is_post()) {
             "INSERT INTO users (name, email, password, role, status, created_at) VALUES (?, ?, ?, ?, 'actif', ?)",
             [$name, $email, auth_hash($password), 'admin', db_now()]
         );
+        activity_log('create', 'user', (int) db()->lastInsertId(), $name, ['action' => 'Premier administrateur (installation)'],
+            ['id' => null, 'name' => $name, 'role' => 'admin']);
         flash('success', 'Compte administrateur créé. Vous pouvez maintenant vous connecter.');
         redirect('login.php');
     }

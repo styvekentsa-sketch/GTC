@@ -16,6 +16,7 @@
 require_once __DIR__ . '/../includes/dashboard.php';
 require_once __DIR__ . '/../includes/settings.php';
 require_once __DIR__ . '/../includes/printers.php';
+require_once __DIR__ . '/../includes/csv_export.php';
 
 $user   = require_login();   // exige une session valide ($_SESSION['logged_in'] === true)
 require_roles(OPERATION_ROLES);   // pas d'accès pour le rôle Secrétaire / Accueil
@@ -147,6 +148,11 @@ if (is_post()) {
                          (int) $_SESSION['user_id'], (string) $_SESSION['user_name'], db_now()]
                     );
                     $newId = (int) db()->lastInsertId();
+                    activity_log('create', 'invoice', $newId, $number, [
+                        'client'  => $form['client_name'],
+                        'montant' => money($form['amount_given'], $form['source_currency']) . ' → ' . money($form['amount_received'], $form['target_currency']),
+                        'paiement' => $form['payment_method'],
+                    ]);
                     flash('success', "Reçu {$number} enregistré.");
                     redirect('print-invoice.php?' . http_build_query(array_filter(['id' => $newId, 'printer_id' => $form['printer_id'], 'autoprint' => 1])));
                 } catch (PDOException $ex) {
@@ -162,7 +168,12 @@ if (is_post()) {
     if ($op === 'status') {
         $status = post('status');
         if (isset(INVOICE_STATUSES[$status])) {
+            $before = db_one('SELECT invoice_number, status FROM invoices WHERE id = ?', [(int) post('id')]);
             db_query('UPDATE invoices SET status = ?, updated_at = ? WHERE id = ?', [$status, db_now(), (int) post('id')]);
+            if ($before && $before['status'] !== $status) {
+                activity_log('status', 'invoice', (int) post('id'), $before['invoice_number'],
+                    ['statut' => (INVOICE_STATUSES[$before['status']]['label'] ?? $before['status']) . ' → ' . INVOICE_STATUSES[$status]['label']]);
+            }
             flash('success', 'Statut mis à jour : ' . INVOICE_STATUSES[$status]['label'] . '.');
         }
         redirect('invoices.php?action=view&id=' . (int) post('id'));
@@ -170,7 +181,12 @@ if (is_post()) {
 
     if ($op === 'delete') {
         require_role('admin');
+        $deleted = db_one('SELECT invoice_number, client_name, amount_given, source_currency FROM invoices WHERE id = ?', [(int) post('id')]);
         db_query('DELETE FROM invoices WHERE id = ?', [(int) post('id')]);
+        if ($deleted) {
+            activity_log('delete', 'invoice', (int) post('id'), $deleted['invoice_number'],
+                ['client' => $deleted['client_name'], 'montant' => money($deleted['amount_given'], $deleted['source_currency'])]);
+        }
         flash('success', 'Reçu supprimé.');
         redirect('invoices.php?action=list');
     }
@@ -304,7 +320,33 @@ if ($action === 'list') {
         $where[]  = 'operation_type = ?';
         $params[] = $type;
     }
+    // Même date que la colonne « Date » de la liste (invoice_row) : création du reçu, à défaut date d'émission
+    [$from, $to, $dateWhere, $dateParams] = list_date_range('COALESCE(created_at, issue_date)');
+    array_push($where, ...$dateWhere);
+    array_push($params, ...$dateParams);
     $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+    $filters  = array_filter(['action' => 'list', 'q' => $q, 'type' => $type, 'from' => $from, 'to' => $to]);
+
+    // Export Excel / CSV : toutes les lignes correspondant aux filtres affichés (includes/csv_export.php)
+    if (query('export') === 'csv') {
+        activity_log('export', 'invoice', null, 'Export CSV des reçus', array_filter(['filtres' => http_build_query(array_diff_key($filters, ['action' => 1]))]));
+        $stmt = db_query("SELECT * FROM invoices {$whereSql} ORDER BY id DESC", $params);
+        csv_send('recus-de-caisse-' . date('Ymd-His') . '.csv',
+            ['N° reçu', 'Date et heure', 'Client', 'Téléphone', 'E-mail', 'Opération', 'Montant remis', 'Devise remise', 'Taux', 'Sens du taux',
+             'Montant à recevoir', 'Devise reçue', 'Frais', 'Mode de paiement', 'Motif', 'Émetteur', 'Statut', 'Agent', "Date d'émission"],
+            (function () use ($stmt) {
+                while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    yield [$r['invoice_number'], fdate($r['created_at'] ?: $r['issue_date'], true), $r['client_name'], $r['client_phone'], $r['client_email'],
+                        OPERATION_TYPES[$r['operation_type']] ?? $r['operation_type'],
+                        csv_amount($r['amount_given'], DASH_CURRENCIES[$r['source_currency']]['decimals'] ?? 2), currency_label((string) $r['source_currency']),
+                        csv_amount($r['exchange_rate'], 6), $r['rate_direction'] === 'divide' ? 'Division' : 'Multiplication',
+                        csv_amount($r['amount_received'], DASH_CURRENCIES[$r['target_currency']]['decimals'] ?? 2), currency_label((string) $r['target_currency']),
+                        csv_amount($r['fees']), $r['payment_method'], $r['transaction_reason'], $r['sender_name'],
+                        INVOICE_STATUSES[$r['status']]['label'] ?? $r['status'], $r['agent_name'], fdate($r['issue_date'])];
+                }
+            })());
+    }
+
     $total    = (int) db_value("SELECT COUNT(*) FROM invoices {$whereSql}", $params);
     $offset   = ($page - 1) * $perPage;
     $rows     = db_all("SELECT * FROM invoices {$whereSql} ORDER BY id DESC LIMIT {$perPage} OFFSET {$offset}", $params);
@@ -326,10 +368,17 @@ if ($action === 'list') {
                     <option value="<?= e($key) ?>" <?= $key === $type ? 'selected' : '' ?>><?= e($label) ?></option>
                 <?php endforeach; ?>
             </select>
-            <?php if ($q !== '' || $type !== ''): ?><a href="invoices.php?action=list" class="btn btn--ghost btn--sm">Réinitialiser</a><?php endif; ?>
+            <?= list_date_inputs($from, $to) ?>
+            <?php if ($q !== '' || $type !== '' || $from !== '' || $to !== ''): ?><a href="invoices.php?action=list" class="btn btn--ghost btn--sm">Réinitialiser</a><?php endif; ?>
         </form>
-        <a href="invoices.php" class="btn btn--primary"><?= icon('plus') ?> Nouveau reçu</a>
+        <div class="toolbar__actions">
+            <a href="invoices.php?<?= e(http_build_query($filters + ['export' => 'csv'])) ?>" class="btn btn--ghost" title="Télécharge les <?= $total ?> reçu<?= $total > 1 ? 's' : '' ?> correspondant aux filtres (fichier ouvert par Excel)"<?= $total ? '' : ' aria-disabled="true" hidden' ?>><?= icon('download') ?> Exporter (Excel/CSV)</a>
+            <a href="invoices.php" class="btn btn--primary"><?= icon('plus') ?> Nouveau reçu</a>
+        </div>
     </div>
+    <?php if ($from !== '' || $to !== ''): ?>
+        <p class="page-intro list-period"><?= icon('clock') ?> <?= $total ?> reçu<?= $total > 1 ? 's' : '' ?> <?= $from !== '' && $to !== '' ? 'du ' . e(fdate($from)) . ' au ' . e(fdate($to)) : ($from !== '' ? 'depuis le ' . e(fdate($from)) : 'jusqu\'au ' . e(fdate($to))) ?></p>
+    <?php endif; ?>
 
     <section class="panel">
         <?php if (!$rows): ?>
@@ -340,7 +389,7 @@ if ($action === 'list') {
                     <?php foreach ($rows as $inv) { echo invoice_row($inv); } ?>
                 </tbody></table>
             </div>
-            <?= pagination($total, $page, $perPage, array_filter(['action' => 'list', 'q' => $q, 'type' => $type])) ?>
+            <?= pagination($total, $page, $perPage, $filters) ?>
         <?php endif; ?>
     </section>
     <?php

@@ -11,6 +11,7 @@
 require_once __DIR__ . '/../includes/dashboard.php';
 require_once __DIR__ . '/../includes/settings.php';
 require_once __DIR__ . '/../includes/printers.php';
+require_once __DIR__ . '/../includes/backup.php';
 
 $user = require_login();   // exige $_SESSION['logged_in'] === true
 
@@ -101,51 +102,17 @@ function delete_logo(string $file): void
     }
 }
 
-/** Sauvegarde SQL complète (structure + données) envoyée en téléchargement. */
+/** Sauvegarde SQL complète (structure + données) envoyée en téléchargement (contenu : includes/backup.php). */
 function send_backup(): never
 {
-    $pdo   = db();
-    $mysql = DB_DRIVER === 'mysql';
-    $tables = $mysql
-        ? $pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN)
-        : $pdo->query("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")->fetchAll(PDO::FETCH_COLUMN);
-    // users en premier (clés étrangères)
-    usort($tables, fn ($a, $b) => ($b === 'users') <=> ($a === 'users') ?: strcmp($a, $b));
-
-    $quoteId = fn (string $id) => $mysql ? '`' . str_replace('`', '``', $id) . '`' : '"' . str_replace('"', '""', $id) . '"';
-    $file    = 'gtc-sauvegarde-' . date('Ymd-His') . '.sql';
+    $file = 'gtc-sauvegarde-' . date('Ymd-His') . '.sql';
 
     header('Content-Type: application/sql; charset=UTF-8');
     header('Content-Disposition: attachment; filename="' . $file . '"');
     header('Cache-Control: no-store');
     header('X-Content-Type-Options: nosniff');
 
-    echo "-- Sauvegarde " . GTC_NAME . "\n";
-    echo "-- Générée le " . date('d/m/Y à H:i') . ' par ' . str_replace(["\r", "\n"], ' ', current_user()['name']) . "\n";
-    echo "-- Moteur : " . ($mysql ? 'MySQL' : 'SQLite') . "\n";
-    echo "-- ATTENTION : fichier confidentiel (comptes, empreintes de mots de passe, factures). À conserver en lieu sûr.\n\n";
-    echo $mysql ? "SET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS = 0;\n\n" : "PRAGMA foreign_keys = OFF;\nBEGIN TRANSACTION;\n\n";
-
-    foreach ($tables as $table) {
-        $create = $mysql
-            ? $pdo->query('SHOW CREATE TABLE ' . $quoteId($table))->fetch(PDO::FETCH_NUM)[1]
-            : $pdo->query("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = " . $pdo->quote($table))->fetchColumn();
-        echo "-- Table {$table}\nDROP TABLE IF EXISTS " . $quoteId($table) . ";\n{$create};\n";
-
-        $stmt = $pdo->query('SELECT * FROM ' . $quoteId($table));
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $cols = implode(', ', array_map($quoteId, array_keys($row)));
-            $vals = implode(', ', array_map(fn ($v) => $v === null ? 'NULL' : $pdo->quote((string) $v), $row));
-            echo 'INSERT INTO ' . $quoteId($table) . " ({$cols}) VALUES ({$vals});\n";
-        }
-        echo "\n";
-    }
-    if (!$mysql) {
-        foreach ($pdo->query("SELECT sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL") as $index) {
-            echo $index['sql'] . ";\n";
-        }
-    }
-    echo $mysql ? "\nSET FOREIGN_KEY_CHECKS = 1;\n" : "\nCOMMIT;\nPRAGMA foreign_keys = ON;\n";
+    backup_dump(function (string $chunk): void { echo $chunk; }, current_user()['name']);
     exit;
 }
 
@@ -189,6 +156,7 @@ if (is_post()) {
         if (!$errors) {
             db_query('UPDATE users SET name = ?, phone = ?, email = ? WHERE id = ?', [$name, $phone ?: null, $email, $user['id']]);
             $_SESSION['user_name'] = $name;
+            activity_log('update', 'user', (int) $user['id'], $user['name'], ['action' => 'Profil modifié par son titulaire']);
             flash('success', 'Profil mis à jour.');
             redirect('settings.php#profil');
         }
@@ -223,6 +191,7 @@ if (is_post()) {
             }
             session_regenerate_id(true);
             $_SESSION['regenerated_at'] = time();
+            activity_log('security', 'user', (int) $user['id'], $user['name'], ['action' => 'Mot de passe changé par son titulaire']);
             flash('success', 'Mot de passe modifié. Vos autres sessions ouvertes (autres appareils) ont été fermées.');
             redirect('settings.php#profil');
         }
@@ -281,6 +250,7 @@ if (is_post()) {
                 $values['company_logo'] = '';
             }
             settings_save($values);
+            activity_log('update', 'settings', null, "Coordonnées de l'entreprise");
             flash('success', 'Coordonnées de l\'entreprise enregistrées : elles figurent désormais sur les reçus de caisse.');
             redirect('settings.php#entreprise');
         }
@@ -296,6 +266,7 @@ if (is_post()) {
         }
         if (!$errors) {
             settings_save(['commission_percent' => (string) round((float) $commission, 2)]);
+            activity_log('update', 'settings', null, 'Commission de guichet par défaut');
             flash('success', 'Commission de guichet par défaut enregistrée.');
             redirect('settings.php#taux');
         }
@@ -315,6 +286,7 @@ if (is_post()) {
         }
         if (!$errors) {
             settings_save(['print_format' => $format, 'currency' => $cur === 'XAF' ? 'FCFA' : $cur]);
+            activity_log('update', 'settings', null, 'Préférences système');
             flash('success', 'Préférences système enregistrées.');
             redirect('settings.php#systeme');
         }
@@ -322,6 +294,7 @@ if (is_post()) {
 
     if ($op === 'backup') {
         $canSystem || deny();
+        activity_log('backup', 'database', null, "Téléchargement d'une sauvegarde complète");
         send_backup();
     }
 
@@ -394,6 +367,8 @@ if (is_post()) {
             if ($makeDefault || ($prnForm['is_active'] && !db_value('SELECT 1 FROM printers WHERE is_default = 1 AND is_active = 1'))) {
                 printer_set_default($pid);
             }
+            activity_log($existing ? 'update' : 'create', 'printer', $existing ? (int) $prnForm['id'] : null, $prnForm['printer_name'],
+                array_filter(['adresse' => $prnForm['host'] !== '' ? $prnForm['host'] . ':' . $prnForm['port'] : '']));
             flash('success', $existing ? "Imprimante « {$prnForm['printer_name']} » mise à jour." : "Imprimante « {$prnForm['printer_name']} » ajoutée.");
             redirect('settings.php#systeme');
         }
@@ -403,6 +378,7 @@ if (is_post()) {
         $printer = printer_find((int) post('id'));   // imprimante active uniquement
         if ($printer) {
             printer_set_default((int) $printer['id']);
+            activity_log('update', 'printer', (int) $printer['id'], $printer['printer_name'], ['action' => 'Imprimante par défaut']);
             flash('success', "« {$printer['printer_name']} » est désormais l'imprimante par défaut de l'agence.");
         } else {
             flash('error', 'Seule une imprimante active peut être définie par défaut.');
@@ -421,6 +397,7 @@ if (is_post()) {
             if ((int) $printer['is_default'] === 1 && ($next = printer_default())) {
                 printer_set_default((int) $next['id']);
             }
+            activity_log('delete', 'printer', (int) $printer['id'], $printer['printer_name']);
             flash('success', "Imprimante « {$printer['printer_name']} » supprimée.");
         }
         redirect('settings.php#systeme');
@@ -745,6 +722,15 @@ dash_header('Paramètres', 'settings');
                     <div><dt>Reçus de caisse enregistrés</dt><dd><?= (int) db_value('SELECT COUNT(*) FROM invoices') ?></dd></div>
                     <div><dt>Comptes</dt><dd><?= (int) db_value('SELECT COUNT(*) FROM users') ?></dd></div>
                     <div><dt>PHP</dt><dd><?= e(PHP_VERSION) ?></dd></div>
+                    <?php $autoBackups = backup_list(); $lastAuto = $autoBackups[0] ?? null; ?>
+                    <div><dt>Sauvegardes automatiques</dt><dd>
+                        <?php if (!$lastAuto): ?>
+                            <span class="badge badge--warning">Aucune</span> <small class="cell-sub">Programmer <code>php tools/auto-backup.php</code> chaque nuit (tâche cron).</small>
+                        <?php else: ?>
+                            <?= $lastAuto['time'] < time() - 2 * 86400 ? '<span class="badge badge--danger">En retard</span> ' : '<span class="badge badge--success">Actives</span> ' ?>
+                            dernière le <?= e(date('d/m/Y à H:i', $lastAuto['time'])) ?> · <?= count($autoBackups) ?> conservée<?= count($autoBackups) > 1 ? 's' : '' ?> (<?= (int) GTC_BACKUP_KEEP_DAYS ?> jours)
+                        <?php endif; ?>
+                    </dd></div>
                 </dl>
             </section>
         </div>

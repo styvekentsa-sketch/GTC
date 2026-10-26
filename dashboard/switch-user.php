@@ -33,6 +33,7 @@ if ($action === 'start') {
         flash('error', $reason);
         redirect(impersonation_active() || $user['role'] !== 'admin' ? 'index.php' : 'users.php');
     }
+    activity_log('security', 'user', (int) $target['id'], $target['name'], ['action' => 'Prise de contrôle du compte'], $user);
     impersonation_start($user, $target);
     flash('warning', "Vous utilisez maintenant le compte de {$target['name']}. Toutes vos actions sont faites en son nom.");
     redirect('index.php');
@@ -49,6 +50,7 @@ if ($action === 'stop') {
         flash('error', "Votre compte administrateur n'est plus actif : la session a été fermée.");
         redirect('login.php');
     }
+    activity_log('security', 'user', null, 'Fin de prise de contrôle', [], current_user());
     flash('success', 'Vous êtes revenu sur votre compte administrateur.');
     redirect('users.php');
 }

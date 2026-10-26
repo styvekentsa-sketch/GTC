@@ -1,8 +1,10 @@
 <?php
 /**
- * Tableau de bord — statistiques & synthèse.
+ * Accueil du Dashboard — Hub : grille de boutons vers chaque module (dash_modules(), selon le rôle),
+ * puis aperçu de l'activité (statistiques, graphique, derniers reçus, messages).
  */
 require_once __DIR__ . '/../includes/dashboard.php';
+require_once __DIR__ . '/../includes/courriers.php';   // courrier_long_date()
 
 $user = require_login();
 if ($user['role'] === 'secretaire') {
@@ -51,23 +53,84 @@ $monthNames = ['01' => 'Janv.', '02' => 'Févr.', '03' => 'Mars', '04' => 'Avr.'
                '07' => 'Juil.', '08' => 'Août', '09' => 'Sept.', '10' => 'Oct.', '11' => 'Nov.', '12' => 'Déc.'];
 
 // ---------- Listes ----------
-$recentInvoices = db_all('SELECT id, invoice_number, client_name, amount_given, source_currency, status, issue_date FROM invoices ORDER BY id DESC LIMIT 5');
+$recentInvoices = db_all('SELECT id, invoice_number, client_name, amount_given, source_currency, status, issue_date FROM invoices ORDER BY id DESC LIMIT 10');
+$invoiceCount   = (int) db_value('SELECT COUNT(*) FROM invoices');
 $messages       = can_access_messages()
     ? db_all("SELECT * FROM messages WHERE status = 'unread' ORDER BY id DESC LIMIT 5")
     : [];
 $printers       = db_all('SELECT printer_name, printer_location, is_default, last_status, last_checked_at FROM printers WHERE is_active = 1 ORDER BY is_default DESC, printer_name LIMIT 5');
 
-dash_header('Tableau de bord', 'index');
+$modules = dash_modules() + ['settings' => is_admin()
+    ? ['href' => 'settings.php', 'icon' => 'settings', 'title' => 'Paramètres & BDD', 'desc' => 'Entreprise, sauvegardes, système', 'tone' => 'green']
+    : ['href' => 'settings.php', 'icon' => 'settings', 'title' => 'Paramètres', 'desc' => 'Mon profil et mot de passe', 'tone' => 'green']];
+
+dash_header('Accueil', 'index');
 ?>
 
-<!-- ==================== BIENVENUE & ACCÈS RAPIDES ==================== -->
-<section class="welcome">
-    <div>
-        <h2 class="welcome__title">Bienvenue, <?= e($user['name']) ?> <span class="welcome__role">(<?= e(role_label($user['role'])) ?>)</span></h2>
-        <p class="page-intro">Voici la situation au <?= date('d/m/Y') ?>.</p>
-    </div>
+<!-- ==================== HUB : BIENVENUE & GRILLE DES MODULES ==================== -->
+<section class="hub" aria-labelledby="hub-title">
+    <header class="hub__head">
+        <div>
+            <h2 class="hub__title" id="hub-title">Bienvenue, <?= e($user['name']) ?> <span class="hub__sep" aria-hidden="true">—</span> <span class="hub__cta">Choisissez un module</span></h2>
+            <p class="page-intro"><?= e(role_label($user['role'])) ?> · <?= e(ucfirst(courrier_long_date($today))) ?></p>
+        </div>
+        <div class="hub__actions">
+            <button type="button" class="btn btn--ghost btn--sm" data-pwa-install hidden><?= icon('download') ?> Installer l'application</button>
+            <a href="../index.php" class="btn btn--ghost btn--sm" target="_blank" rel="noopener"><?= icon('external') ?> Voir le site</a>
+            <form action="logout.php" method="post">
+                <?= csrf_field() ?>
+                <button type="submit" class="btn btn--ghost btn--sm"><?= icon('logout') ?> Déconnexion</button>
+            </form>
+        </div>
+    </header>
+
+    <nav class="hub__grid" aria-label="Modules du Dashboard">
+        <?php $i = 0; foreach ($modules as $key => $m): ?>
+            <?php /* couleurs de la charte en alternance régulière, quels que soient les modules visibles du rôle */ ?>
+            <a href="<?= e($m['href']) ?>" class="hub-tile hub-tile--<?= ['blue', 'green', 'magenta'][$i++ % 3] ?>">
+                <span class="hub-tile__icon"><?= icon($m['icon']) ?></span>
+                <span class="hub-tile__title"><?= e($m['title']) ?></span>
+                <span class="hub-tile__desc"><?= e($m['desc']) ?></span>
+                <?php if ($key === 'messages'): ?>
+                    <span class="hub-tile__badge" data-unread-badge<?= $stats['unread'] ? '' : ' hidden' ?>><?= $stats['unread'] ?> non lu<?= $stats['unread'] > 1 ? 's' : '' ?></span>
+                <?php endif; ?>
+            </a>
+        <?php endforeach; ?>
+    </nav>
 </section>
 
+<!-- ==================== DERNIERS REÇUS DE CAISSE (juste sous la grille : donnée la plus consultée) ==================== -->
+<section class="panel">
+    <header class="panel__head">
+        <h2 class="panel__title">Derniers reçus de caisse <span class="cell-sub">(<?= $invoiceCount ?> au total)</span></h2>
+        <div class="panel__actions">
+            <a href="invoices.php?action=new" class="btn btn--primary btn--sm"><?= icon('plus') ?> Nouveau reçu de caisse</a>
+            <a href="invoices.php?action=list" class="panel__link">Tous les reçus</a>
+        </div>
+    </header>
+    <?php if (!$recentInvoices): ?>
+        <p class="empty">Aucun reçu de caisse pour le moment. <a href="invoices.php?action=new">Créer le premier reçu</a></p>
+    <?php else: ?>
+        <div class="table-wrap">
+            <table class="table">
+                <thead><tr><th>N°</th><th>Client</th><th>Date</th><th class="num">Montant</th><th>Statut</th></tr></thead>
+                <tbody>
+                <?php foreach ($recentInvoices as $inv): ?>
+                    <tr>
+                        <td><a href="invoices.php?action=view&amp;id=<?= (int) $inv['id'] ?>" class="link-strong"><?= e($inv['invoice_number']) ?></a></td>
+                        <td><?= e($inv['client_name']) ?></td>
+                        <td><?= e(fdate($inv['issue_date'])) ?></td>
+                        <td class="num"><?= e(money($inv['amount_given'], $inv['source_currency'])) ?></td>
+                        <td><?= badge($inv['status'], INVOICE_STATUSES) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
+</section>
+
+<h2 class="hub-section-title">Aperçu de l'activité</h2>
 <!-- ==================== SYNTHÈSE ==================== -->
 <section class="stats stats--summary" aria-label="Synthèse du jour">
     <article class="stat">
@@ -95,29 +158,6 @@ dash_header('Tableau de bord', 'index');
         </div>
     </article>
 </section>
-
-<nav class="quick-links" aria-label="Accès rapides">
-    <a href="invoices.php" class="quick-link quick-link--primary">
-        <span class="quick-link__icon"><?= icon('file') ?></span>
-        <span class="quick-link__text"><strong>Nouveau reçu de caisse</strong><small>Créer et imprimer un reçu</small></span>
-        <?= icon('arrow') ?>
-    </a>
-    <?php if (is_admin()): ?>
-        <a href="team.php" class="quick-link">
-            <span class="quick-link__icon"><?= icon('users') ?></span>
-            <span class="quick-link__text"><strong>Gestion de l'équipe</strong><small>Membres affichés sur le site</small></span>
-            <?= icon('arrow') ?>
-        </a>
-    <?php endif; ?>
-    <form action="logout.php" method="post" class="quick-link-form">
-        <?= csrf_field() ?>
-        <button type="submit" class="quick-link">
-            <span class="quick-link__icon"><?= icon('logout') ?></span>
-            <span class="quick-link__text"><strong>Déconnexion</strong><small>Fermer ma session</small></span>
-            <?= icon('arrow') ?>
-        </button>
-    </form>
-</nav>
 
 <!-- ==================== CARTES STATISTIQUES ==================== -->
 <section class="stats" aria-label="Indicateurs clés">
@@ -204,34 +244,6 @@ dash_header('Tableau de bord', 'index');
         <?php endif; ?>
     </section>
 </div>
-
-<!-- ==================== DERNIERS REÇUS DE CAISSE ==================== -->
-<section class="panel">
-    <header class="panel__head">
-        <h2 class="panel__title">Derniers reçus de caisse</h2>
-        <a href="invoices.php" class="panel__link">Tous les reçus</a>
-    </header>
-    <?php if (!$recentInvoices): ?>
-        <p class="empty">Aucun reçu de caisse pour le moment. <a href="invoices.php">Créer le premier reçu</a></p>
-    <?php else: ?>
-        <div class="table-wrap">
-            <table class="table">
-                <thead><tr><th>N°</th><th>Client</th><th>Date</th><th class="num">Montant</th><th>Statut</th></tr></thead>
-                <tbody>
-                <?php foreach ($recentInvoices as $inv): ?>
-                    <tr>
-                        <td><a href="invoices.php?action=view&amp;id=<?= (int) $inv['id'] ?>" class="link-strong"><?= e($inv['invoice_number']) ?></a></td>
-                        <td><?= e($inv['client_name']) ?></td>
-                        <td><?= e(fdate($inv['issue_date'])) ?></td>
-                        <td class="num"><?= e(money($inv['amount_given'], $inv['source_currency'])) ?></td>
-                        <td><?= badge($inv['status'], INVOICE_STATUSES) ?></td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-    <?php endif; ?>
-</section>
 
 <?php if (can_access_messages()): ?>
 <!-- ==================== MESSAGES DU SITE (aperçu ; gestion complète : messages.php) ==================== -->
