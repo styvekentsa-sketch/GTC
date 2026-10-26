@@ -133,10 +133,12 @@ include __DIR__ . '/includes/hero.php';
             <form action="process-contact.php" method="post" class="form" novalidate>
                 <input type="hidden" name="csrf_token" value="<?= e($_SESSION['csrf_token']) ?>">
 
-                <!-- Pot de miel anti-spam (masqué) -->
+                <!-- Pot de miel anti-spam (masqué). Nom volontairement sans signification : un nom courant
+                     (« website », « url »…) serait rempli par l'auto-remplissage du navigateur et le
+                     message d'un vrai visiteur serait écarté comme celui d'un robot. -->
                 <div class="form-hp" aria-hidden="true">
-                    <label for="website">Ne pas remplir</label>
-                    <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+                    <label for="gtc_hp_7k">Ne pas remplir</label>
+                    <input type="text" id="gtc_hp_7k" name="gtc_hp_7k" tabindex="-1" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore>
                 </div>
 
                 <div class="form-row">

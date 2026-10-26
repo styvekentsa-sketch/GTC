@@ -13,6 +13,17 @@ require_once __DIR__ . '/includes/db.php';
 
 const CONTACT_PAGE = 'contact.php#formulaire';
 
+/**
+ * Journalise un échec d'enregistrement : journal PHP du serveur + data/contact-errors.log
+ * (dossier protégé, inaccessible depuis le web) pour un diagnostic facile chez l'hébergeur.
+ */
+function contact_log(string $reason): void
+{
+    $line = '[GTC] Message de contact NON enregistré : ' . $reason;
+    error_log($line);
+    @error_log(date('Y-m-d H:i:s') . ' ' . $line . PHP_EOL, 3, __DIR__ . '/data/contact-errors.log');
+}
+
 /** Redirige vers la page Contact et termine le script. */
 function back_to_contact(): void
 {
@@ -43,7 +54,8 @@ if (empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $tok
 }
 
 // Pot de miel : champ invisible rempli = robot → succès simulé, aucun envoi
-$isBot = !empty($_POST['website']);
+// (nom sans signification, voir contact.php : l'auto-remplissage des navigateurs ne le touche pas)
+$isBot = trim((string) ($_POST['gtc_hp_7k'] ?? '')) !== '';
 
 // ---------- Validation ----------
 $len = fn (string $v) => mb_strlen($v);
@@ -69,20 +81,25 @@ if (!$errors) {
     $sent = true;
 
     if (!$isBot) {
-        // 1. Enregistrement en base → visible dans le Dashboard (non bloquant si la base est indisponible)
+        // 1. Enregistrement en base → visible dans le Dashboard (Messages). Seule cette étape décide du succès.
         $stored = false;
-        if ($pdo = db_try()) {
+        $pdo    = db_try();
+        if (!$pdo) {
+            contact_log('base de données indisponible (voir aussi le journal PHP du serveur)');
+        } else {
             try {
-                $pdo->prepare(
+                $stored = $pdo->prepare(
                     "INSERT INTO messages (sender_name, sender_email, sender_phone, subject, message, ip, status, created_at)
                      VALUES (?, ?, ?, ?, ?, ?, 'unread', ?)"
                 )->execute([
                     $fields['nom'], $fields['email'], $fields['telephone'] ?: null, $fields['sujet'],
                     $fields['message'], substr((string) ($_SERVER['REMOTE_ADDR'] ?? ''), 0, 45), db_now(),
                 ]);
-                $stored = true;
+                if (!$stored) {
+                    contact_log("l'insertion n'a pas abouti");
+                }
             } catch (PDOException $e) {
-                error_log('[GTC] Enregistrement du message impossible : ' . $e->getMessage());
+                contact_log($e->getMessage());
             }
         }
 
@@ -112,10 +129,11 @@ if (!$errors) {
             'X-Mailer'                  => 'PHP/' . PHP_VERSION,
         ];
 
-        $mailed = @mail(GTC_EMAIL, $subject, $body, $headers);
+        // Simple notification (pas une garantie de réception) : n'influe pas sur le résultat affiché
+        @mail(GTC_EMAIL, $subject, $body, $headers);
 
-        // Succès si le message est conservé quelque part (base ou e-mail)
-        $sent = $stored || $mailed;
+        // Succès UNIQUEMENT si le message est enregistré en base, donc visible dans le Dashboard
+        $sent = $stored;
     }
 
     if ($sent) {
@@ -125,7 +143,9 @@ if (!$errors) {
         back_to_contact();
     }
 
-    $errors['global'] = "Le message n'a pas pu être envoyé. Merci de nous contacter directement par téléphone ou WhatsApp.";
+    $errors['global'] = "Désolé, votre message n'a pas pu être enregistré suite à un problème technique. "
+                      . 'Votre saisie est conservée ci-dessous : réessayez dans quelques minutes, ou contactez-nous '
+                      . 'directement par téléphone ou WhatsApp.';
 }
 
 // Échec : on renvoie erreurs + saisie pour réaffichage

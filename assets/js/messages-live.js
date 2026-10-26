@@ -4,8 +4,9 @@
  * Chargé sur toutes les pages du Dashboard pour les comptes ayant accès aux messages
  * (includes/dashboard.php → dash_footer). Interroge dashboard/messages-api.php toutes les 8 secondes :
  *   - pastille « Messages » du menu, titre de l'onglet « (3) … », pastille du panneau de l'accueil ;
- *   - page Messages (1re page de « Tous » / « Non lus », sans recherche) : nouveaux messages ajoutés
- *     en tête de liste sans recharger, compteurs des filtres, bouton « Tout marquer comme lu » ;
+ *   - page Messages (1re page de « Tous » / « Non lus », sans recherche) : la conversation qui reçoit un
+ *     nouveau message remonte en tête de liste sans recharger (une seule ligne par expéditeur),
+ *     compteurs des filtres, bouton « Tout marquer comme lu » ;
  *   - notification discrète « Nouveau message de … » sur les autres pages.
  *
  * Léger : pause quand l'onglet est masqué (reprise immédiate au retour), espacement progressif en cas
@@ -75,14 +76,19 @@
     });
   };
 
-  // Lignes renvoyées par le serveur (même rendu que la page, jetons CSRF compris), ajoutées en tête de liste
+  // Lignes de conversation renvoyées par le serveur (même rendu que la page, jetons CSRF compris), placées en tête
+  // de liste ; la ligne existante du même expéditeur est remplacée (une seule ligne par conversation)
   var addRows = function (rows) {
     if (!list || !rows || !rows.length) return 0;
     var added = 0;
-    // Les plus anciens d'abord, chacun inséré en tête : l'ordre final reste « du plus récent au plus ancien »
+    // Les plus anciennes d'abord, chacune insérée en tête : l'ordre final reste « de la plus récente à la plus ancienne »
     rows.slice().reverse().forEach(function (row) {
       if (onUnreadFilter && row.status !== 'unread') return;
-      if (list.querySelector('[data-message-id="' + row.id + '"]')) return;
+      var existing = list.querySelector('[data-thread="' + row.thread + '"]');
+      if (existing) {
+        if (existing.getAttribute('data-message-id') === String(row.id)) return;   // déjà à jour
+        existing.remove();
+      }
       var tpl = document.createElement('template');
       tpl.innerHTML = row.html.trim();
       var tr = tpl.content.firstElementChild;

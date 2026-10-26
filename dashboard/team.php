@@ -193,13 +193,13 @@ dash_header("Équipe", 'team');
             <p class="empty">Aucun membre. La section équipe est masquée sur le site tant que la liste est vide.</p>
         <?php else: ?>
             <div class="table-wrap">
-                <table class="table">
+                <table class="table table--stack">
                     <thead><tr><th>Membre</th><th>Rôle</th><th class="num">Ordre</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr></thead>
                     <tbody>
                     <?php foreach ($members as $m): ?>
                         <?php $url = team_photo_url($m['photo'], '../', $m['name']); ?>
                         <tr<?= (int) $m['id'] === (int) $form['id'] ? ' class="is-selected"' : '' ?>>
-                            <td>
+                            <td data-label="Membre">
                                 <span class="member-cell">
                                     <?php if ($url): ?>
                                         <img class="member-thumb" src="<?= e($url) ?>" alt="" width="44" height="44">
@@ -209,8 +209,8 @@ dash_header("Équipe", 'team');
                                     <strong><?= e($m['name']) ?></strong>
                                 </span>
                             </td>
-                            <td><?= e($m['role']) ?></td>
-                            <td class="num"><?= (int) $m['display_order'] ?></td>
+                            <td data-label="Rôle"><?= e($m['role']) ?></td>
+                            <td class="num" data-label="Ordre"><?= (int) $m['display_order'] ?></td>
                             <td class="actions">
                                 <a href="team.php?edit=<?= (int) $m['id'] ?>" class="icon-btn" title="Modifier"><?= icon('edit') ?></a>
                                 <form method="post" class="inline-form">

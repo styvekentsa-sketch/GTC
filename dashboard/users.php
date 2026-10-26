@@ -113,17 +113,17 @@ dash_header('Utilisateurs', 'users');
     <section class="panel">
         <h2 class="panel__title">Comptes (<?= count($users) ?>)</h2>
         <div class="table-wrap">
-            <table class="table users-table">
+            <table class="table table--stack users-table">
                 <thead><tr><th>Utilisateur</th><th>Rôle</th><th>Dernière connexion</th><th>Statut</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr></thead>
                 <tbody>
                 <?php foreach ($users as $u): ?>
                     <?php $self = (int) $u['id'] === (int) $user['id']; ?>
                     <tr class="<?= $u['is_active'] ? '' : 'is-disabled' ?>">
-                        <td>
+                        <td data-label="Utilisateur"><span class="cell-stack">
                             <strong><?= e($u['name']) ?></strong><?= $self ? ' <span class="badge badge--info">Vous</span>' : '' ?>
                             <small class="cell-sub"><?= e($u['email']) ?></small>
-                        </td>
-                        <td>
+                        </span></td>
+                        <td data-label="Rôle">
                             <?php if ($self): ?>
                                 <?= e(USER_ROLES[$u['role']] ?? $u['role']) ?>
                             <?php else: ?>
@@ -140,8 +140,8 @@ dash_header('Utilisateurs', 'users');
                                 </form>
                             <?php endif; ?>
                         </td>
-                        <td><?= e(fdate($u['last_login_at'], true)) ?></td>
-                        <td>
+                        <td data-label="Dernière connexion"><?= e(fdate($u['last_login_at'], true)) ?></td>
+                        <td data-label="Statut">
                             <?= $u['is_active'] ? '<span class="badge badge--success">Actif</span>' : '<span class="badge badge--muted">Inactif</span>' ?>
                         </td>
                         <td class="actions">

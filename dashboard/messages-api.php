@@ -8,7 +8,8 @@
  *       counts: { all, unread, read, replied, archived },
  *       latest_id: 45,                              prochain « since »
  *       new: [ { id, sender, subject } ],           messages arrivés depuis « since » (notification)
- *       rows: [ { id, status, html } ]              avec rows=1 : lignes prêtes à insérer (même rendu que la page)
+ *       rows: [ { id, thread, status, html } ]      avec rows=1 : lignes des conversations concernées, prêtes à
+ *                                                   insérer (même rendu que la page ; thread = ligne à remplacer)
  *     }
  *
  * Sécurité : réservé aux comptes de la messagerie (MESSAGE_ROLES) ; lecture seule (GET), aucune action.
@@ -62,10 +63,25 @@ $data['unread'] = $data['counts']['unread'];
 // Nouveaux messages (au plus 20 : au-delà, la page est simplement à recharger)
 if ($since > 0 && $data['latest_id'] > $since) {
     $fresh = db_all('SELECT * FROM messages WHERE id > ? ORDER BY id DESC LIMIT 20', [$since]);
+    $keys  = [];
     foreach ($fresh as $m) {
         $data['new'][] = ['id' => (int) $m['id'], 'sender' => $m['sender_name'], 'subject' => $m['subject'], 'status' => $m['status']];
-        if (($_GET['rows'] ?? '') === '1' && $m['status'] !== 'archived') {
-            $data['rows'][] = ['id' => (int) $m['id'], 'status' => $m['status'], 'html' => message_row($m, $back)];
+        $keys[message_thread_key($m['sender_email'])] = true;
+    }
+    // Conversations concernées, recalculées avec le filtre de la page (une ligne par expéditeur :
+    // la ligne existante est remplacée et remonte en tête au lieu d'être dupliquée)
+    if (($_GET['rows'] ?? '') === '1') {
+        parse_str((string) parse_url($back, PHP_URL_QUERY), $backQuery);
+        $filter = isset(MESSAGE_FILTERS[$backQuery['f'] ?? '']) ? $backQuery['f'] : 'all';
+        $in     = implode(', ', array_fill(0, count($keys), '?'));
+        $where  = 'WHERE ' . MESSAGE_FILTERS[$filter][1] . ' AND ' . MESSAGE_THREAD_KEY . " IN ({$in})";
+        foreach (messages_threads($where, array_keys($keys)) as $t) {
+            $data['rows'][] = [
+                'id'     => (int) $t['last']['id'],
+                'thread' => message_thread_dom_id($t['key']),
+                'status' => $t['unread'] > 0 ? 'unread' : $t['last']['status'],
+                'html'   => message_thread_row($t, $back),
+            ];
         }
     }
 }
