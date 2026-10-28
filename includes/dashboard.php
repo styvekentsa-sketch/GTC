@@ -175,6 +175,95 @@ function fdate(?string $value, bool $withTime = false): string
     return $ts ? date($withTime ? 'd/m/Y H:i' : 'd/m/Y', $ts) : '—';
 }
 
+/**
+ * Bouton « Supprimer » (réservé aux administrateurs : rien n'est affiché pour les autres rôles).
+ * Formulaire POST avec jeton CSRF et confirmation obligatoire (data-confirm, assets/js/dashboard.js) ;
+ * « back » ramène, après suppression, à la page d'origine (liste filtrée, page en cours).
+ * $label vide : icône seule (tableaux) ; sinon bouton rouge avec texte (pages de détail).
+ */
+function delete_button(int $id, string $confirm, string $label = ''): string
+{
+    if (!is_admin()) {
+        return '';
+    }
+    $back = basename((string) parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH)) . (($q = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_QUERY)) ? '?' . $q : '');
+    $button = $label === ''
+        ? '<button type="submit" class="icon-btn icon-btn--danger" title="Supprimer" data-confirm="' . e($confirm) . '">' . icon('trash') . '<span class="visually-hidden">Supprimer</span></button>'
+        : '<button type="submit" class="btn btn--danger btn--sm" data-confirm="' . e($confirm) . '">' . icon('trash') . ' ' . e($label) . '</button>';
+    return '<form method="post" class="inline-form">' . csrf_field()
+        . '<input type="hidden" name="op" value="delete"><input type="hidden" name="id" value="' . $id . '">'
+        . '<input type="hidden" name="back" value="' . e($back) . '">' . $button . '</form>';
+}
+
+/** Adresse de la page en cours (fichier + paramètres), pour revenir au même endroit après une action. */
+function current_back(): string
+{
+    $uri = (string) ($_SERVER['REQUEST_URI'] ?? '');
+    $q   = parse_url($uri, PHP_URL_QUERY);
+    return basename((string) parse_url($uri, PHP_URL_PATH)) . ($q ? '?' . $q : '');
+}
+
+/**
+ * Menu d'actions d'une ligne de tableau (bouton « ⋮ ») — assets/js/dashboard.js (§ Menus d'actions) l'ouvre au-dessus
+ * de la page (jamais coupé par un tableau à défilement), le ferme au clic ailleurs, à Échap ou au défilement.
+ * Sans JavaScript, l'élément <details> natif l'ouvre et le ferme quand même.
+ *
+ * Éléments :
+ *   ['link', 'Libellé', 'url', 'icône', ['target' => '_blank']]
+ *   ['post', 'Libellé', 'icône', ['op' => 'delete', 'id' => 3], 'confirmation ou null', 'danger' => bool, 'action' => 'page.php']
+ *   ['sub',  'Libellé', 'icône', '<html du sous-panneau>']          sous-panneau dépliable (formulaire, choix…)
+ *   ['off',  'Libellé', 'icône', 'raison affichée']                 action indisponible, expliquée
+ *   ['sep']                                                        séparateur
+ */
+function action_menu(array $items, string $label): string
+{
+    $html = '';
+    foreach ($items as $it) {
+        $kind = $it[0];
+        if ($kind === 'sep') {
+            $html .= '<hr class="amenu__sep">';
+        } elseif ($kind === 'link') {
+            $attrs = '';
+            foreach (($it[4] ?? []) as $k => $v) {
+                $attrs .= ' ' . e($k) . '="' . e($v) . '"';
+            }
+            if (($it[4]['target'] ?? '') === '_blank') {
+                $attrs .= ' rel="noopener"';
+            }
+            $html .= '<a href="' . e($it[2]) . '" class="amenu__item" role="menuitem"' . $attrs . '>' . icon($it[3]) . '<span>' . e($it[1]) . '</span></a>';
+        } elseif ($kind === 'post') {
+            $fields = '';
+            foreach ($it[3] as $k => $v) {
+                $fields .= '<input type="hidden" name="' . e($k) . '" value="' . e((string) $v) . '">';
+            }
+            $danger = !empty($it['danger']);
+            $html .= '<form method="post"' . (isset($it['action']) ? ' action="' . e($it['action']) . '"' : '') . ' class="amenu__form">' . csrf_field() . $fields
+                . '<button type="submit" class="amenu__item' . ($danger ? ' amenu__item--danger' : '') . '" role="menuitem"'
+                . (!empty($it[4]) ? ' data-confirm="' . e($it[4]) . '"' : '') . '>' . icon($it[2]) . '<span>' . e($it[1]) . '</span></button></form>';
+        } elseif ($kind === 'sub') {
+            $html .= '<details class="amenu__sub"><summary class="amenu__item" role="menuitem">' . icon($it[2]) . '<span>' . e($it[1]) . '</span>'
+                . icon('arrow') . '</summary><div class="amenu__subpanel">' . $it[3] . '</div></details>';
+        } elseif ($kind === 'off') {
+            $html .= '<span class="amenu__item amenu__item--off" role="menuitem" aria-disabled="true">' . icon($it[2])
+                . '<span>' . e($it[1]) . '<small>' . e($it[3]) . '</small></span></span>';
+        }
+    }
+    return '<details class="amenu" data-amenu><summary class="icon-btn amenu__toggle" title="Actions" aria-label="' . e($label) . '" aria-haspopup="menu">'
+        . icon('more') . '</summary><div class="amenu__panel" role="menu" aria-label="' . e($label) . '">' . $html . '</div></details>';
+}
+
+/** Élément « Supprimer » d'un menu d'actions (administrateurs uniquement : rien pour les autres rôles). */
+function delete_menu_item(int $id, string $confirm, string $label = 'Supprimer'): array
+{
+    return is_admin() ? ['post', $label, 'trash', ['op' => 'delete', 'id' => $id, 'back' => current_back()], $confirm, 'danger' => true] : [];
+}
+
+/** Page de retour sûre : uniquement $page (avec ses paramètres), jamais une autre page ni un autre site. */
+function safe_back(string $back, string $page, string $default): string
+{
+    return preg_match('/^' . preg_quote($page, '/') . '(\?[a-z0-9_=&%+.,:-]*)?$/i', $back) ? $back : $default;
+}
+
 /** Pastille de statut. */
 function badge(string $key, array $map): string
 {

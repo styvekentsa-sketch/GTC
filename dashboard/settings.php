@@ -489,6 +489,10 @@ dash_header('Paramètres', 'settings');
         <?php foreach ($tabs as $id => $t): ?>
             <a href="#<?= e($id) ?>" class="tabs__item" role="tab" id="tab-<?= e($id) ?>" aria-controls="panel-<?= e($id) ?>"><?= icon($t['icon']) ?> <?= e($t['label']) ?></a>
         <?php endforeach; ?>
+        <?php if (is_admin()): ?>
+            <!-- Gestion des comptes : page dédiée (dashboard/users.php, administrateurs uniquement) — simple lien, pas un onglet -->
+            <a href="users.php" class="tabs__item"><?= icon('shield') ?> Utilisateurs <?= icon('arrow') ?></a>
+        <?php endif; ?>
     </nav>
 
     <!-- ==================== 1. PROFIL & SÉCURITÉ ==================== -->

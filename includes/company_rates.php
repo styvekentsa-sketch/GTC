@@ -58,8 +58,9 @@ function company_rates(): array
 function company_rates_load(): array
 {
     $rows = db_all(
-        'SELECT r.currency_code, r.currency_name, r.buy_rate, r.sell_rate, r.updated_at, r.updated_by, u.name AS updated_by_name
-         FROM exchange_rates r LEFT JOIN users u ON u.id = r.updated_by'
+        "SELECT r.currency_code, r.currency_name, r.buy_rate, r.sell_rate, r.updated_at, r.updated_by,
+                CASE WHEN r.updated_by IS NOT NULL AND u.id IS NULL THEN 'Compte supprimé' ELSE u.name END AS updated_by_name
+         FROM exchange_rates r LEFT JOIN users u ON u.id = r.updated_by"
     );
     $rates = [];
     foreach ($rows as $r) {

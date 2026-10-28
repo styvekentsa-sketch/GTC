@@ -103,7 +103,7 @@ foreach (db_all('SELECT status, COUNT(*) AS n FROM print_jobs GROUP BY status') 
     $counts[$row['status']] = (int) $row['n'];
 }
 
-$jobSql = 'SELECT j.*, p.printer_name, u.name AS requester
+$jobSql = 'SELECT j.*, p.printer_name, CASE WHEN j.requested_by IS NOT NULL AND u.id IS NULL THEN \'Compte supprimé\' ELSE u.name END AS requester
            FROM print_jobs j
            LEFT JOIN printers p ON p.id = j.printer_id
            LEFT JOIN users u ON u.id = j.requested_by';

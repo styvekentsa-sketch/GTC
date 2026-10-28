@@ -438,10 +438,16 @@ function cinv_find(int $id): ?array
 /** Supprime une facture et ses lignes. */
 function cinv_delete(int $id): void
 {
+    // Lignes puis document, ensemble ou pas du tout (une erreur annule toute la suppression)
     db()->beginTransaction();
-    db_query('DELETE FROM commercial_invoice_items WHERE invoice_id = ?', [$id]);
-    db_query('DELETE FROM commercial_invoices WHERE id = ?', [$id]);
-    db()->commit();
+    try {
+        db_query('DELETE FROM commercial_invoice_items WHERE invoice_id = ?', [$id]);
+        db_query('DELETE FROM commercial_invoices WHERE id = ?', [$id]);
+        db()->commit();
+    } catch (Throwable $e) {
+        db()->rollBack();
+        throw $e;
+    }
 }
 
 /** Montant sans devise, au format français : 1 250 000 / 99,50 / -10 000. */

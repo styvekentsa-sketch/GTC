@@ -179,16 +179,28 @@ if (is_post()) {
         redirect('invoices.php?action=view&id=' . (int) post('id'));
     }
 
+    // Suppression définitive : administrateurs uniquement (jeton CSRF vérifié plus haut), journal d'activité obligatoire
     if ($op === 'delete') {
         require_role('admin');
-        $deleted = db_one('SELECT invoice_number, client_name, amount_given, source_currency FROM invoices WHERE id = ?', [(int) post('id')]);
-        db_query('DELETE FROM invoices WHERE id = ?', [(int) post('id')]);
-        if ($deleted) {
-            activity_log('delete', 'invoice', (int) post('id'), $deleted['invoice_number'],
-                ['client' => $deleted['client_name'], 'montant' => money($deleted['amount_given'], $deleted['source_currency'])]);
+        $delId   = (int) post('id');
+        $back    = safe_back(post('back'), 'invoices.php', 'invoices.php?action=list');
+        if (str_contains($back, 'action=view')) {
+            $back = 'invoices.php?action=list';   // la page du reçu supprimé n'existe plus
         }
-        flash('success', 'Reçu supprimé.');
-        redirect('invoices.php?action=list');
+        $deleted = db_one('SELECT * FROM invoices WHERE id = ?', [$delId]);
+        if (!$deleted) {
+            flash('error', 'Ce reçu n\'existe plus (déjà supprimé ?).');
+            redirect($back);
+        }
+        db_query('DELETE FROM invoices WHERE id = ?', [$delId]);
+        activity_log('delete', 'invoice', $delId, $deleted['invoice_number'], [
+            'date du reçu' => fdate($deleted['created_at'] ?: $deleted['issue_date'], true),
+            'client'       => $deleted['client_name'],
+            'montant'      => money($deleted['amount_given'], $deleted['source_currency']) . ' → ' . money($deleted['amount_received'], $deleted['target_currency']),
+            'statut'       => INVOICE_STATUSES[$deleted['status']]['label'] ?? $deleted['status'],
+        ]);
+        flash('success', "Reçu {$deleted['invoice_number']} supprimé.");
+        redirect($back);
     }
 }
 
@@ -212,7 +224,13 @@ function invoice_row(array $inv): string
         </span></td>
         <td data-label="Agent"><?= e($inv['agent_name']) ?></td>
         <td class="actions">
-            <a href="print-invoice.php?id=<?= (int) $inv['id'] ?>" class="btn btn--ghost btn--sm" target="_blank" rel="noopener"><?= icon('printer') ?> Imprimer</a>
+            <?= action_menu(array_filter([
+                ['link', 'Voir le reçu', 'invoices.php?action=view&id=' . (int) $inv['id'], 'eye'],
+                ['link', 'Imprimer', 'print-invoice.php?id=' . (int) $inv['id'], 'printer', ['target' => '_blank']],
+                ['link', 'Exporter en PDF', 'pdf.php?type=receipt&id=' . (int) $inv['id'], 'download'],
+                is_admin() ? ['sep'] : [],
+                delete_menu_item((int) $inv['id'], "Êtes-vous sûr de vouloir supprimer définitivement le reçu {$inv['invoice_number']} ? Cette action est irréversible.", 'Supprimer le reçu'),
+            ]), 'Actions du reçu ' . $inv['invoice_number']) ?>
         </td>
     </tr>
     <?php
@@ -285,14 +303,9 @@ if ($action === 'view') {
     </section>
 
     <?php if (is_admin()): ?>
-        <form method="post" class="danger-zone">
-            <?= csrf_field() ?>
-            <input type="hidden" name="op" value="delete">
-            <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
-            <button type="submit" class="btn btn--danger btn--sm" data-confirm="Supprimer définitivement le reçu <?= e($inv['invoice_number']) ?> ?">
-                <?= icon('trash') ?> Supprimer le reçu
-            </button>
-        </form>
+        <div class="danger-zone">
+            <?= delete_button((int) $inv['id'], "Êtes-vous sûr de vouloir supprimer définitivement le reçu {$inv['invoice_number']} ? Cette action est irréversible.", 'Supprimer le reçu') ?>
+        </div>
     <?php endif; ?>
     <?php
     dash_footer();
@@ -328,23 +341,43 @@ if ($action === 'list') {
     $filters  = array_filter(['action' => 'list', 'q' => $q, 'type' => $type, 'from' => $from, 'to' => $to]);
 
     // Export Excel / CSV : toutes les lignes correspondant aux filtres affichés (includes/csv_export.php)
-    if (query('export') === 'csv') {
-        activity_log('export', 'invoice', null, 'Export CSV des reçus', array_filter(['filtres' => http_build_query(array_diff_key($filters, ['action' => 1]))]));
+    if ($format = export_format()) {
+        activity_log('export', 'invoice', null, 'Export ' . strtoupper($format) . ' des reçus', array_filter(['filtres' => http_build_query(array_diff_key($filters, ['action' => 1]))]));
         $stmt = db_query("SELECT * FROM invoices {$whereSql} ORDER BY id DESC", $params);
-        csv_send('recus-de-caisse-' . date('Ymd-His') . '.csv',
-            ['N° reçu', 'Date et heure', 'Client', 'Téléphone', 'E-mail', 'Opération', 'Montant remis', 'Devise remise', 'Taux', 'Sens du taux',
-             'Montant à recevoir', 'Devise reçue', 'Frais', 'Mode de paiement', 'Motif', 'Émetteur', 'Statut', 'Agent', "Date d'émission"],
-            (function () use ($stmt) {
-                while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                    yield [$r['invoice_number'], fdate($r['created_at'] ?: $r['issue_date'], true), $r['client_name'], $r['client_phone'], $r['client_email'],
-                        OPERATION_TYPES[$r['operation_type']] ?? $r['operation_type'],
-                        csv_amount($r['amount_given'], DASH_CURRENCIES[$r['source_currency']]['decimals'] ?? 2), currency_label((string) $r['source_currency']),
-                        csv_amount($r['exchange_rate'], 6), $r['rate_direction'] === 'divide' ? 'Division' : 'Multiplication',
-                        csv_amount($r['amount_received'], DASH_CURRENCIES[$r['target_currency']]['decimals'] ?? 2), currency_label((string) $r['target_currency']),
-                        csv_amount($r['fees']), $r['payment_method'], $r['transaction_reason'], $r['sender_name'],
-                        INVOICE_STATUSES[$r['status']]['label'] ?? $r['status'], $r['agent_name'], fdate($r['issue_date'])];
-                }
-            })());
+        $dec  = fn (?string $cur) => DASH_CURRENCIES[$cur]['decimals'] ?? 2;
+        export_send($format, 'recus-de-caisse', 'Reçus de caisse', [
+            ['label' => 'N° reçu',            'width' => 20],
+            ['label' => 'Date',               'type' => 'date',   'width' => 12],
+            ['label' => 'Heure',              'type' => 'time',   'width' => 8],
+            ['label' => 'Client',             'width' => 26],
+            ['label' => 'Téléphone',          'width' => 16],
+            ['label' => 'Opération',          'width' => 18],
+            ['label' => 'Montant remis',      'type' => 'amount', 'width' => 17],
+            ['label' => 'Devise remise',      'width' => 9],
+            ['label' => 'Montant reçu',       'type' => 'amount', 'width' => 17],
+            ['label' => 'Devise reçue',       'width' => 9],
+            ['label' => 'Taux',               'type' => 'amount', 'decimals' => 6, 'width' => 13],
+            ['label' => 'Sens du taux',       'width' => 14],
+            ['label' => 'Commission',         'type' => 'amount', 'width' => 13],
+            ['label' => 'Mode de paiement',   'width' => 16],
+            ['label' => 'Motif',              'width' => 34],
+            ['label' => 'Émetteur',           'width' => 22],
+            ['label' => 'Statut',             'width' => 11],
+            ['label' => 'Agent',              'width' => 20],
+            ['label' => 'E-mail',             'width' => 26],
+            ['label' => "Date d'émission",    'type' => 'date',   'width' => 12],
+        ], (function () use ($stmt, $dec) {
+            while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $when = $r['created_at'] ?: $r['issue_date'];   // même date que la colonne « Date » de la liste
+                yield [$r['invoice_number'], $when, $r['created_at'] ?: null, $r['client_name'], $r['client_phone'],
+                    OPERATION_TYPES[$r['operation_type']] ?? $r['operation_type'],
+                    [$r['amount_given'], $dec($r['source_currency'])], currency_label((string) $r['source_currency']),
+                    [$r['amount_received'], $dec($r['target_currency'])], currency_label((string) $r['target_currency']),
+                    $r['exchange_rate'], $r['rate_direction'] === 'divide' ? 'Division' : 'Multiplication',
+                    [$r['fees'], $dec($r['source_currency'])], $r['payment_method'], $r['transaction_reason'], $r['sender_name'],
+                    INVOICE_STATUSES[$r['status']]['label'] ?? $r['status'], $r['agent_name'], $r['client_email'], $r['issue_date']];
+            }
+        })());
     }
 
     $total    = (int) db_value("SELECT COUNT(*) FROM invoices {$whereSql}", $params);
@@ -372,7 +405,7 @@ if ($action === 'list') {
             <?php if ($q !== '' || $type !== '' || $from !== '' || $to !== ''): ?><a href="invoices.php?action=list" class="btn btn--ghost btn--sm">Réinitialiser</a><?php endif; ?>
         </form>
         <div class="toolbar__actions">
-            <a href="invoices.php?<?= e(http_build_query($filters + ['export' => 'csv'])) ?>" class="btn btn--ghost" title="Télécharge les <?= $total ?> reçu<?= $total > 1 ? 's' : '' ?> correspondant aux filtres (fichier ouvert par Excel)"<?= $total ? '' : ' aria-disabled="true" hidden' ?>><?= icon('download') ?> Exporter (Excel/CSV)</a>
+            <?= export_buttons('invoices.php', $filters, $total, $total > 1 ? 'reçus' : 'reçu') ?>
             <a href="invoices.php" class="btn btn--primary"><?= icon('plus') ?> Nouveau reçu</a>
         </div>
     </div>

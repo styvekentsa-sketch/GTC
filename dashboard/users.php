@@ -55,8 +55,57 @@ if (is_post()) {
     }
 
     // Garde-fous : on ne peut ni se désactiver, ni se rétrograder soi-même
-    if (in_array($op, ['toggle', 'role'], true) && $target === (int) $user['id']) {
-        flash('error', 'Vous ne pouvez pas modifier votre propre statut ou rôle.');
+    if (in_array($op, ['toggle', 'role', 'delete'], true) && $target === (int) $user['id']) {
+        flash('error', $op === 'delete'
+            ? 'Vous ne pouvez pas supprimer votre propre compte : vous perdriez l\'accès au Dashboard.'
+            : 'Vous ne pouvez pas modifier votre propre statut ou rôle.');
+        redirect('users.php');
+    }
+
+    /*
+     * Suppression définitive d'un compte — SEUL endroit du Dashboard où un compte peut être supprimé
+     * (page réservée aux administrateurs : require_role('admin') en tête de fichier ; jeton CSRF vérifié plus haut).
+     * Refusée : son propre compte (ci-dessus), le dernier administrateur actif, et tout compte ayant émis des reçus
+     * de caisse — l'auteur d'un reçu ne doit jamais disparaître (la base l'interdit : invoices.agent_id) ;
+     * un tel compte se DÉSACTIVE (plus aucun accès, historique intact).
+     */
+    if ($op === 'delete') {
+        $account = db_one('SELECT id, name, email, role, status, created_at, last_login_at FROM users WHERE id = ?', [$target]);
+        if (!$account) {
+            flash('error', 'Ce compte n\'existe plus (déjà supprimé ?).');
+            redirect('users.php');
+        }
+        $receipts = (int) db_value('SELECT COUNT(*) FROM invoices WHERE agent_id = ?', [$target]);
+        if ($receipts > 0) {
+            flash('error', "Le compte de {$account['name']} a émis {$receipts} reçu" . ($receipts > 1 ? 's' : '') . ' de caisse : le supprimer effacerait '
+                . "l'auteur de ces reçus. Désactivez-le plutôt : il ne pourra plus se connecter et l'historique reste intact.");
+            redirect('users.php');
+        }
+        if ($account['role'] === 'admin'
+            && (int) db_value("SELECT COUNT(*) FROM users WHERE role = 'admin' AND status = 'actif' AND id <> ?", [$target]) === 0) {
+            flash('error', 'Impossible de supprimer le dernier administrateur actif.');
+            redirect('users.php');
+        }
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            db_query('DELETE FROM login_attempts WHERE email = ?', [auth_email_key($account['email'])]);
+            db_query('DELETE FROM users WHERE id = ?', [$target]);   // sessions et « Se souvenir de moi » invalidés avec le compte
+            $pdo->commit();
+        } catch (PDOException $e) {
+            $pdo->rollBack();
+            error_log('[GTC] Suppression du compte ' . $target . ' : ' . $e->getMessage());
+            flash('error', "Le compte de {$account['name']} est encore lié à des données : désactivez-le plutôt.");
+            redirect('users.php');
+        }
+        activity_log('delete', 'user', $target, $account['name'], [
+            'e-mail'           => $account['email'],
+            'rôle'             => role_label($account['role']),
+            'statut'           => $account['status'] === 'actif' ? 'Actif' : 'Inactif',
+            'créé le'          => fdate($account['created_at'], true),
+            'dernière connexion' => $account['last_login_at'] ? fdate($account['last_login_at'], true) : 'jamais',
+        ]);
+        flash('success', "Compte de {$account['name']} ({$account['email']}) supprimé.");
         redirect('users.php');
     }
 
@@ -103,11 +152,11 @@ if (is_post()) {
 }
 
 // Journal des prises de contrôle (10 dernières)
-$takeovers = db_all('SELECT l.started_at, l.ended_at, l.ip, a.name AS admin_name, t.name AS target_name
+$takeovers = db_all("SELECT l.started_at, l.ended_at, l.ip, COALESCE(a.name, 'Compte supprimé') AS admin_name, COALESCE(t.name, 'Compte supprimé') AS target_name
                       FROM impersonation_log l
                       LEFT JOIN users a ON a.id = l.admin_id
                       LEFT JOIN users t ON t.id = l.target_id
-                      ORDER BY l.id DESC LIMIT 10');
+                      ORDER BY l.id DESC LIMIT 10");
 // Comptes verrouillés après trop d'échecs de connexion : [e-mail => fin du verrouillage]
 $lockedEmails = auth_locked_emails();
 $users = db_all("SELECT id, name, email, role, status, last_login_at, created_at FROM users ORDER BY CASE WHEN status = 'actif' THEN 0 ELSE 1 END, name");
@@ -115,6 +164,8 @@ foreach ($users as &$u) {
     $u['is_active'] = $u['status'] === 'actif';
 }
 unset($u);
+$receiptsBy   = array_column(db_all('SELECT agent_id, COUNT(*) AS n FROM invoices GROUP BY agent_id'), 'n', 'agent_id');
+$activeAdmins = (int) db_value("SELECT COUNT(*) FROM users WHERE role = 'admin' AND status = 'actif'");
 $err   = fn (string $k) => isset($errors[$k]) ? '<small class="field__error">' . e($errors[$k]) . '</small>' : '';
 
 dash_header('Utilisateurs', 'users');
@@ -134,64 +185,64 @@ dash_header('Utilisateurs', 'users');
                             <strong><?= e($u['name']) ?></strong><?= $self ? ' <span class="badge badge--info">Vous</span>' : '' ?>
                             <small class="cell-sub"><?= e($u['email']) ?></small>
                         </span></td>
-                        <td data-label="Rôle">
-                            <?php if ($self): ?>
-                                <?= e(USER_ROLES[$u['role']] ?? $u['role']) ?>
-                            <?php else: ?>
-                                <form method="post" class="inline-form">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="op" value="role">
-                                    <input type="hidden" name="id" value="<?= (int) $u['id'] ?>">
-                                    <label class="visually-hidden" for="role-<?= (int) $u['id'] ?>">Rôle</label>
-                                    <select id="role-<?= (int) $u['id'] ?>" name="role" class="select-sm" data-autosubmit>
-                                        <?php foreach (USER_ROLES as $key => $label): ?>
-                                            <option value="<?= e($key) ?>" <?= $key === $u['role'] ? 'selected' : '' ?>><?= e($label) ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </form>
-                            <?php endif; ?>
-                        </td>
+                        <td data-label="Rôle"><?= e(USER_ROLES[$u['role']] ?? $u['role']) ?></td>
                         <td data-label="Dernière connexion"><?= e(fdate($u['last_login_at'], true)) ?></td>
                         <td data-label="Statut">
                             <?= $u['is_active'] ? '<span class="badge badge--success">Actif</span>' : '<span class="badge badge--muted">Inactif</span>' ?>
                         </td>
                         <td class="actions">
-                            <?php if (!$self && $u['role'] !== 'admin' && $u['is_active']): ?>
-                                <!-- Prise de contrôle du compte (dashboard/switch-user.php) -->
-                                <form method="post" action="switch-user.php" class="inline-form">
+                            <?php
+                            $uid       = (int) $u['id'];
+                            $nReceipts = (int) ($receiptsBy[$uid] ?? 0);
+                            $lastAdmin = $u['role'] === 'admin' && $u['is_active'] && $activeAdmins <= 1;
+                            // Modifier les droits : choix du rôle (formulaire op=role, jeton CSRF)
+                            ob_start(); ?>
+                                <form method="post" class="amenu__roles">
                                     <?= csrf_field() ?>
-                                    <input type="hidden" name="action" value="start">
-                                    <input type="hidden" name="id" value="<?= (int) $u['id'] ?>">
-                                    <button type="submit" class="icon-btn icon-btn--impersonate"
-                                            title="Incognito : se connecter en tant que <?= e($u['name']) ?>"
-                                            aria-label="Se connecter en tant que <?= e($u['name']) ?>"
-                                            data-confirm="Vous allez utiliser le compte de <?= e($u['name']) ?>. Vos actions seront faites en son nom et notées dans le journal. Continuer ?"><?= icon('eye') ?></button>
+                                    <input type="hidden" name="op" value="role">
+                                    <input type="hidden" name="id" value="<?= $uid ?>">
+                                    <?php foreach (USER_ROLES as $key => $label): ?>
+                                        <label class="amenu__radio"><input type="radio" name="role" value="<?= e($key) ?>" <?= $key === $u['role'] ? 'checked' : '' ?>> <?= e($label) ?></label>
+                                    <?php endforeach; ?>
+                                    <button type="submit" class="btn btn--primary btn--sm">Enregistrer le rôle</button>
                                 </form>
-                            <?php endif; ?>
-                            <details class="popover">
-                                <summary class="icon-btn" title="Réinitialiser le mot de passe"><?= icon('lock') ?></summary>
-                                <form method="post" class="popover__body">
+                            <?php $rolesForm = ob_get_clean();
+                            // Réinitialiser le mot de passe (formulaire op=password)
+                            ob_start(); ?>
+                                <form method="post" class="amenu__password">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="op" value="password">
-                                    <input type="hidden" name="id" value="<?= (int) $u['id'] ?>">
+                                    <input type="hidden" name="id" value="<?= $uid ?>">
                                     <input type="text" value="<?= e($u['email']) ?>" autocomplete="username" readonly hidden>
-                                    <label for="pw-<?= (int) $u['id'] ?>">Nouveau mot de passe</label>
-                                    <input id="pw-<?= (int) $u['id'] ?>" name="password" type="password" minlength="10" required autocomplete="new-password">
+                                    <label for="pw-<?= $uid ?>">Nouveau mot de passe</label>
+                                    <input id="pw-<?= $uid ?>" name="password" type="password" minlength="10" required autocomplete="new-password">
                                     <button type="submit" class="btn btn--primary btn--sm">Enregistrer</button>
                                 </form>
-                            </details>
-                            <?php if (!$self): ?>
-                                <form method="post" class="inline-form">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="op" value="toggle">
-                                    <input type="hidden" name="id" value="<?= (int) $u['id'] ?>">
-                                    <button type="submit" class="icon-btn<?= $u['is_active'] ? ' icon-btn--danger' : '' ?>"
-                                            title="<?= $u['is_active'] ? 'Désactiver' : 'Réactiver' ?>"
-                                            <?= $u['is_active'] ? 'data-confirm="Désactiver le compte de ' . e($u['name']) . ' ?"' : '' ?>>
-                                        <?= icon($u['is_active'] ? 'logout' : 'check') ?>
-                                    </button>
-                                </form>
-                            <?php endif; ?>
+                            <?php $passwordForm = ob_get_clean();
+
+                            $items = $self
+                                ? [['off', 'Modifier les droits', 'shield', 'Vous ne pouvez pas modifier votre propre rôle.'],
+                                   ['sub', 'Changer mon mot de passe', 'lock', $passwordForm]]
+                                : [['sub', 'Modifier les droits', 'shield', $rolesForm],
+                                   ['sub', 'Réinitialiser le mot de passe', 'lock', $passwordForm]];
+                            if (!$self && $u['role'] !== 'admin' && $u['is_active']) {
+                                // Prise de contrôle du compte (dashboard/switch-user.php)
+                                $items[] = ['post', 'Se connecter en tant que…', 'eye', ['action' => 'start', 'id' => $uid],
+                                    "Vous allez utiliser le compte de {$u['name']}. Vos actions seront faites en son nom et notées dans le journal. Continuer ?",
+                                    'action' => 'switch-user.php'];
+                            }
+                            if (!$self) {
+                                $items[] = $u['is_active']
+                                    ? ['post', 'Désactiver le compte', 'logout', ['op' => 'toggle', 'id' => $uid], "Désactiver le compte de {$u['name']} ? Il ne pourra plus se connecter ; son historique est conservé."]
+                                    : ['post', 'Réactiver le compte', 'check', ['op' => 'toggle', 'id' => $uid], null];
+                                $items[] = ['sep'];
+                                $items[] = $nReceipts > 0 || $lastAdmin
+                                    ? ['off', 'Supprimer le compte', 'trash', $lastAdmin ? 'Dernier administrateur actif.'
+                                        : "A émis {$nReceipts} reçu" . ($nReceipts > 1 ? 's' : '') . ' de caisse : désactivez-le plutôt.']
+                                    : delete_menu_item($uid, "Êtes-vous sûr de vouloir supprimer définitivement le compte utilisateur de {$u['name']} ({$u['email']}) ? Cette action est irréversible.", 'Supprimer le compte');
+                            }
+                            echo action_menu($items, 'Actions du compte de ' . $u['name']);
+                            ?>
                         </td>
                     </tr>
                     <?php if ($lockUntil = $lockedEmails[mb_strtolower($u['email'])] ?? null): ?>

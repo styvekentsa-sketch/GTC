@@ -3,7 +3,7 @@
  * Journal d'activité — qui a créé, modifié, supprimé quoi, et quand (administrateurs).
  *
  *   activity.php                 Liste filtrable (recherche, personne, action, élément, période), paginée
- *   activity.php?export=csv      Export Excel / CSV des entrées filtrées
+ *   activity.php?export=xlsx|csv Export Excel (.xlsx) ou CSV des entrées filtrées
  *
  * Écriture : activity_log() (includes/activity.php), appelée par chaque action sensible du Dashboard.
  * Les prises de contrôle de compte restent aussi détaillées dans Utilisateurs (impersonation_log).
@@ -48,17 +48,25 @@ $filters  = array_filter(['q' => $q, 'user' => $who ?: '', 'action' => $action, 
 
 $who_label = fn (array $r) => trim(($r['user_name'] ?: '—') . ($r['acting_admin'] ? ' (prise de contrôle par ' . $r['acting_admin'] . ')' : ''));
 
-if (query('export') === 'csv') {
+if ($format = export_format()) {
     $stmt = db_query("SELECT * FROM activity_log {$whereSql} ORDER BY id DESC", $params);
-    csv_send('journal-activite-' . date('Ymd-His') . '.csv',
-        ['Date et heure', 'Utilisateur', 'Rôle', 'Action', 'Élément', 'Référence', 'Détails', 'Adresse IP'],
-        (function () use ($stmt, $who_label) {
-            while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                yield [fdate($r['created_at'], true), $who_label($r), $r['user_role'] ? role_label($r['user_role']) : '',
-                    ACTIVITY_ACTIONS[$r['action']]['label'] ?? $r['action'], ACTIVITY_ENTITIES[$r['entity']] ?? $r['entity'],
-                    $r['label'], activity_details_text($r['details']), $r['ip']];
-            }
-        })());
+    export_send($format, 'journal-activite', "Journal d'activité", [
+        ['label' => 'Date',        'type' => 'date', 'width' => 12],
+        ['label' => 'Heure',       'type' => 'time', 'width' => 8],
+        ['label' => 'Utilisateur', 'width' => 28],
+        ['label' => 'Rôle',        'width' => 16],
+        ['label' => 'Action',      'width' => 20],
+        ['label' => 'Élément',     'width' => 20],
+        ['label' => 'Référence',   'width' => 28],
+        ['label' => 'Détails',     'width' => 60],
+        ['label' => 'Adresse IP',  'width' => 15],
+    ], (function () use ($stmt, $who_label) {
+        while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            yield [$r['created_at'], $r['created_at'], $who_label($r), $r['user_role'] ? role_label($r['user_role']) : '',
+                ACTIVITY_ACTIONS[$r['action']]['label'] ?? $r['action'], ACTIVITY_ENTITIES[$r['entity']] ?? $r['entity'],
+                $r['label'], activity_details_text($r['details']), $r['ip']];
+        }
+    })());
 }
 
 $total = (int) db_value("SELECT COUNT(*) FROM activity_log {$whereSql}", $params);
@@ -135,7 +143,7 @@ dash_header("Journal d'activité", 'activity');
         <?php if ($filters): ?><a href="activity.php" class="btn btn--ghost btn--sm">Réinitialiser</a><?php endif; ?>
     </form>
     <div class="toolbar__actions">
-        <a href="activity.php?<?= e(http_build_query($filters + ['export' => 'csv'])) ?>" class="btn btn--ghost"<?= $total ? '' : ' hidden' ?>><?= icon('download') ?> Exporter (Excel/CSV)</a>
+        <?= export_buttons('activity.php', $filters, $total, $total > 1 ? 'entrées' : 'entrée') ?>
     </div>
 </div>
 

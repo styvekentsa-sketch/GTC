@@ -67,19 +67,29 @@ if (is_post()) {
         redirect('invoices-list.php');
     }
 
+    // Suppression définitive : administrateurs uniquement (jeton CSRF vérifié plus haut), journal d'activité obligatoire
     if ($op === 'delete') {
         require_role('admin');
-        $deleted = db_one('SELECT invoice_number, doc_type, client_name, total, currency FROM commercial_invoices WHERE id = ?', [(int) post('id')]);
-        $number  = $deleted['invoice_number'] ?? null;
-        if ($number) {
-            cinv_delete((int) post('id'));
-            activity_log('delete', 'commercial', (int) post('id'), $number, [
-                'type' => CINV_TYPES[$deleted['doc_type']]['label'] ?? $deleted['doc_type'], 'client' => $deleted['client_name'],
-                'total' => money($deleted['total'], $deleted['currency']),
-            ]);
-            flash('success', "Document {$number} supprimé.");
+        $delId   = (int) post('id');
+        $back    = safe_back(post('back'), 'invoices-list.php', 'invoices-list.php');
+        if (str_contains($back, 'action=')) {
+            $back = 'invoices-list.php';   // page de modification du document supprimé : retour à la liste
         }
-        redirect('invoices-list.php');
+        $deleted = db_one('SELECT invoice_number, doc_type, client_name, issue_date, total, currency, status FROM commercial_invoices WHERE id = ?', [$delId]);
+        if (!$deleted) {
+            flash('error', 'Ce document n\'existe plus (déjà supprimé ?).');
+            redirect($back);
+        }
+        cinv_delete($delId);
+        activity_log('delete', 'commercial', $delId, $deleted['invoice_number'], [
+            'type'   => CINV_TYPES[$deleted['doc_type']]['label'] ?? $deleted['doc_type'],
+            'date'   => fdate($deleted['issue_date']),
+            'client' => $deleted['client_name'],
+            'total'  => money($deleted['total'], $deleted['currency']),
+            'statut' => CINV_STATUSES[$deleted['status']]['label'] ?? $deleted['status'],
+        ]);
+        flash('success', (CINV_TYPES[$deleted['doc_type']]['label'] ?? 'Document') . " {$deleted['invoice_number']} supprimé" . ($deleted['doc_type'] === 'quote' ? '.' : 'e.'));
+        redirect($back);
     }
 }
 
@@ -323,6 +333,12 @@ if ($action === 'new' || $action === 'edit') {
             <button type="submit" class="btn btn--primary btn--lg" name="then" value="print"><?= icon('printer') ?> Enregistrer &amp; imprimer</button>
         </div>
     </form>
+    <?php if (!empty($existing) && is_admin()): ?>
+        <!-- Suppression : formulaire séparé (un formulaire ne peut pas en contenir un autre) -->
+        <div class="danger-zone">
+            <?= delete_button((int) $existing['id'], 'Êtes-vous sûr de vouloir supprimer définitivement ' . ($existing['doc_type'] === 'quote' ? 'le devis' : 'la facture') . " {$existing['invoice_number']} ? Cette action est irréversible.", 'Supprimer ' . ($existing['doc_type'] === 'quote' ? 'le devis' : 'la facture')) ?>
+        </div>
+    <?php endif; ?>
     <script src="<?= e(asset_url('assets/js/commercial-invoice.js', '../')) ?>" defer></script>
     <?php
     dash_footer();
@@ -360,22 +376,37 @@ $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 $filters  = array_filter(['q' => $q, 'type' => $type, 'status' => $status, 'from' => $from, 'to' => $to]);
 
 // Export Excel / CSV : toutes les lignes correspondant aux filtres affichés (includes/csv_export.php)
-if (query('export') === 'csv') {
-    activity_log('export', 'commercial', null, 'Export CSV des factures', array_filter(['filtres' => http_build_query($filters)]));
+if ($format = export_format()) {
+    activity_log('export', 'commercial', null, 'Export ' . strtoupper($format) . ' des factures', array_filter(['filtres' => http_build_query($filters)]));
     $stmt = db_query("SELECT * FROM commercial_invoices {$whereSql} ORDER BY issue_date DESC, id DESC", $params);
-    csv_send('factures-' . date('Ymd-His') . '.csv',
-        ['N°', 'Type', 'Statut', 'Date', 'Échéance', 'Client', 'Téléphone', 'E-mail', 'Adresse', 'NIU',
-         'Devise', 'Sous-total', 'TVA (%)', 'Montant TVA', 'Total', 'Créée par', 'Créée le'],
-        (function () use ($stmt) {
-            while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                $dec = DASH_CURRENCIES[$r['currency']]['decimals'] ?? 2;
-                yield [$r['invoice_number'], CINV_TYPES[$r['doc_type']]['label'] ?? $r['doc_type'], CINV_STATUSES[$r['status']]['label'] ?? $r['status'],
-                    fdate($r['issue_date']), $r['due_date'] ? fdate($r['due_date']) : '', $r['client_name'], $r['client_phone'], $r['client_email'],
-                    $r['client_address'], $r['client_niu'], currency_label((string) $r['currency']),
-                    csv_amount($r['subtotal'], $dec), csv_amount($r['tax_rate']), csv_amount($r['tax_amount'], $dec), csv_amount($r['total'], $dec),
-                    $r['created_by_name'], fdate($r['created_at'], true)];
-            }
-        })());
+    export_send($format, 'factures', 'Factures', [
+        ['label' => 'N°',            'width' => 16],
+        ['label' => 'Type',          'width' => 16],
+        ['label' => 'Statut',        'width' => 10],
+        ['label' => 'Date',          'type' => 'date', 'width' => 12],
+        ['label' => 'Échéance',      'type' => 'date', 'width' => 12],
+        ['label' => 'Client',        'width' => 28],
+        ['label' => 'Téléphone',     'width' => 16],
+        ['label' => 'E-mail',        'width' => 26],
+        ['label' => 'Adresse',       'width' => 30],
+        ['label' => 'NIU',           'width' => 18],
+        ['label' => 'Devise',        'width' => 8],
+        ['label' => 'Sous-total',    'type' => 'amount', 'width' => 16],
+        ['label' => 'TVA (%)',       'type' => 'amount', 'width' => 9],
+        ['label' => 'Montant TVA',   'type' => 'amount', 'width' => 15],
+        ['label' => 'Total',         'type' => 'amount', 'width' => 17],
+        ['label' => 'Créée par',     'width' => 20],
+        ['label' => 'Créée le',      'type' => 'datetime', 'width' => 17],
+    ], (function () use ($stmt) {
+        while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $dec = DASH_CURRENCIES[$r['currency']]['decimals'] ?? 2;
+            yield [$r['invoice_number'], CINV_TYPES[$r['doc_type']]['label'] ?? $r['doc_type'], CINV_STATUSES[$r['status']]['label'] ?? $r['status'],
+                $r['issue_date'], $r['due_date'], $r['client_name'], $r['client_phone'], $r['client_email'],
+                $r['client_address'], $r['client_niu'], currency_label((string) $r['currency']),
+                [$r['subtotal'], $dec], $r['tax_rate'], [$r['tax_amount'], $dec], [$r['total'], $dec],
+                $r['created_by_name'], $r['created_at']];
+        }
+    })());
 }
 
 $total    = (int) db_value("SELECT COUNT(*) FROM commercial_invoices {$whereSql}", $params);
@@ -429,7 +460,7 @@ dash_header('Factures', 'commercial');
         <?php if ($q !== '' || $type !== '' || $status !== '' || $from !== '' || $to !== ''): ?><a href="invoices-list.php" class="btn btn--ghost btn--sm">Réinitialiser</a><?php endif; ?>
     </form>
     <div class="toolbar__actions">
-        <a href="invoices-list.php?<?= e(http_build_query($filters + ['export' => 'csv'])) ?>" class="btn btn--ghost" title="Télécharge les <?= $total ?> document<?= $total > 1 ? 's' : '' ?> correspondant aux filtres (fichier ouvert par Excel)"<?= $total ? '' : ' hidden' ?>><?= icon('download') ?> Exporter (Excel/CSV)</a>
+        <?= export_buttons('invoices-list.php', $filters, $total, $total > 1 ? 'documents' : 'document') ?>
         <a href="invoices-list.php?action=new&amp;type=quote" class="btn btn--ghost"><?= icon('plus') ?> Devis</a>
         <a href="invoices-list.php?action=new&amp;type=proforma" class="btn btn--ghost"><?= icon('plus') ?> Proforma</a>
         <a href="invoices-list.php?action=new" class="btn btn--primary"><?= icon('plus') ?> Nouvelle facture</a>
@@ -467,16 +498,14 @@ dash_header('Factures', 'commercial');
                             </form>
                         </td>
                         <td class="actions">
-                            <a href="print-commercial-invoice.php?id=<?= $cid ?>" class="icon-btn" title="Imprimer" target="_blank" rel="noopener"><?= icon('printer') ?><span class="visually-hidden">Imprimer</span></a>
-                            <a href="invoices-list.php?action=edit&amp;id=<?= $cid ?>" class="icon-btn" title="Modifier"><?= icon('edit') ?><span class="visually-hidden">Modifier</span></a>
-                            <?php if (is_admin()): ?>
-                                <form method="post" class="inline-form">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="op" value="delete">
-                                    <input type="hidden" name="id" value="<?= $cid ?>">
-                                    <button type="submit" class="icon-btn icon-btn--danger" title="Supprimer" data-confirm="Supprimer définitivement <?= e($c['invoice_number']) ?> ?"><?= icon('trash') ?><span class="visually-hidden">Supprimer</span></button>
-                                </form>
-                            <?php endif; ?>
+                            <?php $docName = ($c['doc_type'] ?? '') === 'quote' ? 'le devis' : 'la facture'; ?>
+                            <?= action_menu(array_filter([
+                                ['link', 'Voir / Imprimer', 'print-commercial-invoice.php?id=' . $cid, 'printer', ['target' => '_blank']],
+                                ['link', 'Modifier', 'invoices-list.php?action=edit&id=' . $cid, 'edit'],
+                                ['link', 'Exporter en PDF', 'pdf.php?type=invoice&id=' . $cid, 'download'],
+                                is_admin() ? ['sep'] : [],
+                                delete_menu_item($cid, "Êtes-vous sûr de vouloir supprimer définitivement {$docName} {$c['invoice_number']} ? Cette action est irréversible.", 'Supprimer ' . $docName),
+                            ]), 'Actions de ' . $docName . ' ' . $c['invoice_number']) ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>

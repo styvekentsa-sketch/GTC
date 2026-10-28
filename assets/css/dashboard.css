@@ -1137,6 +1137,85 @@ code {
 .pagination__item.is-active { background: var(--blue); border-color: var(--blue); color: #fff; }
 
 /* Petite fenêtre contextuelle */
+/* ---- Menus d'actions des tableaux (bouton « ⋮ » : action_menu(), assets/js/dashboard.js § 10) ---- */
+.amenu { position: relative; display: inline-block; }
+.amenu > summary { list-style: none; }
+.amenu > summary::-webkit-details-marker { display: none; }
+.amenu[open] > .amenu__toggle { background: var(--blue-soft); border-color: #B9C7DB; color: var(--blue-dark); }
+.amenu__panel {
+  position: absolute;             /* sans JavaScript : sous le bouton ; avec : déplacé et positionné en fixe */
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 70;                    /* au-dessus de la barre latérale (50) et de la barre supérieure (30) */
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  max-width: min(300px, calc(100vw - 16px));
+  padding: 0.375rem;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16), 0 2px 6px rgba(15, 23, 42, 0.08);
+  text-align: left;
+  white-space: normal;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+.amenu__panel--floating {
+  position: fixed;
+  right: auto;
+  opacity: 0;
+  transform: scale(0.95);
+  transform-origin: top right;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+.amenu__panel--floating[data-placement="top"] { transform-origin: bottom right; }
+.amenu__panel--floating.is-open { opacity: 1; transform: scale(1); }
+.amenu__form { display: block; margin: 0; }
+.amenu__item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: 500 0.875rem/1.35 var(--font);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  list-style: none;
+}
+.amenu__item::-webkit-details-marker { display: none; }
+.amenu__item .icon { width: 17px; height: 17px; flex-shrink: 0; color: var(--text-muted); }
+.amenu__item:hover, .amenu__item:focus-visible { background: var(--surface-hi); color: var(--anthracite); outline: none; }
+.amenu__item:focus-visible { box-shadow: inset 0 0 0 2px var(--blue); }
+.amenu__item--danger, .amenu__item--danger .icon { color: var(--red); }
+.amenu__item--danger:hover, .amenu__item--danger:focus-visible { background: var(--red-soft); color: #9A3412; }
+.amenu__item--off { cursor: not-allowed; color: #8A94A3; }
+.amenu__item--off:hover { background: none; color: #8A94A3; }
+.amenu__item--off small { display: block; font-size: 0.75rem; font-weight: 400; color: var(--text-muted); }
+.amenu__sep { margin: 0.25rem 0.375rem; border: 0; border-top: 1px solid var(--line); }
+/* Sous-panneau dépliable (modifier les droits, mot de passe) */
+.amenu__sub > summary .icon:last-child { margin-left: auto; width: 14px; height: 14px; transition: transform var(--t); }
+.amenu__sub[open] > summary { background: var(--surface-hi); }
+.amenu__sub[open] > summary .icon:last-child { transform: rotate(90deg); }
+.amenu__subpanel { padding: 0.5rem 0.625rem 0.625rem 2.375rem; }
+.amenu__roles, .amenu__password { display: flex; flex-direction: column; gap: 0.375rem; }
+.amenu__radio { display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; margin: 0; font-size: 0.875rem; font-weight: 500; color: var(--text); text-align: left; cursor: pointer; }
+/* .amenu__panel en tête : plus prioritaire que le style général des champs (input:not(…) : largeur 100 %, bordure) */
+.amenu__panel .amenu__radio input[type="radio"] {
+  flex: 0 0 auto; width: 16px; height: 16px; margin: 0; padding: 0;
+  border: 0; border-radius: 50%; background: none; box-shadow: none; appearance: auto; accent-color: var(--blue);
+}
+.amenu__password input[type="password"] { width: 100%; }
+.amenu__password label { font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); }
+.amenu__roles .btn, .amenu__password .btn { align-self: flex-start; margin-top: 0.25rem; }
+@media (prefers-reduced-motion: reduce) { .amenu__panel--floating { transition: none; transform: none; } }
+
 .popover { position: relative; display: inline-block; }
 .popover > summary { list-style: none; }
 .popover > summary::-webkit-details-marker { display: none; }
@@ -1380,7 +1459,9 @@ input::-ms-clear { display: none; }
 
 .icon-btn:hover { color: var(--blue); }
 .icon-btn:active { background: var(--surface-hi); }
-.icon-btn--danger:hover { color: var(--red); }
+/* Suppression : rouge discret dès l'affichage (les écrans tactiles n'ont pas de survol), plus marqué au survol */
+.icon-btn--danger { color: var(--red); border-color: #F1C9B5; }
+.icon-btn--danger:hover, .icon-btn--danger:focus-visible { color: #fff; background: var(--red); border-color: var(--red); }
 
 .badge {
   display: inline-flex;
@@ -1439,13 +1520,16 @@ input::-ms-clear { display: none; }
 }
 .icon-btn--impersonate { color: #B45309; }
 /* Liste des comptes : colonnes resserrées pour garder les actions visibles */
-.users-table td:first-child { min-width: 160px; }
+.users-table td:first-child { min-width: 150px; }
 .users-table td:first-child .cell-sub { overflow-wrap: anywhere; }
 .users-table td:nth-child(3) { width: 92px; max-width: 92px; white-space: normal; }
 .users-table .cselect.select-sm { min-width: 104px; }
 .users-table th, .users-table td { padding-inline: 0.625rem; }
 .users-table th { white-space: normal; }
-.users-table .actions { white-space: nowrap; }
+/* Actions du compte regroupées dans le menu « ⋮ » : colonne étroite */
+.users-table td.actions { width: 1%; }
+/* Fenêtre ouverte dans une cellule d'actions épinglée (sans JavaScript) : au-dessus des lignes suivantes */
+.table td.actions:has(details[open]) { z-index: 5; }
 /* Ligne d'alerte sous un compte verrouillé (trop d'échecs de connexion) */
 .users-table .user-lock-row td { padding-top: 0; background: var(--red-soft); }
 .users-table tr:has(+ .user-lock-row) td { border-bottom: 0; background: var(--red-soft); }
