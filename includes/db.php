@@ -191,6 +191,9 @@ function db_ensure_schema(PDO $pdo): void
     if (!db_table_exists($pdo, 'courriers')) {
         // Courriers officiels sur papier à en-tête (dashboard/courriers.php, includes/courriers.php)
         db_install_courriers($pdo);
+    } elseif (!db_column_exists($pdo, 'courriers', 'show_reference')) {
+        // Référence « N/Réf. » imprimée sur la lettre : facultative, masquée par défaut (courriers existants compris)
+        $pdo->exec('ALTER TABLE courriers ADD COLUMN show_reference SMALLINT NOT NULL DEFAULT 0');
     }
     if (!db_table_exists($pdo, 'exchange_rates')) {
         // Grille des taux de l'entreprise (achat / vente), remplie par includes/company_rates.php
@@ -909,6 +912,7 @@ function db_install_courriers(PDO $pdo): void
             signatory_name VARCHAR(100) NOT NULL,
             signatory_title VARCHAR(100) NULL,
             attachments VARCHAR(255) NULL,
+            show_reference SMALLINT NOT NULL DEFAULT 0,
             created_by {$fk} NULL,
             created_by_name VARCHAR(100) NULL,
             created_at {$ts},

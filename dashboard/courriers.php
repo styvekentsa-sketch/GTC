@@ -214,6 +214,13 @@ if ($action === 'new' || $action === 'edit') {
                     </select>
                 </div>
                 <div class="field field--full">
+                    <label class="check">
+                        <input type="checkbox" name="show_reference" value="1" <?= (int) ($form['show_reference'] ?? 0) === 1 ? 'checked' : '' ?>>
+                        Afficher la référence <strong>N/Réf.</strong><?= $existing ? ' (' . e($existing['reference']) . ')' : '' ?> sur la lettre
+                    </label>
+                    <small class="field__hint">Décochée : la lettre, le PDF et le nom du fichier ne mentionnent pas la référence interne (elle reste visible dans la liste des courriers).</small>
+                </div>
+                <div class="field field--full">
                     <label for="subject">Objet *</label>
                     <input id="subject" name="subject" required value="<?= $val('subject') ?>"<?= $max('subject') . $inv('subject') ?> placeholder="Ex. Demande de cotation pour le transit de 3 conteneurs">
                     <?= $err('subject') ?>

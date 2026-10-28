@@ -341,6 +341,15 @@ function courrier_recipient_lines(array $c): array
     ]));
 }
 
+/**
+ * La référence « N/Réf. » doit-elle figurer sur la lettre (impression, PDF, nom du fichier) ?
+ * Facultative et masquée par défaut ; la numérotation reste utilisée en interne (liste, recherche, journal).
+ */
+function courrier_shows_reference(array $c): bool
+{
+    return (int) ($c['show_reference'] ?? 0) === 1;
+}
+
 /** Prochaine référence de l'année : GTC-COURRIER-2026-001. À appeler dans une transaction. */
 function courrier_next_reference(string $date): string
 {
@@ -373,6 +382,7 @@ function courrier_input(): array
     }
     $d['letter_date'] = (string) ($_POST['letter_date'] ?? '');
     $d['status']      = isset(COURRIER_STATUSES[$_POST['status'] ?? '']) ? $_POST['status'] : 'draft';
+    $d['show_reference'] = empty($_POST['show_reference']) ? 0 : 1;   // case « Afficher la référence N/Réf. » (décochée par défaut)
     // Corps : HTML de l'éditeur (ou texte brut sans JavaScript) réduit aux mises en forme autorisées
     $d['body'] = courrier_body_text(courrier_body_html($d['body'])) === '' ? '' : courrier_sanitize_html(courrier_body_html($d['body']));
 
@@ -407,6 +417,7 @@ function courrier_save(array $d, array $user, ?int $id = null): int
     }
     $fields['letter_date'] = $d['letter_date'];
     $fields['status']      = $d['status'];
+    $fields['show_reference'] = (int) ($d['show_reference'] ?? 0);
     $fields['updated_at']  = db_now();
 
     $pdo = db();

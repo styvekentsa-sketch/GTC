@@ -197,7 +197,7 @@ p, h1, dl, dd { margin: 0; }
 .lt-refs div { display: flex; gap: 2mm; }
 .lt-refs dt { color: var(--muted); }
 .lt-refs dd { font-weight: 700; color: var(--navy); }
-.lt-date { white-space: nowrap; }
+.lt-date { margin-left: auto; white-space: nowrap; }   /* reste à droite même sans la référence N/Réf. */
 .lt-to {
   display: flex;
   flex-direction: column;

@@ -71,7 +71,9 @@ if ($type === 'courrier') {
         exit('Courrier introuvable.');
     }
     $company = settings_all()['company_name'] ?: GTC_NAME;
-    pdf_send(courrier_pdf($c, $company), pdf_filename('Courrier', $c['reference'], $c['recipient_company'] ?: $c['recipient_name']), $inline);
+    // Nom du fichier : sans la référence interne si elle est masquée sur la lettre (date du courrier à la place)
+    pdf_send(courrier_pdf($c, $company), pdf_filename('Courrier', courrier_shows_reference($c) ? $c['reference'] : date('Y-m-d', strtotime($c['letter_date'])),
+        $c['recipient_company'] ?: $c['recipient_name']), $inline);
 }
 
 http_response_code(400);

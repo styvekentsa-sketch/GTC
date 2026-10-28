@@ -181,8 +181,11 @@ function courrier_pdf(array $c, string $companyName): string
 
     /* ---------- Références (gauche) · lieu et date (droite) ---------- */
     $y += 5;
-    $pdf->textColor($L, $y, 'N/Réf. :', 9.5, 'regular', 'left', CIPDF_MUTED);
-    $pdf->textColor($L + $pdf->width('N/Réf. : ', 9.5), $y, $c['reference'], 9.5, 'bold', 'left', [11, 47, 107]);
+    $showRef = courrier_shows_reference($c);   // référence « N/Réf. » facultative, masquée par défaut
+    if ($showRef) {
+        $pdf->textColor($L, $y, 'N/Réf. :', 9.5, 'regular', 'left', CIPDF_MUTED);
+        $pdf->textColor($L + $pdf->width('N/Réf. : ', 9.5), $y, $c['reference'], 9.5, 'bold', 'left', [11, 47, 107]);
+    }
     $pdf->textColor($R, $y, $c['place'] . ', le ' . courrier_long_date($c['letter_date']), LTPDF_SIZE, 'regular', 'right', CIPDF_INK);
 
     /* ---------- Destinataire (à droite) ---------- */
@@ -276,9 +279,9 @@ function courrier_pdf(array $c, string $companyName): string
     if ($pages > 1) {
         for ($p = 0; $p < $pages; $p++) {
             $pdf->setPage($p);
-            $pdf->textColor($R, CIPDF_BOTTOM + 3, $c['reference'] . ' — page ' . ($p + 1) . '/' . $pages, 8, 'regular', 'right', CIPDF_MUTED);
+            $pdf->textColor($R, CIPDF_BOTTOM + 3, ($showRef ? $c['reference'] . ' — page ' : 'Page ') . ($p + 1) . '/' . $pages, 8, 'regular', 'right', CIPDF_MUTED);
         }
     }
 
-    return $pdf->output('Courrier ' . $c['reference'] . ' — ' . $subject);
+    return $pdf->output('Courrier ' . ($showRef ? $c['reference'] . ' — ' : '') . $subject);
 }

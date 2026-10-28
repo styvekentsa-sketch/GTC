@@ -35,7 +35,7 @@ if ($c) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
-    <title><?= $c ? e($c['reference'] . ' — ' . $c['subject']) : 'Courrier introuvable' ?> | <?= e($name) ?></title>
+    <title><?= $c ? e((courrier_shows_reference($c) ? $c['reference'] . ' — ' : 'Courrier — ') . $c['subject']) : 'Courrier introuvable' ?> | <?= e($name) ?></title>
     <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -51,7 +51,7 @@ if ($c) {
         <button type="button" class="ci-btn ci-btn--primary" onclick="window.print()"><?= icon('printer') ?> Imprimer</button>
         <!-- PDF téléchargé directement (téléphones : contourne les limites d'impression de Chrome Android et Safari iOS) -->
         <a href="pdf.php?type=courrier&amp;id=<?= (int) $c['id'] ?>" class="ci-btn ci-btn--pdf" download><?= icon('download') ?> Télécharger le PDF</a>
-        <button type="button" class="ci-btn" data-pdf-share data-pdf-url="pdf.php?type=courrier&amp;id=<?= (int) $c['id'] ?>" data-pdf-title="Courrier <?= e($c['reference']) ?>" hidden><?= icon('share') ?> Partager</button>
+        <button type="button" class="ci-btn" data-pdf-share data-pdf-url="pdf.php?type=courrier&amp;id=<?= (int) $c['id'] ?>" data-pdf-title="Courrier <?= e(courrier_shows_reference($c) ? $c['reference'] : $c['subject']) ?>" hidden><?= icon('share') ?> Partager</button>
         <p class="ci-hint">Dans la fenêtre d'impression : format <strong>A4</strong>, marges <strong>Aucune</strong>, échelle <strong>100 %</strong>, « Graphiques d'arrière-plan » coché. Le PDF garde exactement la même mise en page.</p>
     <?php endif; ?>
 </nav>
@@ -76,9 +76,11 @@ if ($c) {
     <article class="lt">
         <!-- Références (gauche) · lieu et date (droite) -->
         <div class="lt-top">
-            <dl class="lt-refs">
-                <div><dt>N/Réf. :</dt><dd><?= e($c['reference']) ?></dd></div>
-            </dl>
+            <?php if (courrier_shows_reference($c)): ?>
+                <dl class="lt-refs">
+                    <div><dt>N/Réf. :</dt><dd><?= e($c['reference']) ?></dd></div>
+                </dl>
+            <?php endif; ?>
             <p class="lt-date"><?= e($c['place']) ?>, le <?= e(courrier_long_date($c['letter_date'])) ?></p>
         </div>
 
