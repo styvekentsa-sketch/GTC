@@ -75,10 +75,10 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title><?= $inv ? e($inv['invoice_number']) . ' — ' : 'Reçu introuvable — ' ?><?= e($company['company_name']) ?></title>
-    <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="<?= e(site_root()) ?>assets/img/favicon.svg" type="image/svg+xml">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= e(asset_url('assets/css/custom-select.css', '../')) ?>">
-    <link rel="stylesheet" href="<?= e(asset_url('assets/css/invoice-print.css', '../')) ?>">
+    <link rel="stylesheet" href="<?= e(asset_url('assets/css/custom-select.css', site_root())) ?>">
+    <link rel="stylesheet" href="<?= e(asset_url('assets/css/invoice-print.css', site_root())) ?>">
 </head>
 <body class="print-page print-page--<?= e($format) ?>"<?= $inv && $auto ? ' data-autoprint="1"' : '' ?><?= $printer ? ' data-printer="' . e($printer['printer_name']) . '" data-printer-id="' . (int) $printer['id'] . '"' : '' ?>
       <?= $direct ? ' data-direct="1" data-api="printers-api.php" data-invoice="' . $id . '" data-csrf="' . e(csrf_token()) . '"' : '' ?>>
@@ -157,7 +157,7 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
         <article class="receipt<?= $copy ? ' receipt--' . $copy : '' ?>"<?= $copy === 'caisse' ? ' aria-hidden="true"' : '' ?>>
             <!-- En-tête de l'entreprise -->
             <header class="receipt__head">
-                <img class="receipt__logo" src="<?= e(settings_logo_url('../')) ?>" alt="<?= e($company['company_name']) ?>" width="70" height="70">
+                <img class="receipt__logo" src="<?= e(settings_logo_url(site_root())) ?>" alt="<?= e($company['company_name']) ?>" width="70" height="70">
                 <div class="receipt__company">
                     <p class="receipt__name"><?= receipt_brand_name($company['company_name']) ?></p>
                     <p><?= e($company['company_address']) ?></p>
@@ -234,9 +234,9 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
     </main>
 <?php endif; ?>
 
-<script src="<?= e(asset_url('assets/js/custom-select.js', '../')) ?>"></script>
-<script src="<?= e(asset_url('assets/js/printers.js', '../')) ?>"></script>
-<script src="<?= e(asset_url('assets/js/pdf-share.js', '../')) ?>" defer></script>
+<script src="<?= e(asset_url('assets/js/custom-select.js', site_root())) ?>"></script>
+<script src="<?= e(asset_url('assets/js/printers.js', site_root())) ?>"></script>
+<script src="<?= e(asset_url('assets/js/pdf-share.js', site_root())) ?>" defer></script>
 <script>
     // Impression automatique à l'arrivée sur la page (une fois le logo chargé) :
     // envoi direct à l'imprimante si elle l'accepte, sinon boîte d'impression du navigateur

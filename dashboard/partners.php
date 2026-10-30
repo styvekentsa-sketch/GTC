@@ -102,14 +102,14 @@ $partners = db_all('SELECT * FROM partners ORDER BY display_order ASC, id ASC');
 $err      = fn (string $k) => isset($errors[$k]) ? '<small class="field__error">' . e($errors[$k]) . '</small>' : '';
 $inv      = fn (string $k) => isset($errors[$k]) ? ' aria-invalid="true"' : '';
 $editing  = (int) $form['id'] > 0;
-$currentLogo = $editing ? partner_logo_url($form['logo'], '../') : null;
+$currentLogo = $editing ? partner_logo_url($form['logo'], site_root()) : null;
 
 dash_header('Partenaires', 'partners');
 ?>
 
 <div class="toolbar">
     <p class="page-intro">Ces partenaires sont affichés dans la section « Nos Partenaires » de la page d'accueil.</p>
-    <a href="../index.php#partenaires" class="btn btn--ghost btn--sm" target="_blank" rel="noopener"><?= icon('external') ?> Voir sur le site</a>
+    <a href="<?= e(site_root()) ?>index.php#partenaires" class="btn btn--ghost btn--sm" target="_blank" rel="noopener"><?= icon('external') ?> Voir sur le site</a>
 </div>
 
 <div class="dash-grid dash-grid--aside">
@@ -124,7 +124,7 @@ dash_header('Partenaires', 'partners');
                     <thead><tr><th>Partenaire</th><th>Site web</th><th class="num">Ordre</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr></thead>
                     <tbody>
                     <?php foreach ($partners as $p): ?>
-                        <?php $url = partner_logo_url($p['logo'], '../', $p['name']); ?>
+                        <?php $url = partner_logo_url($p['logo'], site_root(), $p['name']); ?>
                         <tr class="<?= trim(((int) $p['id'] === (int) $form['id'] ? 'is-selected ' : '') . ($p['is_active'] ? '' : 'is-disabled')) ?>">
                             <td data-label="Partenaire">
                                 <span class="partner-cell">

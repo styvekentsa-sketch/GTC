@@ -339,7 +339,7 @@ if ($action === 'new' || $action === 'edit') {
             <?= delete_button((int) $existing['id'], 'Êtes-vous sûr de vouloir supprimer définitivement ' . ($existing['doc_type'] === 'quote' ? 'le devis' : 'la facture') . " {$existing['invoice_number']} ? Cette action est irréversible.", 'Supprimer ' . ($existing['doc_type'] === 'quote' ? 'le devis' : 'la facture')) ?>
         </div>
     <?php endif; ?>
-    <script src="<?= e(asset_url('assets/js/commercial-invoice.js', '../')) ?>" defer></script>
+    <script src="<?= e(asset_url('assets/js/commercial-invoice.js', site_root())) ?>" defer></script>
     <?php
     dash_footer();
     exit;

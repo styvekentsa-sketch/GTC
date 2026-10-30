@@ -16,10 +16,15 @@
                   window.matchMedia('(display-mode: window-controls-overlay)').matches ||
                   window.navigator.standalone === true;
 
+  // Dossier du Dashboard déduit de l'adresse du manifeste (chemin absolu, includes/dashboard.php) : juste même si
+  // l'adresse de la page est inhabituelle (barre oblique finale, segment supplémentaire, sous-dossier chez l'hébergeur)
+  var manifestLink = document.querySelector('link[rel="manifest"]');
+  var dashBase = new URL('./', manifestLink ? manifestLink.href : location.href).href;
+
   // Service worker (dashboard/sw.js) : requis pour l'installation, page « hors connexion »
   if ('serviceWorker' in navigator && window.isSecureContext) {
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('sw.js', { scope: './' }).catch(function () { /* installation manuelle encore possible */ });
+      navigator.serviceWorker.register(new URL('sw.js', dashBase).href, { scope: dashBase }).catch(function () { /* installation manuelle encore possible */ });
     });
   }
 
@@ -96,7 +101,7 @@
       document.body.appendChild(dialog);
     }
     dialog.innerHTML =
-      '<div class="pwa-dialog__head"><img src="../assets/img/app-192.png" alt="" width="48" height="48">' +
+      '<div class="pwa-dialog__head"><img src="' + new URL('../assets/img/app-192.png', dashBase).href + '" alt="" width="48" height="48">' +
       '<div><h2 id="pwa-dialog-title">' + title + '</h2><p>Accès direct au Dashboard, comme une application.</p></div></div>' +
       (plain ? '<p class="pwa-dialog__text">' + items.join('') + '</p>' : '<ol class="pwa-dialog__steps">' + items.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ol>') +
       '<div class="pwa-dialog__actions"><button type="button" class="btn btn--primary" data-pwa-close>Compris</button></div>';

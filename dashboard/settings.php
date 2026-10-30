@@ -619,7 +619,7 @@ dash_header('Paramètres', 'settings');
             <div class="field">
                 <label for="c-logo">Logo des reçus et factures (PNG ou JPG, 2 Mo max)</label>
                 <div class="logo-current">
-                    <img src="<?= e(settings_logo_url('../')) ?>" alt="Logo actuel des reçus et factures" height="56">
+                    <img src="<?= e(settings_logo_url(site_root())) ?>" alt="Logo actuel des reçus et factures" height="56">
                     <?php if ($s['company_logo'] !== ''): ?>
                         <label class="check"><input type="checkbox" name="remove_logo"> Revenir au logo GTC par défaut</label>
                     <?php else: ?>

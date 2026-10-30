@@ -50,7 +50,7 @@ function invoice_input(): array
         'client_phone'    => post('client_phone'),
         'operation_type'  => post('operation_type'),
         'amount_given'    => parse_number(post('amount_given')),
-        'source_currency' => post('source_currency', 'EUR'),
+        'source_currency' => post('source_currency', 'XAF'),
         'target_currency' => post('target_currency', 'XAF'),
         'exchange_rate'   => parse_number(post('exchange_rate')),
         'rate_direction'  => post('rate_direction', 'multiply'),
@@ -150,7 +150,7 @@ if (is_post()) {
                     $newId = (int) db()->lastInsertId();
                     activity_log('create', 'invoice', $newId, $number, [
                         'client'  => $form['client_name'],
-                        'montant' => money($form['amount_given'], $form['source_currency']) . ' → ' . money($form['amount_received'], $form['target_currency']),
+                        'montant' => invoice_amounts_text($form),
                         'paiement' => $form['payment_method'],
                     ]);
                     flash('success', "Reçu {$number} enregistré.");
@@ -196,7 +196,7 @@ if (is_post()) {
         activity_log('delete', 'invoice', $delId, $deleted['invoice_number'], [
             'date du reçu' => fdate($deleted['created_at'] ?: $deleted['issue_date'], true),
             'client'       => $deleted['client_name'],
-            'montant'      => money($deleted['amount_given'], $deleted['source_currency']) . ' → ' . money($deleted['amount_received'], $deleted['target_currency']),
+            'montant'      => invoice_amounts_text($deleted),
             'statut'       => INVOICE_STATUSES[$deleted['status']]['label'] ?? $deleted['status'],
         ]);
         flash('success', "Reçu {$deleted['invoice_number']} supprimé.");
@@ -220,7 +220,11 @@ function invoice_row(array $inv): string
         <td data-label="Opération"><?= e(OPERATION_TYPES[$inv['operation_type']] ?? $inv['operation_type']) ?></td>
         <td data-label="Montants" class="num"><span class="cell-stack">
             <?= e(money($inv['amount_given'], $inv['source_currency'])) ?>
-            <small class="cell-sub">→ <?= e(money($inv['amount_received'], $inv['target_currency'])) ?></small>
+            <?php if (!invoice_same_currency($inv)): ?>
+                <small class="cell-sub">→ <?= e(money($inv['amount_received'], $inv['target_currency'])) ?></small>
+            <?php elseif ((float) $inv['fees'] > 0): ?>
+                <small class="cell-sub">net <?= e(money($inv['amount_received'], $inv['target_currency'])) ?></small>
+            <?php endif; ?>
         </span></td>
         <td data-label="Agent"><?= e($inv['agent_name']) ?></td>
         <td class="actions">
@@ -290,7 +294,9 @@ if ($action === 'view') {
             </dl>
             <dl class="detail-list">
                 <div><dt>Montant versé</dt><dd><?= e(money($inv['amount_given'], $inv['source_currency'])) ?></dd></div>
-                <div><dt>Taux appliqué</dt><dd><?= e(rate_text($inv)) ?></dd></div>
+                <?php if (!invoice_same_currency($inv)): ?>
+                    <div><dt>Taux appliqué</dt><dd><?= e(rate_text($inv)) ?></dd></div>
+                <?php endif; ?>
                 <?php if ((float) $inv['fees'] > 0): ?>
                     <div><dt>Commission</dt><dd><?= e(money($inv['fees'], $inv['source_currency'])) ?></dd></div>
                 <?php endif; ?>
@@ -438,7 +444,8 @@ $prefilled = false;
 if ($form === null) {
     $form = [
         'client_name' => '', 'client_phone' => '', 'operation_type' => 'Exchange',
-        'amount_given' => '', 'source_currency' => 'EUR', 'target_currency' => settings_currency(),
+        // Devise source par défaut : FCFA (la plupart des opérations du guichet) ; une autre devise se choisit dans la liste
+        'amount_given' => '', 'source_currency' => 'XAF', 'target_currency' => settings_currency(),
         'exchange_rate' => '', 'rate_direction' => 'multiply', 'fees' => '0', 'payment_method' => 'Espèces', 'transaction_reason' => '',
         'printer_id' => (int) db_value('SELECT printer_id FROM invoices WHERE agent_id = ? AND printer_id IS NOT NULL ORDER BY id DESC LIMIT 1', [$user['id']]),
     ];
@@ -649,5 +656,5 @@ dash_header('Reçus de caisse', 'invoices');
     <?php endif; ?>
 </section>
 
-<script src="<?= e(asset_url('assets/js/printers.js', '../')) ?>" defer></script>
+<script src="<?= e(asset_url('assets/js/printers.js', site_root())) ?>" defer></script>
 <?php dash_footer(); ?>

@@ -58,18 +58,18 @@ dash_header('Simulateur Avancé', 'simulator');
         <!-- ==================== PARAMÈTRES ==================== -->
         <section class="panel sim-panel">
             <div class="sim-mode" id="sim-mode" role="group" aria-label="Sens du change">
-                <button type="button" class="sim-mode__btn is-active" data-mode="buy">Achat <small>le client vend des devises</small></button>
-                <button type="button" class="sim-mode__btn" data-mode="sell">Vente <small>le client achète des devises</small></button>
+                <button type="button" class="sim-mode__btn" data-mode="buy">Achat <small>le client vend des devises</small></button>
+                <button type="button" class="sim-mode__btn is-active" data-mode="sell">Vente <small>le client achète des devises</small></button>
             </div>
 
             <div class="form-grid form-grid--2">
                 <div class="field">
                     <label for="sim-source">Devise remise par le client</label>
-                    <select id="sim-source"><?= $currencyOptions('EUR') ?></select>
+                    <select id="sim-source"><?= $currencyOptions('XAF') ?></select>
                 </div>
                 <div class="field">
                     <label for="sim-target">Devise reçue</label>
-                    <select id="sim-target"><?= $currencyOptions('XAF') ?></select>
+                    <select id="sim-target"><?= $currencyOptions('EUR') ?></select>
                 </div>
             </div>
 
@@ -145,5 +145,5 @@ dash_header('Simulateur Avancé', 'simulator');
     </section>
 </div>
 
-<script src="<?= e(asset_url('assets/js/simulator.js', '../')) ?>" defer></script>
+<script src="<?= e(asset_url('assets/js/simulator.js', site_root())) ?>" defer></script>
 <?php dash_footer(); ?>

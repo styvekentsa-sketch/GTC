@@ -23,6 +23,18 @@ function fx_rate_format(float $rate, string $code): string
     return rtrim(rtrim(number_format($rate, 4, ',', " "), '0'), ',') . " " . $code;
 }
 
+/**
+ * Taux affiché dans le sens lisible : « 1 EUR ≈ 655,957 FCFA » même pour une conversion FCFA → EUR
+ * (plutôt que « 1 FCFA ≈ 0,0015 EUR »). Même règle dans assets/js/main.js.
+ */
+function fx_rate_text(float $rate, string $from, string $to): string
+{
+    if ($rate > 0 && $rate < 1) {
+        return '1 ' . $to . ' ≈ ' . fx_rate_format(1 / $rate, $from);
+    }
+    return '1 ' . $from . ' ≈ ' . fx_rate_format($rate, $to);
+}
+
 /** Montant formaté à la française selon la devise. */
 function fx_format(float $amount, string $code): string
 {
@@ -80,9 +92,9 @@ $guarantees = [
 ];
 
 // Simulateur : valeurs par défaut (affichées aussi sans JavaScript)
-$fxFrom   = 'EUR';
-$fxTo     = 'FCFA';
-$fxAmount = 100;
+$fxFrom   = 'FCFA';     // devise de départ par défaut : le client remet des FCFA
+$fxTo     = 'EUR';
+$fxAmount = 100000;
 // Taux de la grille de l'entreprise (Dashboard → Taux de change) : achat de la devise remise, vente de la devise reçue
 $fxRates  = company_rates_js('FCFA');
 $fxPair   = company_rate_pair($fxFrom, $fxTo);
@@ -234,7 +246,7 @@ include __DIR__ . '/includes/hero.php';
                     </div>
 
                     <p class="fx__rate" id="fx-rate">
-                        1 <?= e($fxFrom) ?> ≈ <?= e(fx_rate_format($fxRate, $fxTo)) ?>
+                        <?= e(fx_rate_text($fxRate, $fxFrom, $fxTo)) ?>
                     </p>
 
                     <a class="btn btn--accent btn--lg btn--block" id="fx-cta" target="_blank" rel="noopener"

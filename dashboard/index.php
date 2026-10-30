@@ -76,7 +76,7 @@ dash_header('Accueil', 'index');
         </div>
         <div class="hub__actions">
             <button type="button" class="btn btn--ghost btn--sm" data-pwa-install hidden><?= icon('download') ?> Installer l'application</button>
-            <a href="../index.php" class="btn btn--ghost btn--sm" target="_blank" rel="noopener"><?= icon('external') ?> Voir le site</a>
+            <a href="<?= e(site_root()) ?>index.php" class="btn btn--ghost btn--sm" target="_blank" rel="noopener"><?= icon('external') ?> Voir le site</a>
             <form action="logout.php" method="post">
                 <?= csrf_field() ?>
                 <button type="submit" class="btn btn--ghost btn--sm"><?= icon('logout') ?> Déconnexion</button>

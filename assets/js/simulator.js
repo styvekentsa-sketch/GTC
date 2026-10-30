@@ -27,7 +27,7 @@
   var DEFAULTS = {
     'Exchange:buy':  ['EUR', 'XAF'],   // le client vend ses devises → reçoit des FCFA
     'Exchange:sell': ['XAF', 'EUR'],   // le client achète des devises
-    'Transfert':     ['EUR', 'XAF'],
+    'Transfert':     ['XAF', 'EUR'],   // envoi depuis le Cameroun : le client remet des FCFA
     'Import/Export': ['XAF', 'USD']
   };
 
@@ -36,7 +36,8 @@
   var fFee = $('sim-fee'), fSend = $('sim-send'), fReceive = $('sim-receive');
   var cta = $('sim-to-invoice');
 
-  var state = { operation: 'Exchange', mode: 'buy', feeType: 'percent', lastEdited: 'send', sendAmount: NaN, fee: 0 };
+  // Ouverture en mode « Vente » : devise de départ FCFA (le client remet des FCFA), comme le formulaire des reçus
+  var state = { operation: 'Exchange', mode: 'sell', feeType: 'percent', lastEdited: 'send', sendAmount: NaN, fee: 0 };
 
   /* ---------- Outils ---------- */
   var label = function (code) { return code === 'XAF' ? 'FCFA' : code; };

@@ -121,6 +121,25 @@ function compute_received(float $given, float $rate, string $direction, string $
     return round($value, $decimals);
 }
 
+/** Opération sans conversion : devise remise = devise reçue (ex. dépôt ou retrait en FCFA). */
+function invoice_same_currency(array $inv): bool
+{
+    return (string) $inv['source_currency'] === (string) $inv['target_currency'];
+}
+
+/**
+ * Montants d'un reçu en une ligne : « 100,00 EUR → 64 284 FCFA » pour un change ;
+ * « 50 000 FCFA » sans conversion (« 50 000 FCFA, net 49 000 FCFA » si une commission est prélevée).
+ */
+function invoice_amounts_text(array $inv): string
+{
+    $given = money($inv['amount_given'], $inv['source_currency']);
+    if (!invoice_same_currency($inv)) {
+        return $given . ' → ' . money($inv['amount_received'], $inv['target_currency']);
+    }
+    return (float) $inv['fees'] > 0 ? $given . ', net ' . money($inv['amount_received'], $inv['target_currency']) : $given;
+}
+
 /** Taux lisible : « 1 EUR = 655,957 FCFA » (selon le sens de saisie). */
 function rate_text(array $inv): string
 {
@@ -332,6 +351,27 @@ function dash_modules(): array
     return $modules;
 }
 
+/**
+ * Avertissement visible si le serveur web a pour racine le dossier dashboard/ (ex. « php -S » lancé depuis ce dossier) :
+ * les fichiers du site (assets/ : CSS, scripts, images) sont alors hors d'atteinte et le Dashboard s'affiche sans
+ * mise en page — aucun chemin dans le code ne peut y remédier. Styles en ligne : la feuille de style ne se charge pas.
+ */
+function dash_root_warning(): string
+{
+    $script  = str_replace('\\', '/', (string) realpath($_SERVER['SCRIPT_FILENAME'] ?? ''));
+    $dashDir = str_replace('\\', '/', (string) realpath(__DIR__ . '/../dashboard'));
+    $name    = (string) ($_SERVER['SCRIPT_NAME'] ?? '');
+    if ($dashDir === '' || stripos($script, $dashDir . '/') !== 0 || preg_match('#/dashboard/[^/]+$#i', $name)) {
+        return '';
+    }
+    $root = str_replace('/', DIRECTORY_SEPARATOR, dirname($dashDir));
+    return '<div role="alert" style="margin:0;padding:12px 16px;background:#7C2D12;color:#fff;font:15px/1.5 Arial,sans-serif">'
+        . '<strong>Serveur mal configuré :</strong> sa racine est le dossier <code>dashboard</code>, la mise en page et les images '
+        . 'du site ne peuvent pas se charger. Lancez le serveur depuis le dossier du site :<br>'
+        . '<code style="background:rgba(255,255,255,.15);padding:2px 6px">php -S 127.0.0.1:8080 -t "' . e($root) . '"</code> '
+        . 'puis ouvrez <code>http://127.0.0.1:8080/dashboard/</code></div>';
+}
+
 function dash_header(string $title, string $active = ''): void
 {
     $user = current_user();
@@ -356,26 +396,27 @@ function dash_header(string $title, string $active = ''): void
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-    <link rel="icon" href="../assets/img/favicon-32.png" sizes="32x32" type="image/png">
-    <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+    <link rel="icon" href="<?= e(site_root()) ?>assets/img/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="<?= e(site_root()) ?>assets/img/favicon-32.png" sizes="32x32" type="image/png">
+    <link rel="apple-touch-icon" href="<?= e(site_root()) ?>assets/img/apple-touch-icon.png">
     <!-- Application installable « GTC Dashboard » (dashboard/manifest.webmanifest, assets/js/pwa-install.js) -->
-    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="manifest" href="<?= e(site_root()) ?>dashboard/manifest.webmanifest">
     <meta name="theme-color" content="#1F2630">
     <meta name="application-name" content="GTC Dashboard">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="GTC Dashboard">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <link rel="stylesheet" href="<?= e(asset_url('assets/css/custom-select.css', '../')) ?>">
-    <link rel="stylesheet" href="<?= e(asset_url('assets/css/dashboard.css', '../')) ?>">
+    <link rel="stylesheet" href="<?= e(asset_url('assets/css/custom-select.css', site_root())) ?>">
+    <link rel="stylesheet" href="<?= e(asset_url('assets/css/dashboard.css', site_root())) ?>">
 </head>
 <body class="dash<?= $hub ? ' dash--hub' : '' ?>" data-session="<?= e(session_identity()) ?>" data-session-name="<?= e($user['name'] ?? '') ?>"<?= $liveAttrs ?>>
+<?= dash_root_warning() ?>
 
 <?php if (!$hub): ?>
 <aside class="sidebar" id="sidebar" aria-label="Menu du dashboard">
     <div class="sidebar__brand">
-        <span class="sidebar__logo"><img src="<?= e(asset_url('assets/img/logo-gtc-light.png', '../')) ?>" alt="<?= e(GTC_NAME) ?>" width="166" height="41"></span>
+        <span class="sidebar__logo"><img src="<?= e(asset_url('assets/img/logo-gtc-light.png', site_root())) ?>" alt="<?= e(GTC_NAME) ?>" width="166" height="41"></span>
         <span class="sidebar__name"><small>Dashboard</small></span>
     </div>
 
@@ -396,7 +437,7 @@ function dash_header(string $title, string $active = ''): void
         <button type="button" class="sidebar__link sidebar__link--btn sidebar__link--install" data-pwa-install hidden>
             <?= icon('download') ?><span>Installer l'application</span>
         </button>
-        <a href="../index.php" class="sidebar__link" target="_blank" rel="noopener">
+        <a href="<?= e(site_root()) ?>index.php" class="sidebar__link" target="_blank" rel="noopener">
             <?= icon('external') ?><span>Voir le site</span>
         </a>
         <a href="settings.php" class="sidebar__link<?= in_array($active, ['settings', 'password'], true) ? ' is-active' : '' ?>"
@@ -433,7 +474,7 @@ function dash_header(string $title, string $active = ''): void
     <header class="topbar">
         <?php if ($hub): ?>
             <a href="index.php" class="topbar__brand" aria-label="<?= e(GTC_NAME) ?> — Accueil du Dashboard">
-                <img src="<?= e(asset_url('assets/img/logo-gtc.png', '../')) ?>" alt="" width="166" height="41">
+                <img src="<?= e(asset_url('assets/img/logo-gtc.png', site_root())) ?>" alt="" width="166" height="41">
             </a>
         <?php else: ?>
             <button class="topbar__menu" id="sidebar-toggle" type="button" aria-label="Ouvrir le menu"
@@ -471,11 +512,11 @@ function dash_footer(): void
     <footer class="dash-footer">© <?= date('Y') ?> <?= e(GTC_NAME) ?> — Espace de gestion interne</footer>
 </div>
 
-<script src="<?= e(asset_url('assets/js/custom-select.js', '../')) ?>" defer></script>
-<script src="<?= e(asset_url('assets/js/dashboard.js', '../')) ?>" defer></script>
-<script src="<?= e(asset_url('assets/js/pwa-install.js', '../')) ?>" defer></script>
+<script src="<?= e(asset_url('assets/js/custom-select.js', site_root())) ?>" defer></script>
+<script src="<?= e(asset_url('assets/js/dashboard.js', site_root())) ?>" defer></script>
+<script src="<?= e(asset_url('assets/js/pwa-install.js', site_root())) ?>" defer></script>
 <?php if (can_access_messages()): ?>
-<script src="<?= e(asset_url('assets/js/messages-live.js', '../')) ?>" defer></script>
+<script src="<?= e(asset_url('assets/js/messages-live.js', site_root())) ?>" defer></script>
 <?php endif; ?>
 </body>
 </html>
@@ -496,24 +537,25 @@ function auth_layout_open(string $title, string $subtitle): void
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-    <link rel="icon" href="../assets/img/favicon-32.png" sizes="32x32" type="image/png">
-    <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+    <link rel="icon" href="<?= e(site_root()) ?>assets/img/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="<?= e(site_root()) ?>assets/img/favicon-32.png" sizes="32x32" type="image/png">
+    <link rel="apple-touch-icon" href="<?= e(site_root()) ?>assets/img/apple-touch-icon.png">
     <!-- Application installable « GTC Dashboard » (dashboard/manifest.webmanifest, assets/js/pwa-install.js) -->
-    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="manifest" href="<?= e(site_root()) ?>dashboard/manifest.webmanifest">
     <meta name="theme-color" content="#1F2630">
     <meta name="application-name" content="GTC Dashboard">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="GTC Dashboard">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <link rel="stylesheet" href="<?= e(asset_url('assets/css/custom-select.css', '../')) ?>">
-    <link rel="stylesheet" href="<?= e(asset_url('assets/css/dashboard.css', '../')) ?>">
+    <link rel="stylesheet" href="<?= e(asset_url('assets/css/custom-select.css', site_root())) ?>">
+    <link rel="stylesheet" href="<?= e(asset_url('assets/css/dashboard.css', site_root())) ?>">
 </head>
 <body class="auth" data-session="">
+<?= dash_root_warning() ?>
 <main class="auth-card">
     <div class="auth-card__brand">
-        <span class="sidebar__logo auth-card__logo"><img src="<?= e(asset_url('assets/img/logo-gtc.png', '../')) ?>" alt="<?= e(GTC_NAME) ?>" width="218" height="54"></span>
+        <span class="sidebar__logo auth-card__logo"><img src="<?= e(asset_url('assets/img/logo-gtc.png', site_root())) ?>" alt="<?= e(GTC_NAME) ?>" width="218" height="54"></span>
     </div>
     <h1 class="auth-card__title"><?= e($title) ?></h1>
     <p class="auth-card__subtitle"><?= e($subtitle) ?></p>
@@ -532,13 +574,13 @@ function auth_layout_close(): void
     <p class="auth-card__install" data-pwa-install hidden>
         <button type="button" class="btn btn--ghost btn--block"><?= icon('download') ?> Installer l'application GTC Dashboard</button>
     </p>
-    <p class="auth-card__back"><a href="../index.php"><?= icon('arrow-left') ?> Retour au site</a></p>
+    <p class="auth-card__back"><a href="<?= e(site_root()) ?>index.php"><?= icon('arrow-left') ?> Retour au site</a></p>
 </main>
-<script src="<?= e(asset_url('assets/js/custom-select.js', '../')) ?>" defer></script>
-<script src="<?= e(asset_url('assets/js/dashboard.js', '../')) ?>" defer></script>
-<script src="<?= e(asset_url('assets/js/pwa-install.js', '../')) ?>" defer></script>
+<script src="<?= e(asset_url('assets/js/custom-select.js', site_root())) ?>" defer></script>
+<script src="<?= e(asset_url('assets/js/dashboard.js', site_root())) ?>" defer></script>
+<script src="<?= e(asset_url('assets/js/pwa-install.js', site_root())) ?>" defer></script>
 <?php if (can_access_messages()): ?>
-<script src="<?= e(asset_url('assets/js/messages-live.js', '../')) ?>" defer></script>
+<script src="<?= e(asset_url('assets/js/messages-live.js', site_root())) ?>" defer></script>
 <?php endif; ?>
 </body>
 </html>

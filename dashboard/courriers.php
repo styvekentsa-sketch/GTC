@@ -279,7 +279,7 @@ if ($action === 'new' || $action === 'edit') {
             <button type="submit" name="then" value="pdf" class="btn btn--ghost"><?= icon('download') ?> Enregistrer et télécharger le PDF</button>
         </div>
     </form>
-    <script src="<?= e(asset_url('assets/js/courrier-editor.js', '../')) ?>" defer></script>
+    <script src="<?= e(asset_url('assets/js/courrier-editor.js', site_root())) ?>" defer></script>
     <?php
     dash_footer();
     exit;

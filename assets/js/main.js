@@ -220,9 +220,12 @@
       var converted = valid ? a * rate : 0;
 
       result.textContent = valid ? format(converted, to.value) : '—';
-      // Taux affiché au dix-millième près (« 1 EUR ≈ 655,957 FCFA », « 1 NGN ≈ 0,4012 FCFA »)
-      rateEl.textContent = '1 ' + from.value + ' ≈ ' +
-        new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 4 }).format(rate) + '\u00A0' + to.value;
+      // Taux au dix-millième près, dans le sens lisible : « 1 EUR ≈ 655,957 FCFA » aussi pour FCFA → EUR
+      // (plutôt que « 1 FCFA ≈ 0,0015 EUR ») ; même règle que fx_rate_text() dans services.php
+      var fmtRate = function (r) { return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 4 }).format(r); };
+      rateEl.textContent = rate > 0 && rate < 1
+        ? '1 ' + to.value + ' ≈ ' + fmtRate(1 / rate) + '\u00A0' + from.value
+        : '1 ' + from.value + ' ≈ ' + fmtRate(rate) + '\u00A0' + to.value;
 
       var message = 'Bonjour GTC, je souhaite connaître le taux du jour pour convertir ' +
         (valid ? format(a, from.value) : 'un montant en ' + from.value) + ' en ' + to.value +

@@ -33,11 +33,11 @@ $curLbl  = currency_label($cur);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title><?= $inv ? e($inv['invoice_number'] . ' — ' . $inv['client_name']) : 'Facture introuvable' ?> | <?= e($name) ?></title>
-    <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="<?= e(site_root()) ?>assets/img/favicon.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= e(asset_url('assets/css/commercial-invoice-print.css', '../')) ?>">
+    <link rel="stylesheet" href="<?= e(asset_url('assets/css/commercial-invoice-print.css', site_root())) ?>">
 </head>
 <body>
 
@@ -157,6 +157,6 @@ $curLbl  = currency_label($cur);
 <?php if ($inv && $auto): ?>
 <script>window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 400); });</script>
 <?php endif; ?>
-<script src="<?= e(asset_url('assets/js/pdf-share.js', '../')) ?>" defer></script>
+<script src="<?= e(asset_url('assets/js/pdf-share.js', site_root())) ?>" defer></script>
 </body>
 </html>

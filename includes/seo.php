@@ -38,6 +38,37 @@ function seo_url(string $path = ''): string
 }
 
 /**
+ * Chemin absolu de la racine du site dans l'adresse, avec « / » final : « / » si le site est à la racine du domaine,
+ * « /gtc/ » s'il est installé dans un sous-dossier. Sert de préfixe aux fichiers (CSS, JS, images) des pages du
+ * Dashboard : contrairement à « ../ », il reste juste quelle que soit l'adresse de la page (barre oblique finale,
+ * segment supplémentaire, alias de l'hébergeur…).
+ * Calculé à partir du script exécuté, sans réglage ; GTC_BASE_PATH (includes/db.local.php) permet de le forcer.
+ */
+function site_root(): string
+{
+    static $root = null;
+    if ($root !== null) {
+        return $root;
+    }
+    if (defined('GTC_BASE_PATH')) {
+        $forced = trim((string) GTC_BASE_PATH, '/');
+        return $root = $forced === '' ? '/' : '/' . $forced . '/';
+    }
+    // Ex. : fichier …/Site GTC/dashboard/index.php exécuté sous l'adresse /gtc/dashboard/index.php → racine « /gtc/ »
+    $base    = '';
+    $siteDir = str_replace('\\', '/', (string) realpath(SEO_ROOT));
+    $script  = str_replace('\\', '/', (string) realpath($_SERVER['SCRIPT_FILENAME'] ?? ''));
+    $name    = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+    if ($siteDir !== '' && $script !== '' && stripos($script, $siteDir . '/') === 0) {
+        $rel = substr($script, strlen($siteDir));                       // « /dashboard/index.php »
+        if (strlen($name) >= strlen($rel) && strcasecmp(substr($name, -strlen($rel)), $rel) === 0) {
+            $base = substr($name, 0, strlen($name) - strlen($rel));     // « » ou « /gtc »
+        }
+    }
+    return $root = rtrim($base, '/') . '/';
+}
+
+/**
  * URL d'un fichier CSS / JS, versionnée par sa date de modification.
  * Si « fichier.min.css » existe et est au moins aussi récent que la source, il est servi à la place.
  * $prefix : chemin vers la racine du site ('' ou '../').

@@ -178,14 +178,14 @@ if (!is_post() && query('edit')) {
 $members = db_all('SELECT * FROM team_members ORDER BY display_order ASC, id ASC');
 $err     = fn (string $k) => isset($errors[$k]) ? '<small class="field__error">' . e($errors[$k]) . '</small>' : '';
 $editing = (int) $form['id'] > 0;
-$currentPhoto = $editing ? team_photo_url($form['photo'], '../') : null;
+$currentPhoto = $editing ? team_photo_url($form['photo'], site_root()) : null;
 
 dash_header("Équipe", 'team');
 ?>
 
 <div class="toolbar">
     <p class="page-intro">Ces fiches sont affichées dans la section « Notre équipe » de la page À propos.</p>
-    <a href="../a-propos.php#equipe" class="btn btn--ghost btn--sm" target="_blank" rel="noopener"><?= icon('external') ?> Voir sur le site</a>
+    <a href="<?= e(site_root()) ?>a-propos.php#equipe" class="btn btn--ghost btn--sm" target="_blank" rel="noopener"><?= icon('external') ?> Voir sur le site</a>
 </div>
 
 <div class="dash-grid dash-grid--aside">
@@ -200,7 +200,7 @@ dash_header("Équipe", 'team');
                     <thead><tr><th>Membre</th><th>Rôle</th><th class="num">Ordre</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr></thead>
                     <tbody>
                     <?php foreach ($members as $m): ?>
-                        <?php $url = team_photo_url($m['photo'], '../', $m['name']); ?>
+                        <?php $url = team_photo_url($m['photo'], site_root(), $m['name']); ?>
                         <tr<?= (int) $m['id'] === (int) $form['id'] ? ' class="is-selected"' : '' ?>>
                             <td data-label="Membre">
                                 <span class="member-cell">
