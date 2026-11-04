@@ -374,108 +374,10 @@ function backup_delete(string $name): bool
     return $b !== null && @unlink($b['path']);
 }
 
-/* ==========================================================================
-   Sauvegarde complète du site (.zip) : fichiers + base de données
-   ========================================================================== */
-
-/**
- * Exclus de l'archive (chemins relatifs à la racine du site, « / » final = dossier) :
- * secrets (db.local.php : mots de passe de la base), base brute et clés (data/ : remplacée par le dump SQL joint),
- * historique Git, réglages de l'éditeur, fichiers temporaires.
- */
-const BACKUP_ZIP_EXCLUDE = ['.git/', '.vscode/', 'node_modules/', 'data/', 'includes/db.local.php'];
-
-/** ZipArchive disponible (extension PHP « zip ») ? */
+/** ZipArchive disponible (extension PHP « zip ») ? Export des documents PDF (includes/pdf_export.php). */
 function backup_zip_available(): bool
 {
     return class_exists('ZipArchive');
-}
-
-/**
- * Crée l'archive complète dans un fichier temporaire et retourne son chemin (à supprimer après envoi) :
- *   site/…                         code source, assets, images envoyées (logos, photos de l'équipe, partenaires…)
- *   base-de-donnees/gtc_backup_….sql   sauvegarde de la base prise à l'instant (structure + données)
- *   LISEZ-MOI.txt                  contenu, exclusions, restauration
- * @throws RuntimeException
- */
-function backup_site_zip(string $author): string
-{
-    if (!backup_zip_available()) {
-        throw new RuntimeException('extension PHP « zip » non activée sur ce serveur');
-    }
-    @set_time_limit(600);
-    $root = realpath(dirname(__DIR__));
-    $dir  = backup_dir();
-    $skipDir = $dir !== null ? str_replace('\\', '/', (string) realpath($dir)) . '/' : null;   // historique (s'il est dans le site)
-    $zipPath = tempnam(sys_get_temp_dir(), 'gtczip');
-    $sqlPath = tempnam(sys_get_temp_dir(), 'gtcsql');
-    $zip = new ZipArchive();
-    if ($zip->open($zipPath, ZipArchive::OVERWRITE) !== true) {
-        @unlink($zipPath);
-        @unlink($sqlPath);
-        throw new RuntimeException('création de l\'archive impossible (dossier temporaire)');
-    }
-    try {
-        // 1. Base de données : sauvegarde du moment
-        $out = fopen($sqlPath, 'wb');
-        backup_dump(function (string $chunk) use ($out): void { fwrite($out, $chunk); }, $author);
-        fclose($out);
-        $stamp = date('Y-m-d_Hi');
-        $zip->addFile($sqlPath, "base-de-donnees/gtc_backup_{$stamp}.sql");
-
-        // 2. Fichiers du site
-        $files = 0;
-        $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::LEAVES_ONLY);
-        foreach ($it as $file) {
-            $path = str_replace('\\', '/', $file->getPathname());
-            $rel  = ltrim(substr($path, strlen(str_replace('\\', '/', $root))), '/');
-            if ($file->isLink() || !$file->isFile() || ($skipDir !== null && str_starts_with($path . '/', $skipDir))) {
-                continue;
-            }
-            foreach (BACKUP_ZIP_EXCLUDE as $ex) {
-                if (str_ends_with($ex, '/') ? str_starts_with($rel, $ex) : $rel === $ex) {
-                    continue 2;
-                }
-            }
-            if (preg_match('/(\.part|\.lock|~)$/', $rel)) {
-                continue;
-            }
-            $zip->addFile($file->getPathname(), 'site/' . $rel);
-            $files++;
-        }
-
-        // 3. Notice
-        $zip->addFromString('LISEZ-MOI.txt', implode("\r\n", [
-            'Sauvegarde complète — ' . GTC_NAME,
-            'Créée le ' . date('d/m/Y à H:i') . ' par ' . $author,
-            '',
-            'CONTENU',
-            '  site/              ' . $files . ' fichiers : code source, assets, images envoyées (logos, photos, partenaires)',
-            "  base-de-donnees/   sauvegarde SQL complète de la base (" . (DB_DRIVER === 'mysql' ? 'MySQL ' . DB_NAME : 'SQLite') . ') au moment de l\'archive',
-            '',
-            'NON INCLUS (volontairement)',
-            '  includes/db.local.php   identifiants de la base : à recréer à partir de includes/db.local.example.php',
-            '  data/                   base brute, clés et fichiers temporaires : remplacés par la sauvegarde SQL',
-            '  .git/ et historique des sauvegardes',
-            '',
-            'RESTAURATION',
-            '  1. Copier le contenu de site/ sur l\'hébergement.',
-            '  2. Recréer includes/db.local.php (accès à la base).',
-            '  3. Importer base-de-donnees/*.sql (phpMyAdmin, ou Dashboard → Sauvegardes).',
-            '',
-            'CONFIDENTIEL : comptes, empreintes des mots de passe et montants. À conserver hors du serveur, en lieu sûr.',
-        ]));
-        if (!$zip->close()) {
-            throw new RuntimeException('écriture de l\'archive interrompue (espace disque ?)');
-        }
-    } catch (Throwable $e) {
-        @$zip->close();
-        @unlink($zipPath);
-        throw $e instanceof RuntimeException ? $e : new RuntimeException($e->getMessage(), 0, $e);
-    } finally {
-        @unlink($sqlPath);
-    }
-    return $zipPath;
 }
 
 /** Nom proposé au téléchargement : gtc_backup_2026-11-04_0230.sql(.gz). */

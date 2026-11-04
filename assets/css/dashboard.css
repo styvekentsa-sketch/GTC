@@ -2344,3 +2344,6 @@ body.auth {
 .dash-grid--aside > * { min-width: 0; }
 .backup-actions__more { display: grid; gap: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--line); }
 .btn[disabled] { opacity: 0.55; cursor: not-allowed; }
+.backup-pdfs__period { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
+.backup-pdfs__period label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; font-weight: 600; }
+.backup-pdfs__period input { width: auto; }

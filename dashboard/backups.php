@@ -80,19 +80,32 @@ if (is_post()) {
         exit;
     }
 
-    // Archive complète du site (fichiers + base) : créée dans un fichier temporaire, envoyée puis supprimée
-    if ($op === 'zip') {
+    // Tous les documents PDF (reçus, factures, courriers) dans une archive : fichier temporaire, envoyé puis supprimé
+    if ($op === 'pdfs') {
+        require_once __DIR__ . '/../includes/pdf_export.php';
+        $date = function (string $key): ?string {
+            $v = post($key);
+            $d = $v !== '' ? DateTimeImmutable::createFromFormat('!Y-m-d', $v) : false;
+            return $d && $d->format('Y-m-d') === $v ? $v : null;
+        };
+        [$from, $to] = [$date('from'), $date('to')];
+        if ($from !== null && $to !== null && $from > $to) {
+            [$from, $to] = [$to, $from];
+        }
         try {
-            $zip = backup_site_zip($user['name']);
+            [$zip, $counts] = pdf_export_zip($from, $to, $user);
         } catch (Throwable $e) {
-            error_log('[GTC] Sauvegarde complète : ' . $e->getMessage());
-            flash('error', 'Sauvegarde complète impossible : ' . $e->getMessage() . '.');
+            error_log('[GTC] Export des PDF : ' . $e->getMessage());
+            flash('error', 'Export des documents PDF impossible : ' . $e->getMessage() . '.');
             redirect('backups.php');
         }
-        activity_log('backup', 'database', null, 'Sauvegarde complète du site (.zip) téléchargée', ['taille' => backup_size((int) filesize($zip))]);
+        activity_log('export', 'database', null, 'Documents PDF exportés (.zip)', [
+            'période' => ($from ?? 'début') . ' → ' . ($to ?? 'aujourd\'hui'),
+            'reçus' => $counts['recus-de-caisse'], 'factures' => $counts['factures'], 'courriers' => $counts['courriers'],
+        ]);
         session_write_close();
         header('Content-Type: application/zip');
-        header('Content-Disposition: attachment; filename="gtc_site_complet_' . date('Y-m-d_Hi') . '.zip"');
+        header('Content-Disposition: attachment; filename="gtc_documents_pdf_' . ($from || $to ? ($from ?? 'debut') . '_' . ($to ?? date('Y-m-d')) : date('Y-m-d_Hi')) . '.zip"');
         header('Content-Length: ' . filesize($zip));
         header('Cache-Control: no-store');
         header('X-Content-Type-Options: nosniff');
@@ -215,14 +228,18 @@ dash_header('Sauvegardes', 'backups');
                 <small class="field__hint">Fichier <code><?= e(backup_download_name(time(), true)) ?></code> enregistré sur cet ordinateur.</small>
             </form>
             <div class="backup-actions__more">
-                <form method="post">
+                <form method="post" class="backup-pdfs">
                     <?= csrf_field() ?>
-                    <input type="hidden" name="op" value="zip">
+                    <input type="hidden" name="op" value="pdfs">
+                    <div class="backup-pdfs__period">
+                        <label>Du <input type="date" name="from" max="<?= e(date('Y-m-d')) ?>"></label>
+                        <label>au <input type="date" name="to" max="<?= e(date('Y-m-d')) ?>"></label>
+                    </div>
                     <?php if (backup_zip_available()): ?>
-                        <button type="submit" class="btn btn--ghost"><?= icon('archive') ?> Créer une sauvegarde complète (.zip)</button>
-                        <small class="field__hint">Tout le site (code, assets, images envoyées) + la base du moment. Sans <code>db.local.php</code> (mots de passe) : voir LISEZ-MOI.txt dans l'archive.</small>
+                        <button type="submit" class="btn btn--ghost"><?= icon('download') ?> Télécharger tous les fichiers PDF (.zip)</button>
+                        <small class="field__hint">Tous les reçus de caisse, factures / proformas / devis et courriers en PDF, rangés par dossier. Dates vides : tous les documents.</small>
                     <?php else: ?>
-                        <button type="button" class="btn btn--ghost" disabled><?= icon('archive') ?> Créer une sauvegarde complète (.zip)</button>
+                        <button type="button" class="btn btn--ghost" disabled><?= icon('download') ?> Télécharger tous les fichiers PDF (.zip)</button>
                         <small class="field__hint">Indisponible : extension PHP « zip » non activée sur ce serveur (php.ini : <code>extension=zip</code>).</small>
                     <?php endif; ?>
                 </form>
