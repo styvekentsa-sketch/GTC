@@ -272,6 +272,33 @@ if (is_post()) {
         }
     }
 
+    // ----- Tarifs du calculateur de fret du site (admin) -----
+    if ($op === 'freight') {
+        $canCompany || deny();
+        $tab = 'taux';
+        $values = [];
+        foreach (['freight_sea_rate' => 'Tarif maritime', 'freight_air_rate' => 'Tarif aérien', 'freight_sea_min_cbm' => 'Minimum'] as $key => $label) {
+            $raw = str_replace([' ', "\u{00A0}", "\u{202F}", ','], ['', '', '', '.'], post($key));
+            if ($raw === '') {
+                $values[$key] = $key === 'freight_sea_min_cbm' ? '0' : '';
+            } elseif (!is_numeric($raw) || (float) $raw < 0 || (float) $raw > 100000000) {
+                $errors[$key] = $label . ' invalide.';
+            } else {
+                $values[$key] = (string) round((float) $raw, 2);
+            }
+        }
+        if (!$errors) {
+            settings_save($values);
+            activity_log('update', 'settings', null, 'Tarifs du calculateur de fret', [
+                'maritime' => $values['freight_sea_rate'] !== '' ? $values['freight_sea_rate'] . ' FCFA/m³' : 'non publié',
+                'aérien'   => $values['freight_air_rate'] !== '' ? $values['freight_air_rate'] . ' FCFA/kg' : 'non publié',
+                'minimum'  => $values['freight_sea_min_cbm'] . ' m³',
+            ]);
+            flash('success', 'Tarifs du calculateur de fret enregistrés.');
+            redirect('settings.php#taux');
+        }
+    }
+
     // ----- Système (admin) -----
     if ($op === 'system') {
         $canSystem || deny();
@@ -678,6 +705,38 @@ dash_header('Paramètres', 'settings');
             </div>
             <div class="form-actions"><button type="submit" class="btn btn--primary"><?= icon('check') ?> Enregistrer</button></div>
         </form>
+
+        <?php if ($canCompany): ?>
+        <form method="post" class="panel form" novalidate>
+            <?= csrf_field() ?>
+            <input type="hidden" name="op" value="freight">
+            <header class="panel__head">
+                <div>
+                    <h2 class="panel__title">Calculateur de fret (site public)</h2>
+                    <span class="cell-sub">Tarifs indicatifs affichés sur <a href="<?= e(site_root()) ?>calculateur-cbm.php" target="_blank" rel="noopener">la page du calculateur</a>. Laissez un tarif vide pour n'afficher que les volumes et poids.</span>
+                </div>
+            </header>
+            <div class="form-grid">
+                <div class="field">
+                    <label for="f-sea">Fret maritime (FCFA par m³)</label>
+                    <input id="f-sea" name="freight_sea_rate" inputmode="decimal" value="<?= $val('freight_sea_rate', str_replace('.', ',', $s['freight_sea_rate'] ?? '')) ?>"<?= $inv('freight_sea_rate') ?> placeholder="Non publié">
+                    <?= $err('freight_sea_rate') ?>
+                </div>
+                <div class="field">
+                    <label for="f-air">Fret aérien (FCFA par kg)</label>
+                    <input id="f-air" name="freight_air_rate" inputmode="decimal" value="<?= $val('freight_air_rate', str_replace('.', ',', $s['freight_air_rate'] ?? '')) ?>"<?= $inv('freight_air_rate') ?> placeholder="Non publié">
+                    <?= $err('freight_air_rate') ?>
+                </div>
+                <div class="field">
+                    <label for="f-min">Minimum facturé en maritime (m³)</label>
+                    <input id="f-min" name="freight_sea_min_cbm" inputmode="decimal" value="<?= $val('freight_sea_min_cbm', str_replace('.', ',', $s['freight_sea_min_cbm'] ?? '1')) ?>"<?= $inv('freight_sea_min_cbm') ?>>
+                    <small class="field__hint">Groupage : un envoi plus petit est facturé sur ce volume.</small>
+                    <?= $err('freight_sea_min_cbm') ?>
+                </div>
+            </div>
+            <div class="form-actions"><button type="submit" class="btn btn--primary"><?= icon('check') ?> Enregistrer les tarifs</button></div>
+        </form>
+        <?php endif; ?>
     </section>
     <?php endif; ?>
 
@@ -720,6 +779,7 @@ dash_header('Paramètres', 'settings');
                     <?= csrf_field() ?>
                     <input type="hidden" name="op" value="backup">
                     <button type="submit" class="btn btn--primary"><?= icon('receipt') ?> Télécharger une sauvegarde BDD (.sql)</button>
+                    <a href="backups.php" class="btn btn--ghost"><?= icon('archive') ?> Historique, restauration…</a>
                 </form>
                 <dl class="detail-list settings__sysinfo">
                     <div><dt>Moteur</dt><dd><?= DB_DRIVER === 'mysql' ? 'MySQL' : 'SQLite' ?></dd></div>
@@ -773,29 +833,13 @@ dash_header('Paramètres', 'settings');
                                         <?php endif; ?>
                                     </td>
                                     <td class="actions">
-                                        <?php if ((int) $p['is_default'] !== 1 && $p['is_active']): ?>
-                                            <form method="post" class="inline-form">
-                                                <?= csrf_field() ?>
-                                                <input type="hidden" name="op" value="printer_default">
-                                                <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
-                                                <button type="submit" class="icon-btn" title="Définir par défaut" aria-label="Définir « <?= e($p['printer_name']) ?> » par défaut"><?= icon('check') ?></button>
-                                            </form>
-                                        <?php endif; ?>
-                                        <?php if ($p['host']): ?>
-                                            <form method="post" class="inline-form">
-                                                <?= csrf_field() ?>
-                                                <input type="hidden" name="op" value="printer_test">
-                                                <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
-                                                <button type="submit" class="icon-btn" title="Tester la connexion" aria-label="Tester « <?= e($p['printer_name']) ?> »"><?= icon('wifi') ?></button>
-                                            </form>
-                                        <?php endif; ?>
-                                        <a href="settings.php?edit=<?= (int) $p['id'] ?>#systeme" class="icon-btn" title="Modifier" aria-label="Modifier « <?= e($p['printer_name']) ?> »"><?= icon('edit') ?></a>
-                                        <form method="post" class="inline-form">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="op" value="printer_delete">
-                                            <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
-                                            <button type="submit" class="icon-btn icon-btn--danger" title="Supprimer" aria-label="Supprimer « <?= e($p['printer_name']) ?> »" data-confirm="Supprimer l'imprimante « <?= e($p['printer_name']) ?> » ?"><?= icon('trash') ?></button>
-                                        </form>
+                                        <?= action_menu(array_filter([
+                                            (int) $p['is_default'] !== 1 && $p['is_active'] ? ['post', 'Définir par défaut', 'check', ['op' => 'printer_default', 'id' => (int) $p['id']]] : [],
+                                            $p['host'] ? ['post', 'Tester la connexion', 'wifi', ['op' => 'printer_test', 'id' => (int) $p['id']]] : [],
+                                            ['link', 'Modifier', 'settings.php?edit=' . (int) $p['id'] . '#systeme', 'edit'],
+                                            ['sep'],
+                                            ['post', 'Supprimer', 'trash', ['op' => 'printer_delete', 'id' => (int) $p['id']], 'Supprimer l\'imprimante « ' . $p['printer_name'] . ' » ?', 'danger' => true],
+                                        ]), 'Actions de l\'imprimante ' . $p['printer_name']) ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

@@ -3587,32 +3587,105 @@ a.social__link--twitter:hover,   a.social__link--twitter:focus-visible   { backg
 }
 
 /* ==========================================================================
-   Bandeau défilant des services (includes/services-carousel.php)
-   index.php et services.php : cartes avec image, accroche, points clés et boutons
+   Carrousel des services (includes/services-carousel.php, assets/js/main.js § 5)
+   index.php et services.php : défilement manuel (glisser, balayer, boutons, points) + automatique
    ========================================================================== */
 .svc-carousel {
-  overflow: hidden;
-  padding-block: var(--space-2) var(--space-4);
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+  position: relative;
 }
 
+/* Bande défilable : les cartes s'alignent sur le contenu de la page (marge = celle du .container) */
 .svc-carousel__track {
+  --svc-pad: max(var(--space-5), calc((100% - var(--container)) / 2 + var(--space-5)));
   display: flex;
-  width: max-content;
+  gap: var(--space-6);
   margin: 0;
-  padding: 0;
+  padding: var(--space-2) var(--svc-pad) var(--space-4);
   list-style: none;
-  animation: svc-scroll 80s linear infinite;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--svc-pad);
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  cursor: grab;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 2.5%, #000 97.5%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 2.5%, #000 97.5%, transparent);
 }
 
-.svc-carousel:hover .svc-carousel__track,
-.svc-carousel:focus-within .svc-carousel__track {
-  animation-play-state: paused;
-}
+.svc-carousel__track::-webkit-scrollbar { display: none; }
 
-@keyframes svc-scroll {
-  to { transform: translateX(-50%); }
+/* Glisser à la souris : défilement direct, alignement rétabli au relâchement */
+.svc-carousel__track.is-dragging {
+  cursor: grabbing;
+  scroll-snap-type: none;
+  scroll-behavior: auto;
+  user-select: none;
+}
+.svc-carousel__track.is-dragging a { pointer-events: none; }
+
+/* Commandes : précédent, points, suivant, pause */
+.svc-carousel__controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+.svc-carousel__controls[hidden] { display: none; }
+
+.svc-carousel__btn {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--color-slate-300);
+  border-radius: 50%;
+  background-color: var(--color-white);
+  color: var(--color-navy-900);
+  font-size: 1.125rem;
+  cursor: pointer;
+  transition: border-color var(--transition), color var(--transition), background-color var(--transition);
+}
+.svc-carousel__btn:hover { border-color: var(--color-accent); color: var(--color-accent-dark); background-color: var(--color-accent-light); }
+
+.svc-carousel__dots { display: flex; align-items: center; }
+/* Point de 10 px, zone cliquable de 24 px (marge intérieure transparente) */
+.svc-carousel__dot {
+  box-sizing: content-box;
+  width: 10px;
+  height: 10px;
+  padding: 7px 5px;
+  border: 0;
+  border-radius: 999px;
+  background-color: var(--color-slate-300);
+  background-clip: content-box;
+  cursor: pointer;
+  transition: width 0.25s ease, background-color 0.25s ease;
+}
+.svc-carousel__dot:hover { background-color: var(--color-slate-400); }
+.svc-carousel__dot[aria-current="true"] { width: 26px; background-color: var(--color-accent); }
+
+.svc-carousel__play {
+  margin-left: var(--space-2);
+  padding: var(--space-2);
+  border: 0;
+  background: none;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.svc-carousel__play:hover { color: var(--color-navy-900); }
+
+.svc-carousel__btn:focus-visible,
+.svc-carousel__dot:focus-visible,
+.svc-carousel__play:focus-visible {
+  outline: 3px solid rgba(0, 150, 71, 0.45);
+  outline-offset: 2px;
 }
 
 /* ---- Carte de service ---- */
@@ -3620,7 +3693,7 @@ a.social__link--twitter:hover,   a.social__link--twitter:focus-visible   { backg
   flex: 0 0 400px;
   display: flex;
   flex-direction: column;
-  margin-right: var(--space-6);   /* marge (et non gap) : boucle sans saut à -50 % */
+  scroll-snap-align: start;
   overflow: hidden;
   background-color: var(--color-white);
   border: 1px solid var(--color-slate-200);
@@ -3717,10 +3790,8 @@ a.social__link--twitter:hover,   a.social__link--twitter:focus-visible   { backg
 
 /* Téléphones : cartes plus étroites */
 @media (max-width: 575.98px) {
-  .svc-card {
-    flex-basis: 300px;
-    margin-right: var(--space-4);
-  }
+  .svc-carousel__track { gap: var(--space-4); }
+  .svc-card { flex-basis: min(300px, 82vw); }
   .svc-card__body { padding: var(--space-6) var(--space-5); }
   .svc-card__title { font-size: var(--fs-xl); }
   .svc-card__tagline { font-size: var(--fs-base); }
@@ -3728,17 +3799,235 @@ a.social__link--twitter:hover,   a.social__link--twitter:focus-visible   { backg
   .svc-list li { font-size: var(--fs-sm); }
 }
 
-/* Moins d'animations demandé : grille fixe, sans la copie de la boucle */
+/* Moins d'animations demandé : pas de défilement automatique (main.js) ni d'animation de défilement */
 @media (prefers-reduced-motion: reduce) {
-  .svc-carousel { -webkit-mask-image: none; mask-image: none; }
-  .svc-carousel__track {
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: var(--space-6);
-    width: auto;
-    padding-inline: var(--space-5);
-    animation: none;
-  }
-  .svc-card { margin-right: 0; }
-  .svc-carousel__track [aria-hidden="true"] { display: none; }
+  .svc-carousel__track { scroll-behavior: auto; }
+  .svc-carousel__dot { transition: none; }
+}
+
+/* ==========================================================================
+   Suivi de colis et de conteneurs (suivi.php)
+   ========================================================================== */
+.track-search__row { display: flex; gap: var(--space-3); }
+.track-search__row .form-control { flex: 1; min-width: 0; font-size: var(--fs-lg); letter-spacing: 0.04em; }
+.track-search__row .btn { flex-shrink: 0; }
+.track-search__error { margin-top: var(--space-3); font-size: var(--fs-sm); }
+
+.track-result {
+  margin-top: var(--space-6);
+  padding: var(--space-6);
+  background-color: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.track-result__subtitle { margin: var(--space-7) 0 var(--space-4); font-size: var(--fs-lg); color: var(--color-navy-900); }
+.track-result__subtitle small { font-size: var(--fs-sm); font-weight: 500; color: var(--color-text-muted); }
+
+/* Statut actuel : grande icône + progression (bleu = en route, vert = disponible / livré) */
+.track-status {
+  --track-tone: var(--brand-blue);
+  --track-soft: #E6EEF8;
+  display: flex; gap: var(--space-5); align-items: flex-start;
+  padding: var(--space-5);
+  background-color: var(--track-soft);
+  border-left: 5px solid var(--track-tone);
+  border-radius: var(--radius-lg);
+}
+.track-status--ready { --track-tone: var(--color-accent-dark); --track-soft: var(--color-accent-light); }
+.track-status__icon {
+  display: grid; place-items: center; flex-shrink: 0;
+  width: 72px; height: 72px; border-radius: 50%;
+  background-color: var(--track-tone); color: var(--color-white); font-size: 2rem;
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.7);
+}
+.track-status__body { flex: 1; min-width: 0; }
+.track-status__label { font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); overflow-wrap: anywhere; }
+.track-status__title { margin-top: var(--space-1); font-size: var(--fs-2xl); line-height: 1.2; color: var(--track-tone); }
+.track-status__text { margin-top: var(--space-2); color: var(--color-navy-800); }
+.track-status__meta { margin-top: var(--space-2); font-size: var(--fs-sm); color: var(--color-text-muted); }
+.track-progress { height: 8px; margin-top: var(--space-4); background-color: rgba(31, 38, 48, 0.1); border-radius: 999px; overflow: hidden; }
+.track-progress__bar { display: block; height: 100%; background-color: var(--track-tone); border-radius: inherit; }
+
+.track-pickup-alert {
+  display: flex; gap: var(--space-3); align-items: flex-start;
+  margin-top: var(--space-4); padding: var(--space-4);
+  background-color: var(--color-accent-light); border: 1px solid var(--brand-green); border-radius: var(--radius);
+  color: var(--color-navy-900);
+}
+.track-pickup-alert .icon { margin-top: 3px; color: var(--color-accent-dark); font-size: 1.25rem; }
+
+/* Barre des 6 étapes du trajet */
+.track-steps-bar { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin: var(--space-6) 0 0; padding: 0; list-style: none; }
+.track-steps-bar__item { position: relative; display: flex; flex-direction: column; align-items: center; gap: var(--space-2); text-align: center; }
+.track-steps-bar__item:not(:first-child)::before {
+  content: ""; position: absolute; top: 17px; right: 50%; width: 100%; height: 3px; background-color: var(--color-slate-200);
+}
+.track-steps-bar__item.is-done::before, .track-steps-bar__item.is-current::before { background-color: var(--brand-green); }
+.track-steps-bar__dot {
+  position: relative; z-index: 1; display: grid; place-items: center;
+  width: 36px; height: 36px; border-radius: 50%;
+  background-color: var(--color-slate-100); color: var(--color-slate-500); border: 2px solid var(--color-slate-200);
+}
+.track-steps-bar__item.is-done .track-steps-bar__dot { background-color: var(--brand-green); border-color: var(--brand-green); color: var(--color-white); }
+.track-steps-bar__item.is-current .track-steps-bar__dot {
+  background-color: var(--brand-blue); border-color: var(--brand-blue); color: var(--color-white); box-shadow: 0 0 0 4px rgba(0, 81, 165, 0.18);
+}
+.track-steps-bar__label { font-size: var(--fs-xs); line-height: 1.3; color: var(--color-text-muted); padding-inline: 2px; }
+.track-steps-bar__item.is-done .track-steps-bar__label { color: var(--color-navy-800); }
+.track-steps-bar__item.is-current .track-steps-bar__label { color: var(--brand-blue); font-weight: 700; }
+
+/* Détails de l'envoi */
+.track-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4) var(--space-5); }
+.track-facts__wide { grid-column: 1 / -1; }
+.track-facts dt { font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-muted); }
+.track-facts dd { margin-top: 2px; font-weight: 600; color: var(--color-navy-900); overflow-wrap: anywhere; }
+.track-facts__pickup { padding: var(--space-4); background-color: var(--color-slate-100); border-radius: var(--radius); }
+.track-facts__pickup a { display: inline-flex; align-items: center; gap: 4px; margin-left: var(--space-2); font-size: var(--fs-sm); color: var(--color-accent-dark); white-space: nowrap; }
+
+/* Historique détaillé : trait vertical reliant les événements, le plus récent en bleu */
+.timeline { list-style: none; margin: 0; padding: 0; }
+.timeline__step { position: relative; display: flex; gap: var(--space-4); padding-bottom: var(--space-5); }
+.timeline__step:last-child { padding-bottom: 0; }
+.timeline__step:not(:last-child)::before {
+  content: ""; position: absolute; left: 19px; top: 40px; bottom: 0; width: 2px; background-color: var(--color-slate-200);
+}
+.timeline__dot {
+  position: relative; z-index: 1; display: grid; place-items: center; flex-shrink: 0;
+  width: 40px; height: 40px; border-radius: 50%; font-size: 1.125rem;
+  background-color: var(--color-slate-100); color: var(--color-navy-700); border: 2px solid var(--color-slate-200);
+}
+.timeline__step.is-current .timeline__dot {
+  background-color: var(--brand-blue); border-color: var(--brand-blue); color: var(--color-white);
+  box-shadow: 0 0 0 5px rgba(0, 81, 165, 0.15);
+}
+.timeline__body { min-width: 0; }
+.timeline__when { font-size: var(--fs-sm); font-weight: 600; color: var(--color-navy-800); }
+.timeline__when span { font-weight: 400; color: var(--color-text-muted); }
+.timeline__label { margin-top: 2px; font-weight: 700; color: var(--color-navy-900); }
+.timeline__step.is-current .timeline__label { color: var(--brand-blue); }
+.timeline__meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: 4px; font-size: var(--fs-sm); color: var(--color-text-muted); }
+.timeline__meta:empty { display: none; }
+.timeline__place { display: inline-flex; align-items: center; gap: 4px; }
+.timeline__chip { padding: 1px 8px; font-size: var(--fs-xs); font-weight: 600; background-color: var(--color-slate-100); border-radius: 999px; color: var(--color-navy-700); }
+.timeline__note {
+  margin-top: var(--space-2); padding: var(--space-2) var(--space-3); font-size: var(--fs-sm);
+  background-color: var(--color-slate-100); border-radius: var(--radius-sm); color: var(--color-navy-800);
+}
+
+.track-help {
+  display: flex; gap: var(--space-4); align-items: flex-start;
+  margin-top: var(--space-6); padding: var(--space-5);
+  background-color: var(--color-slate-100); border-radius: var(--radius-lg);
+}
+.track-help__icon { display: grid; place-items: center; flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%; background-color: var(--color-white); color: var(--color-accent-dark); }
+.track-help__title { font-weight: 600; color: var(--color-navy-900); }
+.track-help a { color: var(--color-accent-dark); font-weight: 600; }
+.track-help__more { margin-top: var(--space-2); font-size: var(--fs-sm); }
+
+@media (max-width: 575.98px) {
+  .track-search__row { flex-direction: column; }
+  .track-result { padding: var(--space-4); }
+  .track-status { flex-direction: column; gap: var(--space-4); padding: var(--space-4); }
+  .track-status__icon { width: 60px; height: 60px; font-size: 1.625rem; }
+  .track-status__title { font-size: var(--fs-xl); }
+  /* Barre des étapes : pastilles seules (le libellé de l'étape en cours est déjà dans le bandeau) */
+  .track-steps-bar__label { display: none; }
+  .track-steps-bar__dot { width: 32px; height: 32px; }
+  .track-steps-bar__item:not(:first-child)::before { top: 15px; }
+}
+
+/* ==========================================================================
+   Calculateur de volume (CBM) et de fret (calculateur-cbm.php, assets/js/freight-calculator.js)
+   ========================================================================== */
+.freight { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--space-6); align-items: start; }
+.freight__main { min-width: 0; }
+.freight input:not([type="radio"]) {
+  width: 100%; min-width: 0; padding: 0.625rem 0.75rem;
+  background-color: var(--color-white); border: 1px solid var(--color-slate-300); border-radius: var(--radius);
+  font-size: var(--fs-base); color: var(--color-navy-900); font-variant-numeric: tabular-nums;
+}
+.freight input:not([type="radio"]):focus { outline: none; border-color: var(--color-navy-900); box-shadow: 0 0 0 3px rgba(31, 38, 48, 0.08); }
+.freight input[aria-invalid="true"] { border-color: #DC2626; background-color: #FEF2F2; }
+
+/* Mode de transport : deux grandes cases à cocher */
+.freight-modes { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin: 0; padding: 0; border: 0; min-width: 0; }
+.freight-modes legend { grid-column: 1 / -1; float: left; width: 100%; }
+.freight-mode { position: relative; display: block; cursor: pointer; }
+.freight-mode input { position: absolute; opacity: 0; }
+.freight-mode__box {
+  display: flex; gap: var(--space-3); align-items: center; height: 100%; padding: var(--space-4);
+  border: 2px solid var(--color-slate-200); border-radius: var(--radius-lg); background-color: var(--color-white);
+  transition: border-color var(--transition), background-color var(--transition);
+}
+.freight-mode__box > .icon { flex-shrink: 0; font-size: 1.75rem; color: var(--color-slate-500); }
+.freight-mode__box strong { display: block; color: var(--color-navy-900); }
+.freight-mode__box small { display: block; font-size: var(--fs-xs); color: var(--color-text-muted); }
+.freight-mode input:checked + .freight-mode__box { border-color: var(--brand-blue); background-color: #E6EEF8; }
+.freight-mode input:checked + .freight-mode__box > .icon { color: var(--brand-blue); }
+.freight-mode input:focus-visible + .freight-mode__box { outline: 3px solid rgba(0, 81, 165, 0.35); outline-offset: 2px; }
+
+.freight-units { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-5); margin: var(--space-5) 0 var(--space-4); }
+.freight-units .form-label { margin: 0; }
+.freight-units label { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--fs-sm); cursor: pointer; }
+.freight-units input { accent-color: var(--brand-blue); width: 1.05rem; height: 1.05rem; }
+
+/* Lignes de colis */
+.freight-lines { display: grid; gap: var(--space-3); }
+.freight-line { padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background-color: var(--color-bg); }
+.freight-line__head { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
+.freight .freight-line__head .freight-line__name {   /* plus précis que « .freight input » */
+  flex: 1; padding: 0.25rem 0.5rem; border-color: transparent; background-color: transparent; font-weight: 700; font-size: var(--fs-base);
+}
+.freight .freight-line__head .freight-line__name:hover,
+.freight .freight-line__head .freight-line__name:focus { border-color: var(--color-slate-300); background-color: var(--color-white); }
+.freight-line__cbm { flex-shrink: 0; padding: 2px 10px; font-size: var(--fs-sm); font-weight: 700; color: var(--brand-blue); background-color: #E6EEF8; border-radius: 999px; font-variant-numeric: tabular-nums; }
+.freight-line__remove {
+  flex-shrink: 0; width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent;
+  font-size: 1.375rem; line-height: 1; color: var(--color-slate-500); cursor: pointer;
+}
+.freight-line__remove:hover { background-color: #FEE2E2; color: #B91C1C; }
+.freight-line__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 0.8fr) minmax(0, 1.1fr); gap: var(--space-3); }
+.freight-line__field label { display: block; margin-bottom: 4px; font-size: var(--fs-xs); font-weight: 600; color: var(--color-navy-800); }
+.freight-line__field label small { font-weight: 400; color: var(--color-text-muted); }
+.freight__add { margin-top: var(--space-3); }
+
+/* Résultat */
+.freight-result {
+  position: sticky; top: calc(var(--header-height, 80px) + var(--space-4));
+  padding: var(--space-5); border-radius: var(--radius-lg);
+  background-color: var(--color-navy-900); color: var(--color-slate-300);
+}
+.freight-result__title { font-size: var(--fs-lg); color: var(--color-white); }
+.freight-totals { margin-top: var(--space-3); }
+.freight-totals div { display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); font-size: var(--fs-sm); }
+.freight-totals dd { font-weight: 700; color: var(--color-white); font-variant-numeric: tabular-nums; text-align: right; }
+.freight-estimate { margin-top: var(--space-4); padding: var(--space-4); background-color: rgba(255, 255, 255, 0.06); border-radius: var(--radius); }
+.freight-estimate__label { font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-slate-400); }
+.freight-estimate__basis { font-size: var(--fs-xl); font-weight: 700; color: var(--color-white); font-variant-numeric: tabular-nums; }
+.freight-estimate__why { margin: 2px 0 var(--space-3); font-size: var(--fs-xs); color: var(--color-slate-400); }
+.freight-estimate__cost { font-size: var(--fs-2xl); font-weight: 700; line-height: 1.2; color: var(--color-accent-on-dark); font-variant-numeric: tabular-nums; }
+.freight-estimate__rate { font-size: var(--fs-xs); color: var(--color-slate-400); }
+.freight-estimate__none { font-size: var(--fs-sm); color: var(--color-white); }
+.freight-result__cta { width: 100%; justify-content: center; margin-top: var(--space-4); }
+.freight-result__note { margin-top: var(--space-3); font-size: var(--fs-xs); line-height: 1.5; color: var(--color-slate-400); }
+
+/* Explications */
+.freight-help { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5); margin-top: var(--space-8); }
+.freight-help h2 { font-size: var(--fs-base); color: var(--color-navy-900); }
+.freight-help p { margin-top: var(--space-2); font-size: var(--fs-sm); color: var(--color-text-muted); }
+.freight-links { margin-top: var(--space-6); font-size: var(--fs-sm); }
+.freight-links .icon { vertical-align: -2px; margin-right: var(--space-1); }
+.freight-links a, .freight-noscript a { color: var(--color-accent-dark); font-weight: 600; }
+.freight-noscript { padding: var(--space-4); background-color: var(--color-slate-100); border-radius: var(--radius); }
+
+@media (max-width: 991.98px) {
+  .freight { grid-template-columns: 1fr; }
+  .freight-result { position: static; }
+  .freight-help { grid-template-columns: 1fr; gap: var(--space-4); }
+}
+@media (max-width: 575.98px) {
+  .freight-modes { grid-template-columns: 1fr; }
+  .freight-line { padding: var(--space-3); }
+  .freight-line__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .freight-line__weight { grid-column: span 2; }
 }

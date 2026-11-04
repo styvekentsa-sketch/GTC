@@ -14,6 +14,7 @@
 require_once __DIR__ . '/dashboard.php';
 require_once __DIR__ . '/settings.php';
 require_once __DIR__ . '/printers.php';
+require_once __DIR__ . '/commercial_invoices.php';   // amount_in_words() : montant en lettres des reçus
 
 const PRINT_LOGO_FALLBACK = __DIR__ . '/../assets/img/logo-recu-print.jpg';   // logo des reçus de caisse
 
@@ -31,6 +32,9 @@ function print_invoice_data(array $inv, array $user): array
         'Mode de paiement'        => PAYMENT_METHODS[$inv['payment_method']] ?? $inv['payment_method'],
         'Motif'                   => invoice_reason_text($inv),
     ];
+    if ($code = invoice_shipment_code($inv)) {
+        $rows['Dossier de suivi'] = $code;
+    }
 
     return [
         'company' => $company['company_name'],
@@ -47,11 +51,31 @@ function print_invoice_data(array $inv, array $user): array
         'phone'   => (string) $inv['client_phone'],
         'rows'    => $rows,
         'total'   => money($inv['amount_received'], $inv['target_currency']),
-        'legal'   => "Ce document atteste la transaction réalisée à la date indiquée au taux confirmé lors de l'opération. "
+        'total_label' => invoice_total_label($inv),
+        // Montant en lettres dans la devise du montant final uniquement (FCFA → « francs CFA », jamais d'euros)
+        'words'   => amount_in_words((float) $inv['amount_received'], (string) $inv['target_currency']),
+        'legal'   => invoice_legal_sentence($inv) . ' '
                    . $company['company_name'] . ' — ' . $company['company_address'] . '.'
                    . ($legal ? ' ' . implode(' · ', $legal) . '.' : ''),
         'printed' => 'Imprimé le ' . date('d/m/Y à H:i') . ' par ' . $user['name'],
     ];
+}
+
+/** Première phrase du pied de page : transaction au taux confirmé, ou paiement reçu (fret / transit). */
+function invoice_legal_sentence(array $inv): string
+{
+    return invoice_is_payment($inv)
+        ? 'Ce document atteste le paiement reçu à la date indiquée.'
+        : "Ce document atteste la transaction réalisée à la date indiquée au taux confirmé lors de l'opération.";
+}
+
+/** Code du dossier de suivi rattaché au reçu (paiement de fret / transit), sinon ''. */
+function invoice_shipment_code(array $inv): string
+{
+    if (empty($inv['shipment_id'])) {
+        return '';
+    }
+    return (string) (db_value('SELECT tracking_number FROM shipments WHERE id = ?', [(int) $inv['shipment_id']]) ?: '');
 }
 
 /** Exemplaires à imprimer selon le format : double souche (A4, ticket) ou exemplaire unique (A5). */
@@ -417,8 +441,17 @@ function pdf_draw_receipt(GtcPdf $pdf, array $d, ?array $logo, float $x, float $
     $pdf->rect($x, $y + 0.6, $w, 8.6, 0.92);
     $pdf->line($x, $y + 0.6, $x + $w, $y + 0.6, 0.6);
     $pdf->line($x, $y + 9.2, $x + $w, $y + 9.2, 0.6);
-    $pdf->text($x + 3, $y + 6.4, 'Montant net à remettre', 10.5, true);
+    $pdf->text($x + 3, $y + 6.4, $d['total_label'] ?? 'Montant net à remettre', 10.5, true);
     $pdf->text($x + $w - 3, $y + 6.4, $d['total'], 11, true, 'right');
+
+    // Montant en lettres (devise du montant final)
+    if (!empty($d['words'])) {
+        $lines = $pdf->wrap('Arrêté à la somme de : ' . $d['words'] . '.', 8, false, $w - 6, 2);
+        foreach ($lines as $i => $line) {
+            $pdf->text($x + 3, $y + 13.2 + $i * 3.6, $line, 8, false, 'left', 0.2);
+        }
+        $y += 3 + count($lines) * 3.6;
+    }
 
     // Signatures
     $y += 13.5;
@@ -545,8 +578,12 @@ function invoice_escpos(array $d): string
             $t .= $enc($kv($k, $v));
         }
         $t .= str_repeat('=', $cols) . "\n";
-        $t .= $boldOn . $tallOn . $enc($kv('NET A REMETTRE', $d['total'])) . $normal . $boldOff;
-        $t .= str_repeat('=', $cols) . "\n\n";
+        $t .= $boldOn . $tallOn . $enc($kv(($d['total_label'] ?? '') === 'Montant réglé' ? 'MONTANT REGLE' : 'NET A REMETTRE', $d['total'])) . $normal . $boldOff;
+        $t .= str_repeat('=', $cols) . "\n";
+        foreach ($wrapU('Arrêté à la somme de : ' . ($d['words'] ?? '') . '.', $cols) as $l) {
+            $t .= $enc($l) . "\n";
+        }
+        $t .= "\n";
         $t .= $enc('Signature du client :') . "\n\n\n" . str_repeat('.', 30) . "\n\n";
         $t .= $enc('Cachet / signature agent :') . "\n\n\n\n" . str_repeat('.', 30) . "\n\n";
         $t .= $center . $boldOn;

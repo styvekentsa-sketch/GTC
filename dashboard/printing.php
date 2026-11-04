@@ -178,12 +178,9 @@ dash_header('Impression réseau', 'printing');
                                 </td>
                                 <td class="actions">
                                     <?php if (is_admin() || (int) $j['requested_by'] === (int) $user['id']): ?>
-                                        <form method="post" class="inline-form">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="op" value="job_delete">
-                                            <input type="hidden" name="id" value="<?= (int) $j['id'] ?>">
-                                            <button type="submit" class="icon-btn icon-btn--danger" title="Supprimer" data-confirm="Supprimer ce travail d'impression ?"><?= icon('trash') ?></button>
-                                        </form>
+                                        <?= action_menu([
+                                            ['post', 'Supprimer', 'trash', ['op' => 'job_delete', 'id' => (int) $j['id']], 'Supprimer ce travail d\'impression ?', 'danger' => true],
+                                        ], 'Actions du travail d\'impression') ?>
                                     <?php endif; ?>
                                 </td>
                             </tr>

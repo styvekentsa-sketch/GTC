@@ -7,7 +7,7 @@
  *
  * Calcul (reçus PAYÉS de la journée, même date que la liste des reçus : création, à défaut émission) :
  *   entrées  = montants remis par les clients (amount_given, devise source, commission comprise)
- *   sorties  = montants versés aux clients (amount_received, devise cible)
+ *   sorties  = montants versés aux clients (amount_received, devise cible) ; aucune pour un paiement de fret / transit
  *   net      = entrées − sorties, par devise ; commissions par devise source
  * Les reçus en attente, brouillons et annulés sont listés à part, hors totaux.
  *
@@ -56,8 +56,11 @@ function closing_compute(string $date, string $next): array
         $currencies[$src]['in']   += (float) $r['amount_given'];
         $currencies[$src]['fees'] += (float) $r['fees'];
         $currencies[$src]['count_in']++;
-        $currencies[$dst]['out']  += (float) $r['amount_received'];
-        $currencies[$dst]['count_out']++;
+        // Paiement de fret / transit : l'argent reste à l'agence, rien n'est remis au client (pas de sortie)
+        if (!invoice_is_payment($r)) {
+            $currencies[$dst]['out']  += (float) $r['amount_received'];
+            $currencies[$dst]['count_out']++;
+        }
         $method = (string) ($r['payment_method'] ?: 'Non précisé');
         $methods[$method][$src] ??= [0, 0.0];
         $methods[$method][$src][0]++;

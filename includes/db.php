@@ -230,6 +230,18 @@ function db_ensure_schema(PDO $pdo): void
         // Clôtures de caisse journalières validées (dashboard/cash-closing.php)
         db_install_cash_closings($pdo);
     }
+    if (!db_table_exists($pdo, 'shipments')) {
+        // Suivi des colis et conteneurs (dashboard/shipments.php, page publique suivi.php, includes/shipments.php)
+        db_install_shipments($pdo);
+    }
+    if (!db_column_exists($pdo, 'shipments', 'pickup_location')) {
+        // Détails logistiques (poids, volume, colis, lieu de retrait) et libellé libre des étapes
+        db_upgrade_shipments_details($pdo);
+    }
+    if (!db_column_exists($pdo, 'invoices', 'shipment_id')) {
+        // Reçu de paiement « Fret / Transit » rattaché à un dossier de suivi (facultatif)
+        $pdo->exec('ALTER TABLE invoices ADD COLUMN shipment_id ' . db_types()['fk'] . ' NULL');
+    }
     // Changement de mot de passe plus jamais imposé à la connexion : annule le statut « provisoire »
     // des comptes existants (une seule fois : plus aucun code ne remet ce champ à 1)
     if ($pdo->query('SELECT 1 FROM users WHERE must_change_password <> 0 LIMIT 1')->fetchColumn()) {
@@ -342,6 +354,10 @@ const DEFAULT_SETTINGS = [
     'printer_scan_subnet' => '',   // sous-réseau analysé pour détecter les imprimantes (ex. 192.168.1.0/24)
     'rates_source'        => 'market',   // 'market' : cours du marché automatiques · 'manual' : taux saisis
     'market_margin_percent' => '0',      // marge ajoutée aux cours du marché (%)
+    // Calculateur de fret du site (calculateur-cbm.php) : tarifs indicatifs en FCFA ; vide = pas d'estimation affichée
+    'freight_sea_rate'    => '',   // fret maritime, par m³ (CBM) taxable
+    'freight_air_rate'    => '',   // fret aérien, par kg taxable
+    'freight_sea_min_cbm' => '1',  // volume minimum facturé en groupage maritime (m³)
 ];
 
 function db_install_settings(PDO $pdo): void
@@ -780,6 +796,82 @@ function db_install_cash_closings(PDO $pdo): void
         closed_by_name VARCHAR(100) NULL,
         closed_at {$dt} NOT NULL
     ){$suffix}");
+}
+
+/**
+ * Suivi des colis et conteneurs (transit et fret international) :
+ *   shipments        un dossier par colis / conteneur : code de suivi GTC (aléatoire, communiqué au client),
+ *                    numéro du transporteur (B/L, LTA, n° de conteneur), client, marchandise, trajet, statut actuel ;
+ *   shipment_events  étapes successives (statut, lieu, date, note visible par le client) : frise de la page publique ;
+ *   tracking_lookups recherches de la page publique (adresse IP, date) : limite les essais en rafale, purgée après 1 jour.
+ * Statuts et règles : includes/shipments.php.
+ */
+function db_install_shipments(PDO $pdo): void
+{
+    ['pk' => $pk, 'fk' => $fk, 'dt' => $dt, 'suffix' => $suffix] = db_types();
+    $pdo->exec("CREATE TABLE IF NOT EXISTS shipments (
+        id {$pk},
+        tracking_number VARCHAR(20) NOT NULL UNIQUE,
+        carrier_reference VARCHAR(60) NULL,
+        client_name VARCHAR(150) NOT NULL,
+        client_phone VARCHAR(40) NULL,
+        description VARCHAR(500) NOT NULL,
+        transport_mode VARCHAR(10) NOT NULL DEFAULT 'sea',
+        origin VARCHAR(120) NULL,
+        destination VARCHAR(120) NULL,
+        eta DATE NULL,
+        status VARCHAR(20) NOT NULL,
+        created_by {$fk} NULL,
+        created_by_name VARCHAR(100) NULL,
+        created_at {$dt} NOT NULL,
+        updated_at {$dt} NOT NULL
+    ){$suffix}");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS shipment_events (
+        id {$pk},
+        shipment_id {$fk} NOT NULL,
+        status VARCHAR(20) NOT NULL,
+        location VARCHAR(120) NULL,
+        note VARCHAR(500) NULL,
+        event_date {$dt} NOT NULL,
+        created_by {$fk} NULL,
+        created_by_name VARCHAR(100) NULL,
+        created_at {$dt} NOT NULL
+    ){$suffix}");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS tracking_lookups (
+        id {$pk},
+        ip VARCHAR(45) NOT NULL,
+        created_at {$dt} NOT NULL
+    ){$suffix}");
+    foreach (['CREATE INDEX idx_shipments_status ON shipments (status)',
+              'CREATE INDEX idx_shipments_carrier ON shipments (carrier_reference)',
+              'CREATE INDEX idx_shipment_events_shipment ON shipment_events (shipment_id, event_date)',
+              'CREATE INDEX idx_tracking_lookups ON tracking_lookups (ip, created_at)'] as $sql) {
+        $pdo->exec($sql);
+    }
+}
+
+/**
+ * Détails logistiques affichés au client : poids (kg), volume (m³ / CBM), nombre et nature des colis, lieu de retrait
+ * à Douala ; libellé libre de chaque étape (« Transbordement à Algésiras »…). Colonnes facultatives : les dossiers
+ * existants restent valides.
+ */
+function db_upgrade_shipments_details(PDO $pdo): void
+{
+    $mysql = DB_DRIVER === 'mysql';
+    foreach ([
+        'weight_kg'       => $mysql ? 'DECIMAL(12,2) NULL' : 'NUMERIC NULL',
+        'volume_cbm'      => $mysql ? 'DECIMAL(10,3) NULL' : 'NUMERIC NULL',
+        'packages'        => 'INT NULL',
+        'package_type'    => 'VARCHAR(40) NULL',
+        'pickup_location' => 'VARCHAR(200) NULL',
+    ] as $column => $type) {
+        if (!db_column_exists($pdo, 'shipments', $column)) {
+            $pdo->exec("ALTER TABLE shipments ADD COLUMN {$column} {$type}");
+        }
+    }
+    if (!db_column_exists($pdo, 'shipment_events', 'label')) {
+        $pdo->exec('ALTER TABLE shipment_events ADD COLUMN label VARCHAR(150) NULL');
+    }
 }
 
 /** La table invoices limite-t-elle encore le type d'opération / mode de paiement (ENUM ou CHECK d'origine) ? */

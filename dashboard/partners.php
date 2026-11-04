@@ -144,14 +144,11 @@ dash_header('Partenaires', 'partners');
                             <td data-label="Site web"><?= $p['website'] ? '<a href="' . e($p['website']) . '" target="_blank" rel="noopener">' . e(preg_replace('#^https?://(www\.)?#', '', $p['website'])) . '</a>' : '<small class="cell-sub">—</small>' ?></td>
                             <td data-label="Ordre" class="num"><?= (int) $p['display_order'] ?></td>
                             <td class="actions">
-                                <a href="partners.php?edit=<?= (int) $p['id'] ?>" class="icon-btn" title="Modifier" aria-label="Modifier <?= e($p['name']) ?>"><?= icon('edit') ?></a>
-                                <form method="post" class="inline-form">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="op" value="delete">
-                                    <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
-                                    <button type="submit" class="icon-btn icon-btn--danger" title="Supprimer" aria-label="Supprimer <?= e($p['name']) ?>"
-                                            data-confirm="Supprimer le partenaire « <?= e($p['name']) ?> » ? Son logo sera supprimé."><?= icon('trash') ?></button>
-                                </form>
+                                <?= action_menu([
+                                    ['link', 'Modifier', 'partners.php?edit=' . (int) $p['id'], 'edit'],
+                                    ['sep'],
+                                    ['post', 'Supprimer', 'trash', ['op' => 'delete', 'id' => (int) $p['id']], 'Supprimer le partenaire « ' . $p['name'] . ' » ? Son logo sera supprimé.', 'danger' => true],
+                                ], 'Actions du partenaire ' . $p['name']) ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>

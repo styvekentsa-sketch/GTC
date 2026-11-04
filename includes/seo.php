@@ -9,6 +9,8 @@
  *   WebSite (accueil), BreadcrumbList (pages secondaires).
  */
 
+require_once __DIR__ . '/dev-router.php';   // dev_docroot_is_dashboard() : serveur de développement lancé depuis dashboard\
+
 const SEO_ROOT = __DIR__ . '/..';
 
 /** Horaires d'ouverture (une seule source pour les données structurées). */
@@ -53,6 +55,10 @@ function site_root(): string
     if (defined('GTC_BASE_PATH')) {
         $forced = trim((string) GTC_BASE_PATH, '/');
         return $root = $forced === '' ? '/' : '/' . $forced . '/';
+    }
+    // Serveur de développement lancé depuis dashboard\ : fichiers du site servis sous /__site/ (includes/dev-router.php)
+    if (dev_docroot_is_dashboard()) {
+        return $root = DEV_SITE_PREFIX;
     }
     // Ex. : fichier …/Site GTC/dashboard/index.php exécuté sous l'adresse /gtc/dashboard/index.php → racine « /gtc/ »
     $base    = '';

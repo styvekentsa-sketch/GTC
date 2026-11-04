@@ -14,7 +14,8 @@
  * Chaque fichier est relu après écriture : une sauvegarde incomplète est supprimée et signalée (code de sortie 1).
  * Seuls les fichiers gtc-auto-* sont purgés ; rien d'autre dans le dossier n'est jamais supprimé.
  *
- * Restauration : décompresser le .gz, puis importer le .sql (sqlite3 data/gtc.sqlite < fichier.sql, ou phpMyAdmin).
+ * Restauration : Dashboard → Sauvegardes (dashboard/backups.php), ou à la main : décompresser le .gz puis importer le .sql
+ * (sqlite3 data/gtc.sqlite < fichier.sql, ou phpMyAdmin).
  * Le dossier tools/ est inaccessible depuis le web (.htaccess).
  */
 
@@ -39,52 +40,19 @@ if ($dir === null) {
 
 if (in_array('--list', $argv, true)) {
     $log("Dossier : {$dir}");
-    foreach (backup_list($dir) as $b) {
+    foreach (backup_list($dir, array_keys(BACKUP_KINDS)) as $b) {   // tout l'historique : automatiques, manuelles, sécurité
         printf("  %s  %8s Ko  %s\n", date('d/m/Y H:i', $b['time']), number_format($b['size'] / 1024, 0, ',', ' '), basename($b['path']));
     }
     exit(0);
 }
 
-// Une seule sauvegarde à la fois (tâche relancée alors que la précédente tourne encore)
-$lock = fopen($dir . '/.backup.lock', 'c');
-if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
-    $log('Sauvegarde déjà en cours : rien à faire.');
-    exit(0);
-}
-
-/* ---------- 1. Sauvegarde compressée ---------- */
-$name = BACKUP_AUTO_PREFIX . date('Ymd-His') . '.sql.gz';
-$tmp  = $dir . '/.' . $name . '.part';   // renommé seulement une fois complet et vérifié
-$path = $dir . '/' . $name;
+/* ---------- 1 et 2. Sauvegarde compressée, relue et vérifiée (includes/backup.php → backup_create()) ---------- */
+// Une seule sauvegarde à la fois : si la précédente tourne encore (ou une sauvegarde lancée depuis le Dashboard),
+// backup_create() refuse et la tâche s'arrête en erreur pour être relancée la nuit suivante.
 try {
-    $gz = gzopen($tmp, 'wb6');
-    if (!$gz) {
-        throw new RuntimeException("écriture impossible dans {$dir}");
-    }
-    backup_dump(function (string $chunk) use ($gz): void {
-        if (gzwrite($gz, $chunk) === false) {
-            throw new RuntimeException('écriture interrompue (disque plein ?)');
-        }
-    }, 'sauvegarde automatique');
-    gzclose($gz);
-
-    // 2. Vérification : le fichier se décompresse entièrement et se termine par la fin de sauvegarde attendue
-    $in = gzopen($tmp, 'rb');
-    $tail = '';
-    while (!gzeof($in)) {
-        $tail = substr($tail . gzread($in, 65536), -200);
-    }
-    gzclose($in);
-    if (!str_contains($tail, DB_DRIVER === 'mysql' ? 'SET FOREIGN_KEY_CHECKS = 1;' : 'PRAGMA foreign_keys = ON;')) {
-        throw new RuntimeException('fichier incomplet après relecture');
-    }
-    if (!rename($tmp, $path)) {
-        throw new RuntimeException('impossible de finaliser le fichier');
-    }
-    @chmod($path, 0600);
+    $path = backup_create(BACKUP_AUTO_PREFIX, 'sauvegarde automatique');
     $log(sprintf('OK : %s (%s Ko)', $path, number_format(filesize($path) / 1024, 0, ',', ' ')));
 } catch (Throwable $e) {
-    @unlink($tmp);
     $log('ÉCHEC : ' . $e->getMessage());
     error_log('[GTC] Sauvegarde automatique : ' . $e->getMessage());
     exit(1);
@@ -102,6 +70,4 @@ foreach (array_slice(backup_list($dir), 1) as $b) {
 $log(sprintf('Historique : %d sauvegarde(s) conservée(s), %d supprimée(s) (plus de %d jours).',
     count(backup_list($dir)), $removed, GTC_BACKUP_KEEP_DAYS));
 
-flock($lock, LOCK_UN);
-fclose($lock);
 exit(0);

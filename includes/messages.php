@@ -141,17 +141,84 @@ function message_thread_row(array $t, string $back): string
         <td data-label="Dernier reçu le"><?= e(fdate($m['created_at'], true)) ?></td>
         <td data-label="Statut"><?= badge($status, MESSAGE_STATUSES) ?></td>
         <td class="actions mail-table__actions">
-            <a href="messages.php?id=<?= $mid ?>" class="icon-btn" title="Ouvrir la conversation"><?= icon('eye') ?><span class="visually-hidden">Ouvrir</span></a>
-            <?php if ($t['unread'] > 0): ?>
-                <?= message_action($mid, 'thread_read', 'Marquer la conversation comme lue', 'check', $back, 'icon-btn') ?>
-            <?php endif; ?>
-            <?= $m['status'] === 'archived'
-                ? message_action($mid, 'thread_unarchive', 'Désarchiver la conversation', 'inbox', $back, 'icon-btn')
-                : message_action($mid, 'thread_archive', 'Archiver la conversation', 'archive', $back, 'icon-btn') ?>
-            <?= message_action($mid, 'thread_delete', 'Supprimer la conversation', 'trash', $back, 'icon-btn icon-btn--danger',
-                'Supprimer définitivement toute la conversation avec ' . $m['sender_name'] . ' (archives comprises) ?') ?>
+            <?php $post = fn (string $op) => ['op' => $op, 'id' => $mid, 'back' => $back]; ?>
+            <?= action_menu(array_filter([
+                ['link', 'Ouvrir la conversation', 'messages.php?id=' . $mid, 'eye'],
+                $t['unread'] > 0 ? ['post', 'Marquer comme lue', 'check', $post('thread_read'), null, 'action' => 'messages.php'] : [],
+                $m['status'] === 'archived'
+                    ? ['post', 'Désarchiver la conversation', 'inbox', $post('thread_unarchive'), null, 'action' => 'messages.php']
+                    : ['post', 'Archiver la conversation', 'archive', $post('thread_archive'), null, 'action' => 'messages.php'],
+                ['sep'],
+                ['post', 'Supprimer la conversation', 'trash', $post('thread_delete'),
+                    'Supprimer définitivement toute la conversation avec ' . $m['sender_name'] . ' (archives comprises) ?', 'danger' => true, 'action' => 'messages.php'],
+            ]), 'Actions de la conversation avec ' . $m['sender_name']) ?>
         </td>
     </tr>
+    <?php
+    return (string) ob_get_clean();
+}
+
+/**
+ * Aperçu « Messages du site » de l'accueil (dashboard/index.php) : les 5 derniers non lus.
+ * Renvoyé aussi par messages-api.php (panel=1) pour être remplacé en direct.
+ */
+function messages_panel_html(): string
+{
+    $messages = db_all("SELECT * FROM messages WHERE status = 'unread' ORDER BY id DESC LIMIT 5");
+    if (!$messages) {
+        return '<p class="empty">Aucun nouveau message.</p>';
+    }
+    ob_start(); ?>
+    <ul class="messages">
+        <?php foreach ($messages as $m): ?>
+            <li class="message message--unread" data-message-id="<?= (int) $m['id'] ?>">
+                <a href="messages.php?id=<?= (int) $m['id'] ?>" class="message__head">
+                    <span class="message__from"><strong><?= e($m['sender_name']) ?></strong> — <?= e($m['subject']) ?></span>
+                    <small class="message__date"><?= e(fdate($m['created_at'], true)) ?></small>
+                </a>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+    <?php
+    return (string) ob_get_clean();
+}
+
+/**
+ * Un message dans la vue d'une conversation (messages.php?id=…), aussi renvoyé par messages-api.php (thread=…)
+ * pour les messages arrivés pendant que la conversation est ouverte.
+ * $currentId : message ouvert (mis en évidence) ; $threadName : nom affiché de la conversation (« signé … » s'il
+ * diffère) ; $isNew : pastille « Nouveau ».
+ */
+function message_thread_item(array $m, int $currentId, string $threadName, bool $isNew, string $back): string
+{
+    $mid = (int) $m['id'];
+    ob_start(); ?>
+    <li class="thread__item<?= $mid === $currentId ? ' is-current' : '' ?><?= $m['status'] === 'archived' ? ' is-archived' : '' ?>" id="m-<?= $mid ?>" data-message-id="<?= $mid ?>">
+        <header class="thread__head">
+            <div>
+                <h3 class="thread__subject"><?= e($m['subject']) ?></h3>
+                <p class="cell-sub">
+                    Reçu le <?= e(fdate($m['created_at'], true)) ?>
+                    <?php if ($m['sender_name'] !== $threadName): ?>· signé « <?= e($m['sender_name']) ?> »<?php endif; ?>
+                </p>
+            </div>
+            <span class="thread__badges">
+                <?php if ($isNew): ?><span class="badge badge--info">Nouveau</span><?php endif; ?>
+                <?= badge($m['status'], MESSAGE_STATUSES) ?>
+            </span>
+        </header>
+        <div class="mail-view__body"><?= nl2br(e($m['message'])) ?></div>
+        <footer class="thread__actions">
+            <?php if (!in_array($m['status'], ['replied', 'archived'], true)): ?>
+                <?= message_action($mid, 'replied', 'Répondu', 'check', $back) ?>
+            <?php endif; ?>
+            <?= $m['status'] === 'archived'
+                ? message_action($mid, 'unarchive', 'Désarchiver', 'inbox', $back)
+                : message_action($mid, 'archive', 'Archiver ce message', 'archive', $back) ?>
+            <?= message_action($mid, 'delete', 'Supprimer', 'trash', $back, 'btn btn--ghost btn--sm',
+                'Supprimer définitivement ce message de ' . $m['sender_name'] . ' ?') ?>
+        </footer>
+    </li>
     <?php
     return (string) ob_get_clean();
 }

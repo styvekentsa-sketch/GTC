@@ -183,36 +183,11 @@ if ($id) {
             </dd></div>
         </dl>
 
-        <ol class="thread">
-            <?php foreach ($messages as $m): ?>
-                <?php $mid = (int) $m['id']; ?>
-                <li class="thread__item<?= $mid === $id ? ' is-current' : '' ?><?= $m['status'] === 'archived' ? ' is-archived' : '' ?>" id="m-<?= $mid ?>">
-                    <header class="thread__head">
-                        <div>
-                            <h3 class="thread__subject"><?= e($m['subject']) ?></h3>
-                            <p class="cell-sub">
-                                Reçu le <?= e(fdate($m['created_at'], true)) ?>
-                                <?php if ($m['sender_name'] !== $last['sender_name']): ?>· signé « <?= e($m['sender_name']) ?> »<?php endif; ?>
-                            </p>
-                        </div>
-                        <span class="thread__badges">
-                            <?php if (in_array($m['id'], $fresh, false)): ?><span class="badge badge--info">Nouveau</span><?php endif; ?>
-                            <?= badge($m['status'], MESSAGE_STATUSES) ?>
-                        </span>
-                    </header>
-                    <div class="mail-view__body"><?= nl2br(e($m['message'])) ?></div>
-                    <footer class="thread__actions">
-                        <?php if (!in_array($m['status'], ['replied', 'archived'], true)): ?>
-                            <?= message_action($mid, 'replied', 'Répondu', 'check', $back) ?>
-                        <?php endif; ?>
-                        <?= $m['status'] === 'archived'
-                            ? message_action($mid, 'unarchive', 'Désarchiver', 'inbox', $back)
-                            : message_action($mid, 'archive', 'Archiver ce message', 'archive', $back) ?>
-                        <?= message_action($mid, 'delete', 'Supprimer', 'trash', $back, 'btn btn--ghost btn--sm',
-                            'Supprimer définitivement ce message de ' . $m['sender_name'] . ' ?') ?>
-                    </footer>
-                </li>
-            <?php endforeach; ?>
+        <!-- Messages arrivés pendant la lecture : ajoutés en fin de liste par assets/js/messages-live.js -->
+        <ol class="thread" data-thread-live="<?= $id ?>">
+            <?php foreach ($messages as $m) {
+                echo message_thread_item($m, $id, $last['sender_name'], in_array($m['id'], $fresh, false), $back);
+            } ?>
         </ol>
 
         <footer class="mail-view__actions">

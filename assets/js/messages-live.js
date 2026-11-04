@@ -2,11 +2,13 @@
  * Global Trading Corporation — Actualisation automatique de la messagerie (Dashboard)
  *
  * Chargé sur toutes les pages du Dashboard pour les comptes ayant accès aux messages
- * (includes/dashboard.php → dash_footer). Interroge dashboard/messages-api.php toutes les 8 secondes :
+ * (includes/dashboard.php → dash_footer). Interroge dashboard/messages-api.php toutes les 6 secondes :
  *   - pastille « Messages » du menu, titre de l'onglet « (3) … », pastille du panneau de l'accueil ;
+ *   - accueil : liste « Messages du site » (5 derniers non lus) remplacée quand elle change ;
  *   - page Messages (1re page de « Tous » / « Non lus », sans recherche) : la conversation qui reçoit un
  *     nouveau message remonte en tête de liste sans recharger (une seule ligne par expéditeur),
  *     compteurs des filtres, bouton « Tout marquer comme lu » ;
+ *   - conversation ouverte (messages.php?id=…) : les messages du même expéditeur s'ajoutent en fin de fil ;
  *   - notification discrète « Nouveau message de … » sur les autres pages.
  *
  * Léger : pause quand l'onglet est masqué (reprise immédiate au retour), espacement progressif en cas
@@ -19,7 +21,7 @@
   var api = body.getAttribute('data-messages-api');
   if (!api || !window.fetch) return;
 
-  var INTERVAL = 8000;          // délai normal entre deux vérifications (ms)
+  var INTERVAL = 6000;         // délai normal entre deux vérifications (ms)
   var MAX_INTERVAL = 60000;     // délai maximal après des erreurs répétées
   var lastId = parseInt(body.getAttribute('data-messages-last') || '0', 10) || 0;
   var delay = INTERVAL;
@@ -31,6 +33,15 @@
   var live = document.querySelector('[data-messages-live]');         // liste de la page Messages
   var list = live && live.querySelector('[data-messages-list]');
   var onUnreadFilter = /[?&]f=unread\b/.test(location.search);
+  var panel = document.querySelector('[data-messages-panel]');       // aperçu de l'accueil
+  var thread = document.querySelector('[data-thread-live]');         // conversation ouverte
+
+  // Fragment HTML renvoyé par le serveur (déjà échappé côté PHP) → premier élément
+  var toElement = function (html) {
+    var tpl = document.createElement('template');
+    tpl.innerHTML = html.trim();
+    return tpl.content.firstElementChild;
+  };
 
   /* ---------- Mise à jour de l'affichage ---------- */
 
@@ -106,6 +117,32 @@
     return added;
   };
 
+  // Aperçu de l'accueil : remplacé seulement s'il a changé ; les messages qui n'y figuraient pas sont mis en évidence
+  var setPanel = function (html) {
+    if (!panel || typeof html !== 'string' || panel.innerHTML.trim() === html.trim()) return;
+    var known = {};
+    panel.querySelectorAll('[data-message-id]').forEach(function (li) { known[li.getAttribute('data-message-id')] = true; });
+    panel.innerHTML = html;
+    panel.querySelectorAll('[data-message-id]').forEach(function (li) {
+      if (!known[li.getAttribute('data-message-id')]) li.classList.add('is-new');
+    });
+  };
+
+  // Conversation ouverte : nouveaux messages ajoutés en fin de fil (sans doublon)
+  var addThreadItems = function (items) {
+    if (!thread || !items || !items.length) return 0;
+    var added = 0;
+    items.forEach(function (item) {
+      if (thread.querySelector('[data-message-id="' + item.id + '"]')) return;
+      var li = toElement(item.html);
+      if (!li) return;
+      li.classList.add('is-new');
+      thread.appendChild(li);
+      added++;
+    });
+    return added;
+  };
+
   /* ---------- Notification discrète ---------- */
 
   var toastBox = null;
@@ -142,7 +179,10 @@
   var poll = function () {
     if (busy || stopped) return;
     busy = true;
-    var url = api + '?since=' + lastId + (list ? '&rows=1&back=' + encodeURIComponent(live.getAttribute('data-back') || 'messages.php') : '');
+    var url = api + '?since=' + lastId
+      + (list ? '&rows=1&back=' + encodeURIComponent(live.getAttribute('data-back') || 'messages.php') : '')
+      + (panel ? '&panel=1' : '')
+      + (thread ? '&thread=' + encodeURIComponent(thread.getAttribute('data-thread-live')) : '');
     fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' }, cache: 'no-store' })
       .then(function (r) {
         if (r.status === 401 || r.status === 403) { stopped = true; return null; }   // session expirée / droits retirés
@@ -156,8 +196,9 @@
         lastId = Math.max(lastId, data.latest_id || 0);
         setUnread(data.unread || 0);
         setCounts(data.counts);
-        var added = addRows(data.rows);
-        // Sur la liste, les nouveaux messages apparaissent directement ; ailleurs, une notification les signale
+        setPanel(data.panel);
+        var added = addRows(data.rows) + addThreadItems(data.thread_items);
+        // Sur la liste ou dans la conversation, les nouveaux messages apparaissent directement ; ailleurs, une notification les signale
         if (!added) notify(fresh.filter(function (m) { return m.status === 'unread'; }));
       })
       .catch(function () { delay = Math.min(delay * 2, MAX_INTERVAL); })

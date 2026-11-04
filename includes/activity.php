@@ -30,6 +30,7 @@ const ACTIVITY_ENTITIES = [
     'invoice'    => 'Reçu de caisse',
     'commercial' => 'Facture / devis',
     'courrier'   => 'Courrier',
+    'shipment'   => 'Dossier de suivi',
     'message'    => 'Message du site',
     'user'       => 'Compte utilisateur',
     'team'       => 'Membre de l\'équipe',

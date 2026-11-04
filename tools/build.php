@@ -123,6 +123,8 @@ printf("  Total : %s → %s octets (avant compression GZIP)\n\n", number_format(
 $pages = [
     ''                                    => 'index.php',
     'services.php'                        => 'services.php',
+    'suivi.php'                           => 'suivi.php',
+    'calculateur-cbm.php'                 => 'calculateur-cbm.php',
     'a-propos.php'                        => 'a-propos.php',
     'contact.php'                         => 'contact.php',
     'legal/mentions-legales.php'          => 'legal/mentions-legales.php',

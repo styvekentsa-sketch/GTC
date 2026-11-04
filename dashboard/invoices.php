@@ -17,6 +17,7 @@ require_once __DIR__ . '/../includes/dashboard.php';
 require_once __DIR__ . '/../includes/settings.php';
 require_once __DIR__ . '/../includes/printers.php';
 require_once __DIR__ . '/../includes/csv_export.php';
+require_once __DIR__ . '/../includes/shipments.php';   // reçus « Fret / Transit » rattachés à un dossier de suivi
 
 $user   = require_login();   // exige une session valide ($_SESSION['logged_in'] === true)
 require_roles(OPERATION_ROLES);   // pas d'accès pour le rôle Secrétaire / Accueil
@@ -58,8 +59,30 @@ function invoice_input(): array
         'payment_method'  => post('payment_method', 'Espèces'),
         'transaction_reason' => post('transaction_reason'),
         'printer_id'      => (int) post('printer_id'),
+        'shipment_code'   => post('shipment_code'),
+        'shipment_id'     => null,
     ];
     $e = [];
+
+    // Paiement de fret / transit : aucune conversion (même devise, taux 1, sans commission), dossier de suivi facultatif
+    if (invoice_is_payment($d)) {
+        $d['target_currency'] = $d['source_currency'];
+        $d['exchange_rate']   = '1';
+        $d['rate_direction']  = 'multiply';
+        $d['fees']            = '0';
+        if ($d['shipment_code'] !== '') {
+            $shipment = db_one('SELECT id, tracking_number FROM shipments WHERE ' . shipment_sql_normalized('tracking_number') . ' = ?',
+                [shipment_normalize($d['shipment_code'])]);
+            if ($shipment) {
+                $d['shipment_id']   = (int) $shipment['id'];
+                $d['shipment_code'] = $shipment['tracking_number'];
+            } else {
+                $e['shipment_code'] = 'Aucun dossier de suivi ne porte ce code.';
+            }
+        }
+    } else {
+        $d['shipment_code'] = '';
+    }
 
     if (mb_strlen($d['client_name']) < 2 || mb_strlen($d['client_name']) > 150) {
         $e['client_name'] = 'Indiquez le nom et prénom du client.';
@@ -139,20 +162,21 @@ if (is_post()) {
                     db_query(
                         'INSERT INTO invoices (invoice_number, client_name, client_phone, operation_type, source_currency,
                          target_currency, amount_given, exchange_rate, rate_direction, amount_received, fees, payment_method,
-                         transaction_reason, sender_name, printer_id, status, issue_date, agent_id, agent_name, created_at)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                         transaction_reason, sender_name, printer_id, status, issue_date, agent_id, agent_name, created_at, shipment_id)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                         [$number, $form['client_name'], $form['client_phone'], $form['operation_type'], $form['source_currency'],
                          $form['target_currency'], $form['amount_given'], $form['exchange_rate'], $form['rate_direction'],
                          $form['amount_received'], $form['fees'], $form['payment_method'], $form['transaction_reason'], $form['sender_name'],
                          $form['printer_id'] ?: null, 'paid', date('Y-m-d'),
-                         (int) $_SESSION['user_id'], (string) $_SESSION['user_name'], db_now()]
+                         (int) $_SESSION['user_id'], (string) $_SESSION['user_name'], db_now(), $form['shipment_id']]
                     );
                     $newId = (int) db()->lastInsertId();
-                    activity_log('create', 'invoice', $newId, $number, [
+                    activity_log('create', 'invoice', $newId, $number, array_filter([
                         'client'  => $form['client_name'],
                         'montant' => invoice_amounts_text($form),
                         'paiement' => $form['payment_method'],
-                    ]);
+                        'dossier'  => $form['shipment_code'],
+                    ]));
                     flash('success', "Reçu {$number} enregistré.");
                     redirect('print-invoice.php?' . http_build_query(array_filter(['id' => $newId, 'printer_id' => $form['printer_id'], 'autoprint' => 1])));
                 } catch (PDOException $ex) {
@@ -270,6 +294,7 @@ if ($action === 'view') {
                     <?php endforeach; ?>
                 </select>
             </form>
+            <a href="pdf.php?type=receipt&amp;id=<?= (int) $inv['id'] ?>" class="btn btn--ghost" download><?= icon('download') ?> Télécharger le PDF</a>
             <a href="print-invoice.php?id=<?= (int) $inv['id'] ?>&amp;autoprint=1" class="btn btn--primary" target="_blank" rel="noopener"><?= icon('printer') ?> Imprimer</a>
         </div>
     </div>
@@ -290,6 +315,9 @@ if ($action === 'view') {
                 <div><dt>Téléphone / WhatsApp</dt><dd><?= e($inv['client_phone'] ?? '—') ?></dd></div>
                 <div><dt>Mode de paiement</dt><dd><?= e(PAYMENT_METHODS[$inv['payment_method']] ?? $inv['payment_method']) ?></dd></div>
                 <div><dt>Motif</dt><dd><?= e(invoice_reason_text($inv)) ?></dd></div>
+                <?php if (!empty($inv['shipment_id']) && ($shp = shipment_find((int) $inv['shipment_id']))): ?>
+                    <div><dt>Dossier de suivi</dt><dd><a href="shipments.php?id=<?= (int) $shp['id'] ?>" class="link-strong"><?= e($shp['tracking_number']) ?></a></dd></div>
+                <?php endif; ?>
                 <?php if ($inv['printer_id'] && ($prn = printer_find((int) $inv['printer_id'], false))): ?><div><dt>Imprimante</dt><dd><?= e($prn['printer_name']) ?></dd></div><?php endif; ?>
             </dl>
             <dl class="detail-list">
@@ -300,7 +328,7 @@ if ($action === 'view') {
                 <?php if ((float) $inv['fees'] > 0): ?>
                     <div><dt>Commission</dt><dd><?= e(money($inv['fees'], $inv['source_currency'])) ?></dd></div>
                 <?php endif; ?>
-                <div class="detail-list__total"><dt>Montant à recevoir</dt><dd><?= e(money($inv['amount_received'], $inv['target_currency'])) ?></dd></div>
+                <div class="detail-list__total"><dt><?= invoice_is_payment($inv) ? 'Montant réglé' : 'Montant à recevoir' ?></dt><dd><?= e(money($inv['amount_received'], $inv['target_currency'])) ?></dd></div>
             </dl>
         </div>
         <?php if ($inv['description']): ?>
@@ -448,7 +476,18 @@ if ($form === null) {
         'amount_given' => '', 'source_currency' => 'XAF', 'target_currency' => settings_currency(),
         'exchange_rate' => '', 'rate_direction' => 'multiply', 'fees' => '0', 'payment_method' => 'Espèces', 'transaction_reason' => '',
         'printer_id' => (int) db_value('SELECT printer_id FROM invoices WHERE agent_id = ? AND printer_id IS NOT NULL ORDER BY id DESC LIMIT 1', [$user['id']]),
+        'shipment_code' => '',
     ];
+    // Paiement d'un dossier de suivi (bouton « Encaisser un paiement » de dashboard/shipments.php) : client, dossier et motif repris
+    if (($shipment = (int) query('shipment') ? shipment_find((int) query('shipment')) : null)) {
+        $form = array_merge($form, [
+            'operation_type' => 'Fret/Transit', 'target_currency' => 'XAF', 'source_currency' => 'XAF',
+            'client_name' => $shipment['client_name'], 'client_phone' => (string) $shipment['client_phone'],
+            'shipment_code' => $shipment['tracking_number'],
+            'transaction_reason' => 'Fret ' . mb_strtolower(SHIPMENT_MODES[$shipment['transport_mode']] ?? '') . ' — dossier ' . $shipment['tracking_number'],
+        ]);
+        $fromShipment = $shipment;
+    }
     // Pré-remplissage depuis le simulateur : chaque paramètre est validé, les autres sont ignorés
     $prefill = [
         'operation_type'  => fn ($v) => isset(OPERATION_TYPES[$v]),
@@ -488,6 +527,8 @@ dash_header('Reçus de caisse', 'invoices');
 
 <?php if ($errors): ?>
     <div class="alert alert--error" role="alert"><?= icon('alert') ?><p>Merci de corriger les champs indiqués.</p></div>
+<?php elseif (!empty($fromShipment)): ?>
+    <div class="alert alert--success" role="status"><?= icon('ship') ?><p>Paiement du dossier <strong><?= e($fromShipment['tracking_number']) ?></strong> : saisissez le montant réglé puis enregistrez.</p></div>
 <?php elseif ($prefilled): ?>
     <div class="alert alert--success" role="status"><?= icon('calc') ?><p>Reçu pré-rempli depuis le simulateur : complétez les informations du client puis enregistrez.</p></div>
 <?php endif; ?>
@@ -497,6 +538,7 @@ dash_header('Reçus de caisse', 'invoices');
       data-rates="<?= e(json_encode(company_rates_js())) ?>"
       data-rates-updated="<?= e(company_rates_updated_label()) ?>"
       data-rates-api="rates-api.php"
+      data-payment-ops="<?= e(json_encode(PAYMENT_OPERATIONS)) ?>"
       data-decimals="<?= e(json_encode(array_map(fn ($c) => $c['decimals'], DASH_CURRENCIES))) ?>">
     <?= csrf_field() ?>
     <input type="hidden" name="op" value="save">
@@ -528,6 +570,13 @@ dash_header('Reçus de caisse', 'invoices');
                 </select>
                 <?= $err('operation_type') ?>
             </div>
+            <!-- Paiement de fret / transit uniquement (assets/js/dashboard.js) -->
+            <div class="field" data-payment-only>
+                <label for="shipment_code">Dossier de suivi <small>(facultatif)</small></label>
+                <input id="shipment_code" name="shipment_code" maxlength="20" autocomplete="off" placeholder="GTC-XXXX-XXXX" value="<?= e((string) ($form['shipment_code'] ?? '')) ?>"<?= $inv('shipment_code') ?>>
+                <small class="field__hint">Le reçu mentionne le dossier et apparaît dans sa fiche.</small>
+                <?= $err('shipment_code') ?>
+            </div>
         </div>
     </fieldset>
 
@@ -535,21 +584,21 @@ dash_header('Reçus de caisse', 'invoices');
         <legend>Montants &amp; taux</legend>
         <div class="form-grid form-grid--amounts">
             <div class="field">
-                <label for="amount_given">Montant versé *</label>
+                <label for="amount_given" data-label-exchange="Montant versé *" data-label-payment="Montant réglé *">Montant versé *</label>
                 <input id="amount_given" name="amount_given" inputmode="decimal" required autocomplete="off" value="<?= e((string) $form['amount_given']) ?>"<?= $inv('amount_given') ?>>
                 <?= $err('amount_given') ?>
             </div>
             <div class="field">
-                <label for="source_currency">Devise source</label>
+                <label for="source_currency" data-label-exchange="Devise source" data-label-payment="Devise du paiement">Devise source</label>
                 <select id="source_currency" name="source_currency"<?= $inv('source_currency') ?>><?= $currencyOptions($form['source_currency']) ?></select>
                 <?= $err('source_currency') ?>
             </div>
-            <div class="field">
+            <div class="field" data-exchange-only>
                 <label for="target_currency">Devise cible</label>
                 <select id="target_currency" name="target_currency"<?= $inv('target_currency') ?>><?= $currencyOptions($form['target_currency']) ?></select>
                 <?= $err('target_currency') ?>
             </div>
-            <div class="field">
+            <div class="field" data-exchange-only>
                 <label for="exchange_rate">Taux appliqué *</label>
                 <div class="input-action">
                     <input id="exchange_rate" name="exchange_rate" inputmode="decimal" required autocomplete="off" value="<?= e((string) $form['exchange_rate']) ?>"<?= $inv('exchange_rate') ?>>
@@ -558,7 +607,7 @@ dash_header('Reçus de caisse', 'invoices');
                 <small class="rate-badge" id="rate-badge" aria-live="polite"></small>
                 <?= $err('exchange_rate') ?>
             </div>
-            <div class="field">
+            <div class="field" data-exchange-only>
                 <label for="rate_direction">Sens du taux</label>
                 <select id="rate_direction" name="rate_direction">
                     <option value="multiply" <?= $form['rate_direction'] === 'multiply' ? 'selected' : '' ?>>1 source = taux cible (×)</option>
@@ -566,7 +615,7 @@ dash_header('Reçus de caisse', 'invoices');
                 </select>
                 <?= $err('rate_direction') ?>
             </div>
-            <div class="field">
+            <div class="field" data-exchange-only>
                 <label for="fees">Commission / frais <small class="field__hint">(en devise source)</small></label>
                 <input id="fees" name="fees" inputmode="decimal" autocomplete="off" value="<?= e((string) ($form['fees'] ?? '0')) ?>"<?= $inv('fees') ?>>
                 <?= $err('fees') ?>
@@ -607,7 +656,7 @@ dash_header('Reçus de caisse', 'invoices');
 
     <!-- Montant calculé automatiquement -->
     <div class="net-box" aria-live="polite">
-        <span class="net-box__label">Montant à recevoir</span>
+        <span class="net-box__label" id="net-label">Montant à recevoir</span>
         <strong class="net-box__value" id="net-amount">—</strong>
         <span class="net-box__detail" id="net-detail">Saisissez le montant versé et le taux.</span>
     </div>

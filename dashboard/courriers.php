@@ -358,18 +358,14 @@ dash_header('Courriers', 'courriers');
                             </form>
                         </td>
                         <td class="actions">
-                            <a href="print-courrier.php?id=<?= $cid ?>" class="icon-btn" title="Imprimer" target="_blank" rel="noopener"><?= icon('printer') ?><span class="visually-hidden">Imprimer</span></a>
-                            <a href="pdf.php?type=courrier&amp;id=<?= $cid ?>" class="icon-btn" title="Télécharger le PDF"><?= icon('download') ?><span class="visually-hidden">PDF</span></a>
-                            <a href="courriers.php?action=edit&amp;id=<?= $cid ?>" class="icon-btn" title="Modifier"><?= icon('edit') ?><span class="visually-hidden">Modifier</span></a>
-                            <a href="courriers.php?action=new&amp;from=<?= $cid ?>" class="icon-btn" title="Dupliquer (nouveau courrier à partir de celui-ci)"><?= icon('row-add') ?><span class="visually-hidden">Dupliquer</span></a>
-                            <?php if (is_admin()): ?>
-                                <form method="post" class="inline-form">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="op" value="delete">
-                                    <input type="hidden" name="id" value="<?= $cid ?>">
-                                    <button type="submit" class="icon-btn icon-btn--danger" title="Supprimer" data-confirm="Supprimer définitivement le courrier <?= e($c['reference']) ?> ?"><?= icon('trash') ?><span class="visually-hidden">Supprimer</span></button>
-                                </form>
-                            <?php endif; ?>
+                            <?= action_menu(array_filter([
+                                ['link', 'Imprimer', 'print-courrier.php?id=' . $cid, 'printer', ['target' => '_blank']],
+                                ['link', 'Télécharger le PDF', 'pdf.php?type=courrier&id=' . $cid, 'download'],
+                                ['link', 'Modifier', 'courriers.php?action=edit&id=' . $cid, 'edit'],
+                                ['link', 'Dupliquer (nouveau courrier à partir de celui-ci)', 'courriers.php?action=new&from=' . $cid, 'row-add'],
+                                is_admin() ? ['sep'] : [],
+                                is_admin() ? ['post', 'Supprimer', 'trash', ['op' => 'delete', 'id' => $cid], 'Supprimer définitivement le courrier ' . $c['reference'] . ' ?', 'danger' => true] : [],
+                            ]), 'Actions du courrier ' . $c['reference']) ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>

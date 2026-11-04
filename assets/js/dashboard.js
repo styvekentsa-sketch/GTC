@@ -173,6 +173,37 @@
         .catch(function () { if (id === requestId && !rateTouched) fallback(); });
     };
 
+    // Paiement de fret / transit : pas de conversion (devise cible = devise source, taux 1, sans commission) ;
+    // champs de change masqués, champ « Dossier de suivi » affiché, montant final libellé « Montant réglé »
+    var fOp = document.getElementById('operation_type');
+    var paymentOps = JSON.parse(invForm.getAttribute('data-payment-ops') || '[]');
+    var isPayment = function () { return paymentOps.indexOf(fOp.value) !== -1; };
+    var wasPayment = false;
+    var applyMode = function () {
+      var pay = isPayment();
+      invForm.querySelectorAll('[data-exchange-only]').forEach(function (el) { el.hidden = pay; });
+      invForm.querySelectorAll('[data-payment-only]').forEach(function (el) { el.hidden = !pay; });
+      invForm.querySelectorAll('[data-label-payment]').forEach(function (el) {
+        el.textContent = el.getAttribute(pay ? 'data-label-payment' : 'data-label-exchange');
+      });
+      document.getElementById('net-label').textContent = pay ? 'Montant réglé' : 'Montant à recevoir';
+      if (pay) {
+        fTarget.value = fSource.value;
+        fRate.value = '1';
+        fDir.value = 'multiply';
+        if (fFees) fFees.value = '0';
+        rateTouched = true;
+        requestId++;   // une réponse de taux encore attendue ne doit pas réécrire le taux 1
+      } else if (wasPayment) {
+        rateTouched = false;
+        suggestRate();
+      }
+      wasPayment = pay;
+      compute();
+    };
+    fOp.addEventListener('change', applyMode);
+    fSource.addEventListener('change', function () { if (isPayment()) fTarget.value = fSource.value; });
+
     fRate.addEventListener('input', function () {
       rateTouched = true;
       requestId++;   // une réponse encore attendue ne doit pas écraser la saisie
@@ -202,6 +233,7 @@
       setBadge('custom', 'Taux repris de la saisie : « Taux GTC » pour le taux de la grille');
       compute();
     }
+    applyMode();
   }
 
   /* ---------- 6. Afficher / masquer les mots de passe ---------- */
@@ -429,7 +461,9 @@
     if (focusToggle) m.summary.focus();
   }
 
-  document.querySelectorAll('[data-amenu]').forEach(function (details) {
+  var initMenu = function (details) {
+    if (details.hasAttribute('data-amenu-ready')) return;
+    details.setAttribute('data-amenu-ready', '');
     var summary = details.querySelector('summary');
     var panel = details.querySelector('.amenu__panel');
     summary.setAttribute('aria-expanded', 'false');
@@ -470,7 +504,20 @@
       if (step && i !== -1) { e.preventDefault(); items[(i + step + items.length) % items.length].focus(); }
       else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); items[e.key === 'Home' ? 0 : items.length - 1].focus(); }
     });
-  });
+  };
+  document.querySelectorAll('[data-amenu]').forEach(initMenu);
+  // Lignes ajoutées après le chargement (ex. nouvelle conversation insérée par assets/js/messages-live.js)
+  if (window.MutationObserver) {
+    new MutationObserver(function (mutations) {
+      mutations.forEach(function (m) {
+        m.addedNodes.forEach(function (n) {
+          if (n.nodeType !== 1) return;
+          if (n.matches('[data-amenu]')) initMenu(n);
+          n.querySelectorAll('[data-amenu]').forEach(initMenu);
+        });
+      });
+    }).observe(document.body, { childList: true, subtree: true });
+  }
 
   document.addEventListener('pointerdown', function (e) {
     if (openMenu && !openMenu.panel.contains(e.target) && !openMenu.details.contains(e.target)) closeMenu(false);

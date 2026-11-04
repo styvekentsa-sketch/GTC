@@ -3,8 +3,18 @@
  * Accueil du Dashboard — Hub : grille de boutons vers chaque module (dash_modules(), selon le rôle),
  * puis aperçu de l'activité (statistiques, graphique, derniers reçus, messages).
  */
+
+// Serveur de développement lancé depuis dashboard\ : ce fichier reçoit aussi les adresses des CSS, images et pages du
+// site, servies par includes/dev-router.php (sans effet sur un serveur correctement configuré)
+require_once __DIR__ . '/../includes/dev-router.php';
+if (($devPage = dev_route()) !== null) {
+    require $devPage;
+    exit;
+}
+
 require_once __DIR__ . '/../includes/dashboard.php';
 require_once __DIR__ . '/../includes/courriers.php';   // courrier_long_date()
+require_once __DIR__ . '/../includes/messages.php';    // messages_panel_html()
 
 $user = require_login();
 if ($user['role'] === 'secretaire') {
@@ -55,9 +65,6 @@ $monthNames = ['01' => 'Janv.', '02' => 'Févr.', '03' => 'Mars', '04' => 'Avr.'
 // ---------- Listes ----------
 $recentInvoices = db_all('SELECT id, invoice_number, client_name, amount_given, source_currency, status, issue_date FROM invoices ORDER BY id DESC LIMIT 10');
 $invoiceCount   = (int) db_value('SELECT COUNT(*) FROM invoices');
-$messages       = can_access_messages()
-    ? db_all("SELECT * FROM messages WHERE status = 'unread' ORDER BY id DESC LIMIT 5")
-    : [];
 $printers       = db_all('SELECT printer_name, printer_location, is_default, last_status, last_checked_at FROM printers WHERE is_active = 1 ORDER BY is_default DESC, printer_name LIMIT 5');
 
 $modules = dash_modules() + ['settings' => is_admin()
@@ -252,20 +259,8 @@ dash_header('Accueil', 'index');
         <h2 class="panel__title">Messages du site <span class="badge badge--info" data-unread-badge<?= $stats['unread'] ? '' : ' hidden' ?>><?= $stats['unread'] ?> non lu<?= $stats['unread'] > 1 ? 's' : '' ?></span></h2>
         <a href="messages.php" class="panel__link">Ouvrir la messagerie</a>
     </header>
-    <?php if (!$messages): ?>
-        <p class="empty">Aucun nouveau message.</p>
-    <?php else: ?>
-        <ul class="messages">
-            <?php foreach ($messages as $m): ?>
-                <li class="message message--unread">
-                    <a href="messages.php?id=<?= (int) $m['id'] ?>" class="message__head">
-                        <span class="message__from"><strong><?= e($m['sender_name']) ?></strong> — <?= e($m['subject']) ?></span>
-                        <small class="message__date"><?= e(fdate($m['created_at'], true)) ?></small>
-                    </a>
-                </li>
-            <?php endforeach; ?>
-        </ul>
-    <?php endif; ?>
+    <!-- Mis à jour en direct par assets/js/messages-live.js (messages-api.php?panel=1) -->
+    <div data-messages-panel><?= messages_panel_html() ?></div>
 </section>
 <?php endif; ?>
 

@@ -215,16 +215,11 @@ dash_header("Équipe", 'team');
                             <td data-label="Rôle"><?= e($m['role']) ?></td>
                             <td class="num" data-label="Ordre"><?= (int) $m['display_order'] ?></td>
                             <td class="actions">
-                                <a href="team.php?edit=<?= (int) $m['id'] ?>" class="icon-btn" title="Modifier"><?= icon('edit') ?></a>
-                                <form method="post" class="inline-form">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="op" value="delete">
-                                    <input type="hidden" name="id" value="<?= (int) $m['id'] ?>">
-                                    <button type="submit" class="icon-btn icon-btn--danger" title="Supprimer"
-                                            data-confirm="Retirer <?= e($m['name']) ?> de l'équipe ? Sa photo sera supprimée.">
-                                        <?= icon('trash') ?>
-                                    </button>
-                                </form>
+                                <?= action_menu([
+                                    ['link', 'Modifier', 'team.php?edit=' . (int) $m['id'], 'edit'],
+                                    ['sep'],
+                                    ['post', 'Retirer de l\'équipe', 'trash', ['op' => 'delete', 'id' => (int) $m['id']], 'Retirer ' . $m['name'] . ' de l\'équipe ? Sa photo sera supprimée.', 'danger' => true],
+                                ], 'Actions pour ' . $m['name']) ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>

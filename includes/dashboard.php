@@ -75,7 +75,26 @@ const OPERATION_TYPES = [
     'Exchange'      => 'Change / Exchange',
     'Transfert'     => 'Transfert de fonds',
     'Import/Export' => 'Import/Export',
+    'Fret/Transit'  => 'Fret / Transit',
 ];
+
+/**
+ * Paiements de prestations (fret, transit) : le client règle une somme à l'agence, sans conversion ni remise d'argent.
+ * Devise cible = devise source, taux 1, sans commission ; montant reçu = montant réglé (enregistré tel quel).
+ * Reçu : « Montant réglé » au lieu de « Montant net à remettre » ; clôture de caisse : entrée seulement, pas de sortie.
+ */
+const PAYMENT_OPERATIONS = ['Fret/Transit'];
+
+function invoice_is_payment(array $inv): bool
+{
+    return in_array($inv['operation_type'] ?? '', PAYMENT_OPERATIONS, true);
+}
+
+/** Libellé du montant final du reçu (écran, impression, PDF, ticket). */
+function invoice_total_label(array $inv): string
+{
+    return invoice_is_payment($inv) ? 'Montant réglé' : 'Montant net à remettre';
+}
 
 /**
  * Texte de la ligne « Motif » d'une facture : motif et/ou nom de la personne qui effectue l'opération.
@@ -334,6 +353,7 @@ function dash_modules(): array
             'closing'    => ['href' => 'cash-closing.php',  'icon' => 'wallet',   'label' => 'Clôture de caisse', 'title' => 'Clôture de caisse',          'desc' => 'Totaux du jour par devise et paiement', 'tone' => 'magenta'],
             'commercial' => ['href' => 'invoices-list.php', 'icon' => 'file',     'label' => 'Factures',          'title' => 'Factures',                   'desc' => 'Proformas et factures commerciales', 'tone' => 'green'],
             'courriers'  => ['href' => 'courriers.php',     'icon' => 'letter',   'label' => 'Courriers',         'title' => 'Courriers & Correspondances', 'desc' => 'Lettres sur papier à en-tête',     'tone' => 'magenta'],
+            'shipments'  => ['href' => 'shipments.php',     'icon' => 'ship',     'label' => 'Suivi des colis',   'title' => 'Suivi des colis',            'desc' => 'Conteneurs et colis en transit',   'tone' => 'blue'],
             'simulator'  => ['href' => 'simulator.php',     'icon' => 'calc',     'label' => 'Simulateur Avancé', 'title' => 'Simulateur Avancé',          'desc' => 'Calculer une opération de change', 'tone' => 'blue'],
             'rates'      => ['href' => 'rates.php',         'icon' => 'exchange', 'label' => 'Taux de change',    'title' => 'Taux de change',             'desc' => 'Grille des devises du jour',       'tone' => 'green'],
             'printing'   => ['href' => 'printing.php',      'icon' => 'printer',  'label' => 'Impression réseau', 'title' => 'Impression réseau',          'desc' => 'Imprimantes et file d\'attente',   'tone' => 'magenta'],
@@ -347,6 +367,7 @@ function dash_modules(): array
         $modules['partners'] = ['href' => 'partners.php', 'icon' => 'hand',   'label' => 'Partenaires',  'title' => 'Partenaires',       'desc' => 'Logos des partenaires du site', 'tone' => 'magenta'];
         $modules['users']    = ['href' => 'users.php',    'icon' => 'shield', 'label' => 'Utilisateurs', 'title' => 'Utilisateurs',      'desc' => 'Comptes et droits d\'accès',    'tone' => 'blue'];
         $modules['activity'] = ['href' => 'activity.php', 'icon' => 'history', 'label' => "Journal d'activité", 'title' => "Journal d'activité", 'desc' => 'Qui a fait quoi, et quand', 'tone' => 'green'];
+        $modules['backups']  = ['href' => 'backups.php',  'icon' => 'archive', 'label' => 'Sauvegardes', 'title' => 'Sauvegardes', 'desc' => 'Base de données : historique et restauration', 'tone' => 'magenta'];
     }
     return $modules;
 }
@@ -358,7 +379,10 @@ function dash_modules(): array
  */
 function dash_root_warning(): string
 {
-    $script  = str_replace('\\', '/', (string) realpath($_SERVER['SCRIPT_FILENAME'] ?? ''));
+    if (dev_docroot_is_dashboard()) {
+        return '';   // serveur intégré de PHP : rattrapé automatiquement (includes/dev-router.php)
+    }
+    $script  =str_replace('\\', '/', (string) realpath($_SERVER['SCRIPT_FILENAME'] ?? ''));
     $dashDir = str_replace('\\', '/', (string) realpath(__DIR__ . '/../dashboard'));
     $name    = (string) ($_SERVER['SCRIPT_NAME'] ?? '');
     if ($dashDir === '' || stripos($script, $dashDir . '/') !== 0 || preg_match('#/dashboard/[^/]+$#i', $name)) {

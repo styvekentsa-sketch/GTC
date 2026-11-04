@@ -7,7 +7,7 @@
  *   $seoTitle        (string) Balise <title> complète (sinon « $pageTitle | Global Trading Corporation »)
  *   $pageDescription (string) Meta description (≈ 150 à 160 caractères), reprise par Open Graph
  *   $robots          (string) Directive robots (défaut : index, follow)
- *   $currentPage     (string) Clé du lien actif         'accueil' | 'services' | 'a-propos' | 'contact'
+ *   $currentPage     (string) Clé du lien actif         'accueil' | 'services' | 'suivi' | 'a-propos' | 'contact'
  *   $root            (string) Chemin vers la racine du site : '' (défaut) ou '../' pour les pages
  *                             d'un sous-dossier (ex. legal/), appliqué à tous les liens et fichiers.
  */
@@ -40,6 +40,7 @@ $shareImage      = seo_url(SEO_SHARE_IMAGE);
 $navItems = [
     'accueil'  => ['label' => 'Accueil',   'href' => $root . 'index.php'],
     'services' => ['label' => 'Services',  'href' => $root . 'services.php'],
+    'suivi'    => ['label' => 'Suivi colis', 'href' => $root . 'suivi.php'],
     'a-propos' => ['label' => 'À propos',  'href' => $root . 'a-propos.php'],
     'contact'  => ['label' => 'Contact',   'href' => $root . 'contact.php'],
 ];

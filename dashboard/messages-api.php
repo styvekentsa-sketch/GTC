@@ -1,8 +1,8 @@
 <?php
 /**
- * Actualisation automatique de la messagerie (assets/js/messages-live.js, toutes les 8 secondes).
+ * Actualisation automatique de la messagerie (assets/js/messages-live.js, toutes les 6 secondes).
  *
- *   GET messages-api.php?since=42[&back=messages.php][&rows=1]
+ *   GET messages-api.php?since=42[&back=messages.php][&rows=1][&panel=1][&thread=12]
  *   → {
  *       unread: 3,                                  pastille du menu, titre de l'onglet
  *       counts: { all, unread, read, replied, archived },
@@ -10,6 +10,9 @@
  *       new: [ { id, sender, subject } ],           messages arrivés depuis « since » (notification)
  *       rows: [ { id, thread, status, html } ]      avec rows=1 : lignes des conversations concernées, prêtes à
  *                                                   insérer (même rendu que la page ; thread = ligne à remplacer)
+ *       panel: "<ul …>"                             avec panel=1 : aperçu « Messages du site » de l'accueil
+ *       thread_items: [ { id, html } ]              avec thread=12 : messages arrivés dans la conversation ouverte
+ *                                                   (messages.php?id=12), à ajouter en fin de fil
  *     }
  *
  * Sécurité : réservé aux comptes de la messagerie (MESSAGE_ROLES) ; lecture seule (GET), aucune action.
@@ -58,6 +61,10 @@ $data = [
     'new'       => [],
     'rows'      => [],
 ];
+if (($_GET['panel'] ?? '') === '1') {
+    $data['panel'] = messages_panel_html();   // 5 lignes au plus : renvoyé à chaque fois (suit aussi les lectures)
+}
+$threadId = max(0, (int) ($_GET['thread'] ?? 0));
 $data['unread'] = $data['counts']['unread'];
 
 // Nouveaux messages (au plus 20 : au-delà, la page est simplement à recharger)
@@ -67,6 +74,20 @@ if ($since > 0 && $data['latest_id'] > $since) {
     foreach ($fresh as $m) {
         $data['new'][] = ['id' => (int) $m['id'], 'sender' => $m['sender_name'], 'subject' => $m['subject'], 'status' => $m['status']];
         $keys[message_thread_key($m['sender_email'])] = true;
+    }
+    // Conversation ouverte : messages du même expéditeur, du plus ancien au plus récent. Ils ne sont pas marqués
+    // comme lus (requête en lecture seule) : ils le seront à la prochaine ouverture de la conversation.
+    $open = $threadId > 0 ? db_value('SELECT sender_email FROM messages WHERE id = ?', [$threadId]) : null;
+    if (is_string($open)) {
+        $data['thread_items'] = [];
+        foreach (array_reverse($fresh) as $m) {
+            if (message_thread_key($m['sender_email']) === message_thread_key($open)) {
+                $data['thread_items'][] = [
+                    'id'   => (int) $m['id'],
+                    'html' => message_thread_item($m, $threadId, $m['sender_name'], true, 'messages.php?id=' . $threadId),
+                ];
+            }
+        }
     }
     // Conversations concernées, recalculées avec le filtre de la page (une ligne par expéditeur :
     // la ligne existante est remplacée et remonte en tête au lieu d'être dupliquée)

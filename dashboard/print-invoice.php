@@ -149,10 +149,11 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
     $issuedAt  = fdate($inv['created_at'] ?: $inv['issue_date'], true);
     $legal     = array_filter([GTC_RCCM ? 'RCCM : ' . GTC_RCCM : '']);
     $niu       = company_niu();
+    $shipmentCode = invoice_shipment_code($inv);
     ?>
     <?php
     /** Un exemplaire de la facture ; $copy : 'client', 'caisse' ou null (exemplaire unique). */
-    $receipt = function (?string $copy, ?string $copyLabel) use ($inv, $company, $operation, $payment, $issuedAt, $legal, $niu, $user): void {
+    $receipt = function (?string $copy, ?string $copyLabel) use ($inv, $company, $operation, $payment, $issuedAt, $legal, $niu, $user, $shipmentCode): void {
         ?>
         <article class="receipt<?= $copy ? ' receipt--' . $copy : '' ?>"<?= $copy === 'caisse' ? ' aria-hidden="true"' : '' ?>>
             <!-- En-tête de l'entreprise -->
@@ -192,11 +193,14 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
                     <tr><th scope="row">Type d'opération</th><td><?= e($operation) ?></td></tr>
                     <tr><th scope="row">Mode de paiement</th><td><?= e($payment) ?></td></tr>
                     <tr><th scope="row">Motif</th><td><span class="receipt__clamp receipt__clamp--2"><?= e(invoice_reason_text($inv)) ?></span></td></tr>
+                    <?php if ($shipmentCode !== ''): ?><tr><th scope="row">Dossier de suivi</th><td><?= e($shipmentCode) ?></td></tr><?php endif; ?>
                 </tbody>
                 <tfoot>
-                    <tr class="receipt__total"><th scope="row">Montant net à remettre</th><td><?= e(money($inv['amount_received'], $inv['target_currency'])) ?></td></tr>
+                    <tr class="receipt__total"><th scope="row"><?= e(invoice_total_label($inv)) ?></th><td><?= e(money($inv['amount_received'], $inv['target_currency'])) ?></td></tr>
                 </tfoot>
             </table>
+            <!-- Montant en lettres, dans la devise du montant final uniquement -->
+            <p class="receipt__words">Arrêté à la somme de : <strong><?= e(amount_in_words((float) $inv['amount_received'], (string) $inv['target_currency'])) ?></strong>.</p>
 
             <!-- Signatures -->
             <section class="receipt__signatures">
@@ -215,7 +219,7 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
                 <p class="receipt__thanks"><?= $copy === 'caisse'
                     ? 'Exemplaire caisse — à classer avec les pièces comptables du jour.'
                     : 'Merci pour votre confiance. Gardez ce reçu comme justificatif.' ?></p>
-                <p>Ce document atteste la transaction réalisée à la date indiquée au taux confirmé lors de l'opération.
+                <p><?= e(invoice_legal_sentence($inv)) ?>
                    <?= e($company['company_name']) ?> — <?= e($company['company_address']) ?>.<?= $legal ? ' ' . e(implode(' · ', $legal)) . '.' : '' ?></p>
                 <p class="receipt__printed">Imprimé le <?= e(date('d/m/Y à H:i')) ?> par <?= e($user['name']) ?></p>
             </footer>
