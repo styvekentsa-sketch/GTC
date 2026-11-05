@@ -161,7 +161,7 @@ function review_share_box(string $id, string $title, string $intro, string $link
         </div>
         <?php if ($phone !== '' || $email !== ''): ?>
             <p class="field__hint share-box__to">
-                <?= $phone !== '' ? 'WhatsApp et SMS s\'ouvrent directement sur le ' . e($phone) . '.' : '' ?>
+                <?= $phone !== '' ? 'WhatsApp et SMS s\'ouvrent directement sur le <span class="nowrap">' . e($phone) . '</span>.' : '' ?>
                 <?= $email !== '' ? 'Gmail et l\'e-mail sont adressés à ' . e($email) . '.' : '' ?>
             </p>
         <?php endif; ?>
@@ -172,7 +172,7 @@ function review_share_box(string $id, string $title, string $intro, string $link
 
 dash_header('Avis clients', 'reviews');
 ?>
-<div class="toolbar">
+<div class="toolbar reviews-toolbar">
     <nav class="chips" aria-label="Filtrer les avis">
         <?php foreach (REVIEW_FILTERS as $key => $label): ?>
             <a href="reviews.php<?= $key === 'pending' ? '' : '?f=' . $key ?>" class="chip<?= $key === $filter ? ' is-active' : '' ?>"
@@ -183,7 +183,7 @@ dash_header('Avis clients', 'reviews');
         <?php if ($filter !== 'invites'): ?>
             <a href="reviews.php?f=invites#inviter" class="btn btn--primary btn--sm"><?= icon('share') ?> Inviter un client</a>
         <?php endif; ?>
-        <a href="<?= e(site_root()) ?>avis.php" class="btn btn--ghost btn--sm" target="_blank" rel="noopener"><?= icon('external') ?> Voir la page publique</a>
+        <a href="<?= e(site_root()) ?>avis.php" class="btn btn--ghost btn--sm" target="_blank" rel="noopener"><?= icon('external') ?> <span class="wide-only">Voir la page publique</span><span class="narrow-only">Page publique</span></a>
     </div>
 </div>
 
@@ -203,17 +203,17 @@ if ($filter === 'invites'):
                        ORDER BY i.created_at DESC, i.id DESC LIMIT {$perPage} OFFSET {$offset}");
     $opened   = (int) db_value('SELECT COUNT(*) FROM review_invites WHERE opened_at IS NOT NULL');
     $answered = (int) db_value('SELECT COUNT(*) FROM review_invites WHERE review_id IS NOT NULL');
-    $pct      = fn (int $n) => $total ? round($n / $total * 100) . ' %' : '—';
+    $pct      = fn (int $n) => $total ? round($n / $total * 100) . " %" : '—';
     $general  = review_invite_link();
     ?>
 
-    <section class="stats stats--summary" aria-label="Suivi des invitations">
+    <section class="stats stats--summary stats--compact" aria-label="Suivi des invitations">
         <article class="stat"><span class="stat__icon stat__icon--blue"><?= icon('send') ?></span>
             <div><p class="stat__label">Invitations créées</p><p class="stat__value"><?= $total ?></p></div></article>
         <article class="stat"><span class="stat__icon stat__icon--gold"><?= icon('eye') ?></span>
-            <div><p class="stat__label">Liens ouverts</p><p class="stat__value"><?= $opened ?></p><p class="stat__note"><?= $pct($opened) ?> des invitations</p></div></article>
+            <div><p class="stat__label">Liens ouverts</p><p class="stat__value"><?= $opened ?></p><p class="stat__note"><?= $pct($opened) ?><span class="wide-only"> des invitations</span></p></div></article>
         <article class="stat"><span class="stat__icon stat__icon--green"><?= icon('star') ?></span>
-            <div><p class="stat__label">Avis reçus</p><p class="stat__value"><?= $answered ?></p><p class="stat__note">Taux de réponse : <?= $pct($answered) ?></p></div></article>
+            <div><p class="stat__label">Avis reçus</p><p class="stat__value"><?= $answered ?></p><p class="stat__note"><span class="wide-only">Taux de réponse : </span><?= $pct($answered) ?><span class="narrow-only"> de réponse</span></p></div></article>
     </section>
 
     <?php if ($shared):
@@ -263,7 +263,7 @@ if ($filter === 'invites'):
             <p class="empty">Aucune invitation pour le moment : créez-en une ci-dessus.</p>
         <?php else: ?>
             <div class="table-wrap">
-                <table class="table table--hover table--stack">
+                <table class="table table--hover table--stack table--card-menu">
                     <thead><tr><th>Client</th><th>Créée le</th><th>Suivi</th><th>Avis</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr></thead>
                     <tbody>
                     <?php foreach ($invites as $inv):
@@ -359,7 +359,7 @@ $back       = 'reviews.php' . ($listParams ? '?' . http_build_query($listParams)
         <p class="empty"><?= $q !== '' ? 'Aucun avis ne correspond à cette recherche.' : ($filter === 'pending' ? 'Aucun avis en attente de validation.' : 'Aucun avis dans cette catégorie.') ?></p>
     <?php else: ?>
         <div class="table-wrap">
-            <table class="table table--hover table--stack">
+            <table class="table table--hover table--stack table--card-menu">
                 <thead><tr><th>Auteur</th><th>Note</th><th>Avis</th><th>Reçu le</th><th>Statut</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr></thead>
                 <tbody>
                 <?php foreach ($rows as $r):
