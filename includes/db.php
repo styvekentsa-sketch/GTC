@@ -918,7 +918,7 @@ function db_install_reviews(PDO $pdo): void
  */
 function db_install_review_invites(PDO $pdo): void
 {
-    [pk => $pk, fk => $fk, dt => $dt, suffix => $suffix] = db_types();
+    ['pk' => $pk, 'fk' => $fk, 'dt' => $dt, 'suffix' => $suffix] = db_types();
     $pdo->exec("CREATE TABLE IF NOT EXISTS review_invites (
         id {$pk},
         token VARCHAR(24) NOT NULL,
