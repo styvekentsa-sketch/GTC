@@ -48,13 +48,14 @@ function team_store_upload(array $file): array
         return [null, 'Dimensions de la photo invalides (entre 64 et 6000 pixels).'];
     }
 
-    if (!is_dir(TEAM_PHOTO_DIR) && !mkdir(TEAM_PHOTO_DIR, 0755, true)) {
+    $dir = upload_store_dir('team');   // hors du dossier du site : la photo survit aux mises à jour (includes/uploads.php)
+    if ($dir === null) {
         return [null, "Le dossier des photos n'est pas accessible en écriture."];
     }
 
     $ext  = $info[2] === IMAGETYPE_PNG ? 'png' : 'jpg';
     $name = 'membre-' . bin2hex(random_bytes(8)) . '.' . $ext;
-    $dest = TEAM_PHOTO_DIR . '/' . $name;
+    $dest = $dir . '/' . $name;
 
     if (function_exists('imagecreatetruecolor')) {
         // Réencodage : recadrage carré centré + redimensionnement

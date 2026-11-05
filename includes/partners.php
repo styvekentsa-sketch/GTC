@@ -9,7 +9,9 @@
 
 require_once __DIR__ . '/db.php';
 
-const PARTNER_LOGO_DIR   = __DIR__ . '/../assets/img/partners';
+require_once __DIR__ . '/uploads.php';   // logos envoyés : hors du dossier du site (à l'abri des mises à jour)
+
+const PARTNER_LOGO_DIR   = __DIR__ . '/../assets/img/partners';   // logos suivis par Git (ex. dhl.png) et anciens envois
 const PARTNER_LOGO_URL   = 'assets/img/partners';
 const PARTNER_MAX_BYTES  = 2 * 1024 * 1024;
 const PARTNER_MAX_WIDTH  = 600;   // logo réencodé : 600 × 240 px au plus (affiché à 56 px de haut)
@@ -44,23 +46,19 @@ function partners_public(): array
  */
 function partner_logo_url(?string $logo, string $prefix = '', ?string $name = null): ?string
 {
+    // Logo envoyé depuis le Dashboard (dossier hors du site), puis logo suivi par Git nommé d'après le partenaire
+    // (ex. « DHL » → dhl.png, « PAD » → pad.png) : il reste affiché même si l'envoi a été perdu.
     $file = basename((string) $logo);
-    if ($file === '' || !preg_match('/^partenaire-[a-f0-9]{16}\.(png|jpg)$/', $file) || !is_file(PARTNER_LOGO_DIR . '/' . $file)) {
-        $file = null;
-        if ($name !== null) {
-            $slug = trim(preg_replace('/[^a-z0-9]+/', '-', strtolower(iconv('UTF-8', 'ASCII//TRANSLIT', $name) ?: $name)), '-');
-            foreach (['png', 'jpg'] as $ext) {
-                if ($slug !== '' && is_file(PARTNER_LOGO_DIR . "/{$slug}.{$ext}")) {
-                    $file = "{$slug}.{$ext}";
-                    break;
-                }
+    $url  = preg_match('/^partenaire-[a-f0-9]{16}\.(png|jpg)$/', $file) ? upload_url('partners', $file, $prefix) : null;
+    if ($url === null && $name !== null) {
+        $slug = trim(preg_replace('/[^a-z0-9]+/', '-', strtolower(iconv('UTF-8', 'ASCII//TRANSLIT', $name) ?: $name)), '-');
+        foreach (['png', 'jpg'] as $ext) {
+            if ($slug !== '' && ($url = upload_url('partners', "{$slug}.{$ext}", $prefix, true)) !== null) {
+                break;
             }
         }
-        if ($file === null) {
-            return null;
-        }
     }
-    return $prefix . PARTNER_LOGO_URL . '/' . $file . '?v=' . filemtime(PARTNER_LOGO_DIR . '/' . $file);
+    return $url;
 }
 
 /**
@@ -69,8 +67,10 @@ function partner_logo_url(?string $logo, string $prefix = '', ?string $name = nu
  */
 function partner_logo_width(string $url, int $height): ?int
 {
-    $file = PARTNER_LOGO_DIR . '/' . basename((string) parse_url($url, PHP_URL_PATH));
-    $size = is_file($file) ? @getimagesize($file) : false;
+    // Adresse image.php?d=partners&f=… (envoi) ou assets/img/partners/… (fichier suivi par Git)
+    parse_str((string) parse_url($url, PHP_URL_QUERY), $q);
+    $file = isset($q['f']) ? upload_path('partners', (string) $q['f']) : upload_path('partners', basename((string) parse_url($url, PHP_URL_PATH)), true);
+    $size = $file ? @getimagesize($file) : false;
     return $size && $size[1] > 0 ? max(1, (int) round($size[0] * $height / $size[1])) : null;
 }
 
@@ -114,13 +114,14 @@ function partner_store_logo(array $file): array
     if ($info[0] < 32 || $info[1] < 16 || $info[0] > 6000 || $info[1] > 6000) {
         return [null, 'Dimensions du logo invalides.'];
     }
-    if (!is_dir(PARTNER_LOGO_DIR) && !mkdir(PARTNER_LOGO_DIR, 0755, true)) {
+    $dir = upload_store_dir('partners');   // hors du dossier du site : le logo survit aux mises à jour
+    if ($dir === null) {
         return [null, "Le dossier des logos n'est pas accessible en écriture."];
     }
 
     $ext  = $info[2] === IMAGETYPE_PNG ? 'png' : 'jpg';
     $name = 'partenaire-' . bin2hex(random_bytes(8)) . '.' . $ext;
-    $dest = PARTNER_LOGO_DIR . '/' . $name;
+    $dest = $dir . '/' . $name;
 
     if (function_exists('imagecreatetruecolor')) {
         $src = $ext === 'png' ? @imagecreatefrompng($tmp) : @imagecreatefromjpeg($tmp);
@@ -151,7 +152,7 @@ function partner_store_logo(array $file): array
 function partner_delete_logo(?string $logo): void
 {
     $file = basename((string) $logo);
-    if (preg_match('/^partenaire-[a-f0-9]{16}\.(png|jpg)$/', $file) && is_file(PARTNER_LOGO_DIR . '/' . $file)) {
-        @unlink(PARTNER_LOGO_DIR . '/' . $file);
+    if (preg_match('/^partenaire-[a-f0-9]{16}\.(png|jpg)$/', $file)) {   // jamais un logo suivi par Git (dhl.png…)
+        upload_delete('partners', $file);
     }
 }

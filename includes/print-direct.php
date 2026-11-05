@@ -350,8 +350,7 @@ function print_logo_jpeg(): ?array
 {
     $custom = setting('company_logo');
     $file = PRINT_LOGO_FALLBACK;
-    if ($custom !== '' && is_file(BRAND_DIR . '/' . basename($custom))) {
-        $path = BRAND_DIR . '/' . basename($custom);
+    if ($custom !== '' && ($path = upload_path('brand', basename($custom))) !== null) {
         $info = @getimagesize($path);
         if ($info && $info[2] === IMAGETYPE_JPEG) {
             $file = $path;

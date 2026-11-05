@@ -61,13 +61,14 @@ function store_logo(array $file): array
     if ($info[0] < 32 || $info[1] < 32 || $info[0] > 4000 || $info[1] > 4000) {
         return [null, 'Dimensions du logo invalides (entre 32 et 4000 pixels).'];
     }
-    if (!is_dir(BRAND_DIR) && !mkdir(BRAND_DIR, 0755, true)) {
+    $dir = upload_store_dir('brand');   // hors du dossier du site : le logo survit aux mises à jour
+    if ($dir === null) {
         return [null, "Le dossier du logo n'est pas accessible en écriture."];
     }
 
     $ext  = $info[2] === IMAGETYPE_PNG ? 'png' : 'jpg';
     $name = 'logo-' . bin2hex(random_bytes(8)) . '.' . $ext;
-    $dest = BRAND_DIR . '/' . $name;
+    $dest = $dir . '/' . $name;
 
     if (function_exists('imagecreatetruecolor')) {
         $src = $ext === 'png' ? @imagecreatefrompng($tmp) : @imagecreatefromjpeg($tmp);
@@ -97,8 +98,8 @@ function store_logo(array $file): array
 function delete_logo(string $file): void
 {
     $file = basename($file);
-    if (preg_match('/^logo-[a-f0-9]{16}\.(png|jpe?g)$/', $file) && is_file(BRAND_DIR . '/' . $file)) {
-        @unlink(BRAND_DIR . '/' . $file);
+    if (preg_match('/^logo-[a-f0-9]{16}\.(png|jpe?g)$/', $file)) {
+        upload_delete('brand', $file);
     }
 }
 

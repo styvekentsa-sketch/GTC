@@ -10,6 +10,7 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/rates.php';
 require_once __DIR__ . '/exchange_rates.php';
 require_once __DIR__ . '/company_rates.php';
+require_once __DIR__ . '/uploads.php';   // logo envoyé : hors du dossier du site (à l'abri des mises à jour)
 
 const BRAND_DIR = __DIR__ . '/../assets/img/brand';
 const BRAND_URL = 'assets/img/brand';
@@ -77,8 +78,8 @@ function settings_print_format(): string
 function settings_logo_url(string $prefix = ''): string
 {
     $file = basename(setting('company_logo'));
-    if ($file !== '' && preg_match('/^logo-[a-f0-9]{16}\.(png|jpe?g)$/', $file) && is_file(BRAND_DIR . '/' . $file)) {
-        return $prefix . BRAND_URL . '/' . $file . '?v=' . filemtime(BRAND_DIR . '/' . $file);
+    if ($file !== '' && preg_match('/^logo-[a-f0-9]{16}\.(png|jpe?g)$/', $file) && ($url = upload_url('brand', $file, $prefix)) !== null) {
+        return $url;
     }
     return $prefix . 'assets/img/logo-recu.png';   // logo des reçus de caisse (globe GTC)
 }

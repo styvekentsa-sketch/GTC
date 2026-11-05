@@ -9,7 +9,9 @@
 
 require_once __DIR__ . '/db.php';
 
-const TEAM_PHOTO_DIR = __DIR__ . '/../assets/img/team';
+require_once __DIR__ . '/uploads.php';   // photos envoyées : hors du dossier du site (à l'abri des mises à jour)
+
+const TEAM_PHOTO_DIR = __DIR__ . '/../assets/img/team';   // photos suivies par Git (nommées d'après le membre) et anciens envois
 const TEAM_PHOTO_URL = 'assets/img/team';
 
 /** Membres par défaut, utilisés si la base de données est indisponible. */
@@ -53,21 +55,18 @@ function team_photo_file(?string $photo): ?string
  */
 function team_photo_url(?string $photo, string $prefix = '', ?string $name = null): ?string
 {
+    // Photo envoyée depuis le Dashboard (dossier hors du site), puis photo suivie par Git nommée d'après le membre
+    // (ex. cherif-alioum.jpg) : elle reste affichée même si l'envoi a été perdu. Adresse versionnée (?v=).
     $file = team_photo_file($photo);
-    if ((!$file || $file === 'default-avatar.png' || !is_file(TEAM_PHOTO_DIR . '/' . $file)) && $name !== null) {
-        $file = null;
+    $url  = $file && $file !== 'default-avatar.png' ? upload_url('team', $file, $prefix) : null;
+    if ($url === null && $name !== null) {
         foreach (['jpg', 'jpeg', 'png'] as $ext) {
-            if (is_file(TEAM_PHOTO_DIR . '/' . team_slug($name) . '.' . $ext)) {
-                $file = team_slug($name) . '.' . $ext;
+            if (($url = upload_url('team', team_slug($name) . '.' . $ext, $prefix, true)) !== null) {
                 break;
             }
         }
     }
-    if (!$file || !is_file(TEAM_PHOTO_DIR . '/' . $file)) {
-        return null;
-    }
-    // Paramètre de version : la nouvelle photo s'affiche immédiatement après un remplacement
-    return $prefix . TEAM_PHOTO_URL . '/' . rawurlencode($file) . '?v=' . filemtime(TEAM_PHOTO_DIR . '/' . $file);
+    return $url;
 }
 
 /** Nom de fichier tiré du nom du membre : « Chérif Alioum » → « cherif-alioum ». */
@@ -85,7 +84,7 @@ function team_slug(string $name): string
 function team_delete_photo(?string $photo): void
 {
     $file = team_photo_file($photo);
-    if ($file && $file !== 'default-avatar.png' && is_file(TEAM_PHOTO_DIR . '/' . $file)) {
-        @unlink(TEAM_PHOTO_DIR . '/' . $file);
+    if ($file && $file !== 'default-avatar.png' && str_starts_with($file, 'membre-')) {   // jamais une photo suivie par Git
+        upload_delete('team', $file);
     }
 }
