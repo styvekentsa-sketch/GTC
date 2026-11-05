@@ -4879,3 +4879,158 @@ a.social__link--twitter:hover,   a.social__link--twitter:focus-visible   { backg
   .rating-input__stars label:hover { transform: none; }
   .review-form__spinner { animation-duration: 2.4s; }
 }
+
+/* ==========================================================================
+   12. Confort mobile (revue complète du site sur téléphone)
+   Placé en fin de feuille : complète les règles responsives précédentes sans changer l'affichage ordinateur.
+   ========================================================================== */
+
+/* Photo de fond des bannières : couvre toute la hauteur (l'élément <picture> prenait la hauteur de l'image) */
+.hero__bg picture,
+.page-hero__bg picture {
+  display: block;
+  height: 100%;
+}
+
+/* Un numéro de téléphone ne se coupe jamais en deux lignes */
+a[href^="tel:"] { white-space: nowrap; }
+
+/* Icône du lien « Suivez votre colis » (calculateur CBM) sur la même ligne que le texte */
+.freight-links .icon { display: inline-block; }
+
+/* ---- Tablette & mobile : < 992px ---- */
+@media (max-width: 991.98px) {
+  /* Zones tactiles d'au moins 44 px (recommandation Apple / Google) */
+  .btn,
+  .btn--sm { min-height: 44px; }
+  .social__link { width: 44px; height: 44px; }
+  .svc-carousel__play { min-height: 44px; padding-inline: var(--space-4); }
+  .cur-item__link { display: inline-flex; align-items: center; min-height: 40px; padding-inline: var(--space-4); }
+
+  /* Champs à 16 px : iPhone ne zoome plus la page quand on touche un champ */
+  .form-control,
+  .tool-card__form .form-control,
+  .freight-line input,
+  .lang-switch__select,
+  input[type="text"], input[type="email"], input[type="tel"], input[type="search"], input[type="number"],
+  select, textarea { font-size: 16px; }
+
+  /* Accueil : panneau « Informations pratiques » sur toute la largeur */
+  .hero__panel { justify-self: stretch; width: 100%; max-width: none; }
+}
+
+/* ---- Téléphone : < 576px ---- */
+@media (max-width: 575.98px) {
+  /* Barre supérieure : 2 lignes au lieu de 4 (les horaires sont dans le pied de page et la page Contact) */
+  .topbar__inner { gap: 0 var(--space-3); padding-block: var(--space-1); }
+  .topbar__list { flex-wrap: nowrap; gap: var(--space-5); }
+  .topbar__list > li:nth-child(2) { display: none; }
+  .topbar__item a { display: inline-flex; align-items: center; min-height: 36px; }
+  .lang-switch { margin-bottom: var(--space-1); }
+  .lang-switch__select { padding-block: 0.3rem; }
+
+  /* Groupes de boutons : pleine largeur, faciles à toucher et alignés */
+  .svc-card__actions,
+  .svc-row__actions,
+  .map-panel__actions,
+  .testimonials__more { flex-direction: column; align-items: stretch; gap: var(--space-3); }
+  .svc-card__actions .btn,
+  .svc-row__actions .btn,
+  .map-panel__actions .btn,
+  .testimonials__more .btn { width: 100%; justify-content: center; }
+
+  /* Cartes Contact et outils : icône à gauche, texte à droite (cartes 2 fois moins hautes) */
+  .contact-card,
+  .tool-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: var(--space-4);
+    align-content: start;
+  }
+  .contact-card > *,
+  .tool-card > * { grid-column: 2; }
+  .contact-card > .card__icon,
+  .tool-card > .card__icon { grid-column: 1; grid-row: 1 / span 4; width: 48px; height: 48px; margin: 0; }
+  .contact-card > .card__icon + *,
+  .tool-card > .card__icon + * { margin-top: 0; }
+  .tool-card > .tool-card__form { grid-column: 1 / -1; }
+  .contact-card > .status { justify-self: start; }
+  .tool-card__form .btn { min-width: 48px; }
+
+  /* Engagements : icône à gauche, numéro en haut à droite (cartes plus courtes) */
+  .value-card { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--space-4); align-content: start; }
+  .value-card > * { grid-column: 2; }
+  .value-card__head { display: contents; }
+  .value-card .card__icon { grid-column: 1; grid-row: 1 / span 3; width: 48px; height: 48px; margin: 0; }
+  .value-card__num { position: absolute; top: var(--space-4); right: var(--space-4); }
+  .value-card > .card__title { margin-top: 0; padding-right: var(--space-6); }
+
+  /* Témoignages : défilement horizontal au doigt (carte suivante visible) au lieu de 3 longues cartes empilées */
+  #temoignages .grid {
+    display: flex;
+    gap: var(--space-4);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    margin-inline: calc(-1 * var(--space-4));
+    padding: var(--space-1) var(--space-4) var(--space-3);
+    scroll-padding-inline: var(--space-4);
+    scrollbar-width: none;
+  }
+  #temoignages .grid::-webkit-scrollbar { display: none; }
+  #temoignages .grid > * { flex: 0 0 86%; scroll-snap-align: start; }
+
+  /* Devises (Services) : bouton « Simuler » toujours en haut à droite, statut en dessous */
+  .cur-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; padding: var(--space-4); }
+  .cur-item__meta { display: contents; }
+  .cur-item__status { grid-column: 1 / -1; grid-row: 2; white-space: normal; }
+  .cur-item__link { grid-column: 3; grid-row: 1; }
+
+  /* Services : grand numéro décoratif réduit, il ne masque plus la photo */
+  .svc-row__num { font-size: 3.6rem; }
+
+  /* Bandeaux de filtres défilants : alignés sur la marge du téléphone (plus de débordement de 8 px) */
+  .svc-cat__chips,
+  .faq__filters { margin-inline: calc(-1 * var(--space-4)); padding-inline: var(--space-4); }
+
+  /* ---- Pied de page mobile ----
+     Ordre : présentation (centrée) → coordonnées & horaires → navigation → informations légales.
+     Sections séparées par un filet, liens sur 2 colonnes, coordonnées en lignes faciles à toucher. */
+  .site-footer__grid { display: flex; flex-direction: column; gap: 0; padding-block: var(--space-7) var(--space-4); }
+  .site-footer__grid > .site-footer__col { padding-block: var(--space-6); border-top: 1px solid var(--color-navy-800); }
+  .site-footer__grid > .site-footer__col:first-child { order: 1; padding-top: 0; border-top: 0; text-align: center; }
+  .site-footer__grid > .site-footer__col:nth-child(4) { order: 2; }
+  .site-footer__grid > .site-footer__col:nth-child(2) { order: 3; }
+  .site-footer__grid > .site-footer__col:nth-child(3) { order: 4; }
+
+  .site-footer__col:first-child .logo { justify-content: center; margin-inline: auto; margin-bottom: var(--space-4); }
+  .site-footer__about { max-width: 34ch; margin-inline: auto; font-size: var(--fs-sm); color: var(--color-slate-400); }
+  .site-footer__follow { margin-bottom: var(--space-3); }
+  .site-footer__col:first-child .social { justify-content: center; }
+  .site-footer__col:first-child > .btn { width: 100%; margin-top: var(--space-5); justify-content: center; }
+
+  .site-footer__title { margin-bottom: var(--space-3); font-size: var(--fs-xs); color: var(--color-slate-400); }
+  .site-footer__title--spaced { margin-top: var(--space-5); }
+
+  /* Horaires : encadré clair */
+  .hours { padding: var(--space-1) var(--space-4); border: 1px solid var(--color-navy-800); border-radius: var(--radius-lg); background-color: rgba(255, 255, 255, 0.03); }
+  .hours__row:last-child { border-bottom: 0; }
+
+  /* Coordonnées : une ligne tactile par moyen de contact, icône dans une pastille */
+  .site-footer__contact { display: grid; gap: var(--space-2); }
+  .site-footer__contact li { align-items: center; min-height: 52px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-navy-800); border-radius: var(--radius-lg); background-color: rgba(255, 255, 255, 0.03); color: var(--color-white); }
+  .site-footer__contact li + li { margin-top: 0; }
+  .site-footer__contact .icon { display: grid; place-items: center; box-sizing: content-box; width: 1rem; height: 1rem; margin: 0; padding: 0.55rem; border-radius: 50%; background-color: rgba(34, 197, 94, 0.12); }
+  .site-footer__contact a { display: flex; align-items: center; flex: 1; align-self: stretch; color: var(--color-white); font-weight: 500; }
+
+  /* Navigation et légal : 2 colonnes, liens de 40 px de haut */
+  .site-footer__links { display: grid; grid-template-columns: 1fr 1fr; gap: 0 var(--space-4); }
+  .site-footer__col:nth-child(3) .site-footer__links { grid-template-columns: 1fr; }   /* libellés légaux longs : une colonne */
+  .site-footer__links li + li { margin-top: 0; }
+  .site-footer__links a,
+  .site-footer__links button { display: flex; align-items: center; min-height: 40px; line-height: 1.3; color: var(--color-slate-300); }
+
+  /* Bas de page centré */
+  .site-footer__bottom .container { flex-direction: column; justify-content: center; gap: var(--space-2); }
+  .site-footer__bottom { padding-bottom: calc(var(--space-5) + 64px); }   /* place pour les boutons flottants */
+  .site-footer__staff { display: inline-flex; align-items: center; min-height: 36px; }
+}

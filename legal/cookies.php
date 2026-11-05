@@ -25,7 +25,7 @@ include __DIR__ . '/../includes/hero.php';
 
 legal_open('cookies');
 ?>
-            <h2 id="definition">1. Qu'est-ce qu'un cookie ?</h2>
+            <h2 id="definition">1. Qu'est-ce qu'un cookie&nbsp;?</h2>
             <p>Un cookie est un petit fichier enregistré par votre navigateur lors de la visite d'un site. Le stockage local
                du navigateur (<em>localStorage</em>) fonctionne de manière comparable. Certains sont indispensables au
                fonctionnement du site ; d'autres, déposés par des services tiers, nécessitent votre accord.</p>

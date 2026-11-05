@@ -113,7 +113,7 @@ include __DIR__ . '/includes/hero.php';
 
         <div class="cta-band rates__cta">
             <div class="cta-band__text">
-                <h2>Un montant important ou une devise rare ?</h2>
+                <h2>Un montant important ou une devise rare&nbsp;?</h2>
                 <p>Indiquez-nous la devise et le montant : nous vous confirmons le taux et réservons les fonds si nécessaire.</p>
             </div>
             <div class="cta-band__actions">

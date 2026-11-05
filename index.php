@@ -263,7 +263,7 @@ $partnerItem = function (array $p, bool $copy = false): void {
     <div class="container">
         <div class="cta-band">
             <div class="cta-band__text">
-                <h2 id="cta-title">Une opération à réaliser ?</h2>
+                <h2 id="cta-title">Une opération à réaliser&nbsp;?</h2>
                 <p>Écrivez-nous sur WhatsApp ou appelez-nous : nous vous répondons avec le taux du jour et les étapes à suivre.
                     Notre guichet est ouvert du lundi au vendredi de 08h à 17h30 et le samedi de 09h à 14h.</p>
             </div>

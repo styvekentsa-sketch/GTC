@@ -191,7 +191,7 @@ include __DIR__ . '/includes/hero.php';
         <div class="modal__grid">
             <div class="modal__intro">
                 <span class="section__eyebrow">Simulateur</span>
-                <h2 id="calculator-title">Combien allez-vous recevoir ?</h2>
+                <h2 id="calculator-title">Combien allez-vous recevoir&nbsp;?</h2>
                 <p class="modal__lead">
                     Choisissez vos devises et saisissez un montant : l'estimation s'affiche aussitôt.
                     Pour le taux exact du jour, un message suffit.

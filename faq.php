@@ -132,7 +132,7 @@ echo seo_jsonld($jsonLd);
             <!-- Encadré de contact -->
             <aside class="faq-help">
                 <span class="faq-help__icon"><?= icon('whatsapp') ?></span>
-                <h2 class="faq-help__title">Vous ne trouvez pas votre réponse ?</h2>
+                <h2 class="faq-help__title">Vous ne trouvez pas votre réponse&nbsp;?</h2>
                 <p>Notre équipe vous répond <?= e($hours) ?>.</p>
                 <a href="https://wa.me/<?= e(GTC_WHATSAPP) ?>?text=<?= e(rawurlencode('Bonjour GTC, j\'ai une question :')) ?>" class="btn btn--accent btn--block" target="_blank" rel="noopener"><?= icon('whatsapp') ?> Poser ma question sur WhatsApp</a>
                 <a href="tel:<?= e(GTC_PHONE_LINK) ?>" class="btn btn--outline btn--block"><?= icon('phone') ?> <?= e(GTC_PHONE) ?></a>

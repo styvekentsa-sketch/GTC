@@ -115,7 +115,7 @@ include __DIR__ . '/includes/hero.php';
         <!-- Rappel des règles de calcul (aussi lu par les moteurs de recherche) -->
         <div class="freight-help">
             <article>
-                <h2>Comment est calculé le volume (CBM) ?</h2>
+                <h2>Comment est calculé le volume (CBM)&nbsp;?</h2>
                 <p>Volume d'un colis en m³ = longueur × largeur × hauteur en mètres (ou en cm ÷ 1 000 000), multiplié par le nombre de colis identiques.
                     Ex. : un carton de 60 × 40 × 40 cm = 0,096 m³ ; 10 cartons = 0,96 m³.</p>
             </article>
