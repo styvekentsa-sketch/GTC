@@ -7,7 +7,7 @@
  *   $seoTitle        (string) Balise <title> complète (sinon « $pageTitle | Global Trading Corporation »)
  *   $pageDescription (string) Meta description (≈ 150 à 160 caractères), reprise par Open Graph
  *   $robots          (string) Directive robots (défaut : index, follow)
- *   $currentPage     (string) Clé du lien actif         'accueil' | 'services' | 'suivi' | 'a-propos' | 'contact'
+ *   $currentPage     (string) Clé du lien actif         'accueil' | 'services' | 'suivi' | 'a-propos' | 'faq' | 'contact'
  *   $root            (string) Chemin vers la racine du site : '' (défaut) ou '../' pour les pages
  *                             d'un sous-dossier (ex. legal/), appliqué à tous les liens et fichiers.
  */
@@ -42,6 +42,7 @@ $navItems = [
     'services' => ['label' => 'Services',  'href' => $root . 'services.php'],
     'suivi'    => ['label' => 'Suivi colis', 'href' => $root . 'suivi.php'],
     'a-propos' => ['label' => 'À propos',  'href' => $root . 'a-propos.php'],
+    'faq'      => ['label' => 'FAQ',       'href' => $root . 'faq.php'],
     'contact'  => ['label' => 'Contact',   'href' => $root . 'contact.php'],
 ];
 
@@ -83,10 +84,10 @@ if (!function_exists('e')) {
     <meta name="twitter:description" content="<?= e($pageDescription) ?>">
     <meta name="twitter:image" content="<?= e($shareImage) ?>">
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://images.unsplash.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Police Inter hébergée sur le site (assets/fonts/, assets/css/fonts.css) : aucune requête vers Google -->
+    <link rel="preload" href="<?= e($root) ?>assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="<?= e(asset_url('assets/css/fonts.css', $root)) ?>">
     <link rel="icon" href="<?= e($root) ?>assets/img/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="<?= e($root) ?>assets/img/favicon-32.png" sizes="32x32" type="image/png">
     <link rel="alternate icon" href="<?= e($root) ?>favicon.ico">
@@ -115,6 +116,10 @@ if (!function_exists('e')) {
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
                 <span>Lun-Ven : 08h-17h30 &nbsp;·&nbsp; Sam : 09h-14h</span>
             </li>
+            <li class="topbar__item topbar__rates">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
+                <a href="<?= e($root) ?>taux.php">Taux du jour</a>
+            </li>
         </ul>
         <p class="topbar__item topbar__zones">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg>
@@ -128,7 +133,11 @@ if (!function_exists('e')) {
     <div class="container site-header__inner">
         <a href="<?= e($root) ?>index.php" class="logo" aria-label="<?= e(GTC_NAME) ?> — Accueil">
             <!-- Logo officiel (globe + GLOBAL TRADING CORPORATION) : le nom fait partie de l'image -->
-            <img class="logo__img" src="<?= e(asset_url('assets/img/logo-gtc.png', $root)) ?>" alt="<?= e(GTC_NAME) ?>" width="202" height="50">
+            <!-- Logo à la taille d'affichage (×2 pour les écrans haute densité) : 22 Ko en WebP au lieu de 190 Ko -->
+            <picture>
+                <source type="image/webp" srcset="<?= e(asset_url('assets/img/logo-gtc-436.webp', $root)) ?>">
+                <img class="logo__img" src="<?= e(asset_url('assets/img/logo-gtc-436.png', $root)) ?>" alt="<?= e(GTC_NAME) ?>" width="202" height="50" fetchpriority="high">
+            </picture>
         </a>
 
         <button class="burger" id="burger" type="button"

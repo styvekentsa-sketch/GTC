@@ -18,6 +18,7 @@ $hero = [
     'title'   => 'Mentions légales',
     'lead'    => "Qui édite ce site, comment nous joindre et dans quel cadre juridique il est publié.",
     'crumb'   => 'Mentions légales',
+    'image'   => 'buildings',   // photo de la bannière (tours de bureaux : identité de l'entreprise) — GTC_IMAGES, includes/media.php
 ];
 include __DIR__ . '/../includes/hero.php';
 
@@ -95,7 +96,7 @@ legal_open('mentions-legales');
             <h2 id="credits"><?= $host ? '8' : '7' ?>. Crédits</h2>
             <ul>
                 <li>Photographies : <a href="https://unsplash.com" target="_blank" rel="noopener">Unsplash</a>, utilisées selon la licence Unsplash ; elles restent la propriété de leurs auteurs.</li>
-                <li>Police de caractères : Inter (licence SIL Open Font License), servie par Google Fonts.</li>
+                <li>Police de caractères : Inter (licence SIL Open Font License), hébergée sur ce site.</li>
             </ul>
 <?php
 legal_close();

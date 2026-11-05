@@ -14,9 +14,13 @@ DirectoryIndex index.php index.html
 # Pas de listage du contenu des dossiers
 Options -Indexes
 
+# Page introuvable aux couleurs du site (liens absolus : fonctionne à toute profondeur d'adresse)
+ErrorDocument 404 /404.php
+
 AddDefaultCharset UTF-8
 
-# Types MIME (logo SVG, manifeste, favicon)
+# Types MIME (logo SVG, manifeste, favicon, police Inter hébergée sur le site)
+AddType font/woff2 .woff2
 AddType image/svg+xml .svg
 AddType application/manifest+json .webmanifest
 AddType image/x-icon .ico

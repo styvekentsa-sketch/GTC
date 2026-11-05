@@ -96,3 +96,19 @@ const GTC_AVAILABILITY = [
     'request'   => ['label' => 'Sur demande',              'tone' => 'warning'],
     'limited'   => ['label' => 'Disponibilité limitée',    'tone' => 'muted'],
 ];
+
+/**
+ * Drapeau d'une devise, hébergé sur le site (assets/img/flags/{iso}.png, 80 px de large : net aussi sur écran haute densité).
+ * Commun aux pages Services et Taux du jour ; $prefix : chemin vers la racine du site ('' ou '../').
+ * Nouvelle devise : ajouter son drapeau dans ce dossier (ex. https://flagcdn.com/w80/{iso}.png).
+ */
+function flag(string $code, int $width = 32, string $prefix = ''): string
+{
+    $iso = preg_replace('/[^a-z]/', '', GTC_CURRENCIES[$code]['flag'] ?? '');
+    $h   = (int) round($width * 0.75);
+    if ($iso === '' || !is_file(__DIR__ . '/../assets/img/flags/' . $iso . '.png')) {
+        return '<span class="flag flag--none" style="width:' . $width . 'px;height:' . $h . 'px" aria-hidden="true"></span>';
+    }
+    return '<img class="flag" src="' . e(asset_url('assets/img/flags/' . $iso . '.png', $prefix)) . '"'
+         . ' width="' . $width . '" height="' . $h . '" alt="" loading="lazy" decoding="async">';
+}

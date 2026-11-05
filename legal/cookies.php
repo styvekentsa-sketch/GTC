@@ -18,6 +18,7 @@ $hero = [
     'title'   => 'Politique des cookies',
     'lead'    => 'Les cookies et traceurs utilisés sur ce site, et comment garder la main sur vos choix.',
     'crumb'   => 'Cookies',
+    'image'   => 'phone',   // photo de la bannière (smartphone : navigation sur le site) — GTC_IMAGES, includes/media.php
     'parent'  => ['label' => 'Informations légales', 'href' => 'mentions-legales.php'],
 ];
 include __DIR__ . '/../includes/hero.php';
@@ -104,9 +105,9 @@ legal_open('cookies');
                des traceurs : les icônes de nos réseaux sociaux sont de simples liens.</p>
 
             <h2 id="ressources">6. Ressources externes sans cookie</h2>
-            <p>La police d'écriture (Google Fonts) et les photographies (Unsplash) sont chargées depuis les serveurs de ces
-               services. Ils ne déposent pas de cookie, mais reçoivent l'adresse IP de votre appareil, comme pour toute
-               ressource chargée sur Internet.</p>
+            <p>Les photographies (Unsplash) sont chargées depuis les serveurs de ce service. Il ne dépose pas de cookie, mais
+               reçoit l'adresse IP de votre appareil, comme pour toute ressource chargée sur Internet. La police d'écriture
+               est hébergée sur notre propre serveur : aucune requête n'est envoyée à un tiers pour l'afficher.</p>
 
             <h2 id="navigateur">7. Paramétrer votre navigateur</h2>
             <p>Vous pouvez aussi bloquer ou supprimer les cookies depuis les réglages de votre navigateur (rubrique

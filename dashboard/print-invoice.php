@@ -76,7 +76,9 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
     <meta name="robots" content="noindex, nofollow">
     <title><?= $inv ? e($inv['invoice_number']) . ' — ' : 'Reçu introuvable — ' ?><?= e($company['company_name']) ?></title>
     <link rel="icon" href="<?= e(site_root()) ?>assets/img/favicon.svg" type="image/svg+xml">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Police Inter hébergée sur le site (assets/fonts/, assets/css/fonts.css) : aucune requête vers Google -->
+    <link rel="preload" href="<?= e(site_root()) ?>assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="<?= e(asset_url('assets/css/fonts.css', site_root())) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('assets/css/custom-select.css', site_root())) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('assets/css/invoice-print.css', site_root())) ?>">
 </head>

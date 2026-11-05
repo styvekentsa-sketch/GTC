@@ -19,6 +19,7 @@ $hero = [
     'title'   => 'Politique de confidentialité',
     'lead'    => 'Quelles données nous recueillons, pourquoi, combien de temps nous les gardons et quels sont vos droits.',
     'crumb'   => 'Politique de confidentialité',
+    'image'   => 'transfer',   // photo de la bannière (carte bancaire et ordinateur : protection des données) — GTC_IMAGES, includes/media.php
     'parent'  => ['label' => 'Informations légales', 'href' => 'mentions-legales.php'],
 ];
 include __DIR__ . '/../includes/hero.php';
@@ -100,7 +101,7 @@ legal_open('politique-confidentialite');
             <p>Certaines fonctions s'appuient sur des services externes, qui reçoivent votre adresse IP et appliquent leur
                propre politique de confidentialité. Leurs serveurs peuvent être situés hors du Cameroun.</p>
             <ul>
-                <li><strong>Google Fonts</strong> (police d'écriture) et <strong>Unsplash</strong> (photographies) : chargés à chaque visite, sans cookie ;</li>
+                <li><strong>Unsplash</strong> (photographies) : chargé à chaque visite, sans cookie ;</li>
                 <li><strong>Google Maps</strong> (carte de la page Contact) : chargé uniquement si vous l'acceptez ;</li>
                 <li><strong>Google Traduction</strong> : chargé uniquement si vous choisissez une autre langue que le français ;</li>
                 <li><strong>WhatsApp</strong> (Meta) : utilisé uniquement si vous cliquez sur un lien WhatsApp pour nous écrire.</li>

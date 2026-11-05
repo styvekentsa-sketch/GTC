@@ -6,6 +6,8 @@
  *   include header.php → include hero.php → legal_open() → contenu → legal_close() → include footer.php
  */
 
+require_once __DIR__ . '/media.php';   // unsplash_img() : photo de la bannière de chaque page légale
+
 /** Pages légales : clé (nom du fichier) => libellé. */
 const LEGAL_PAGES = [
     'mentions-legales'          => 'Mentions légales',

@@ -21,7 +21,10 @@ $legalLinks = [
         <!-- Colonne 1 : Présentation -->
         <div class="site-footer__col">
             <a href="<?= e($root) ?>index.php" class="logo logo--light" data-secret-logo>
-                <img class="logo__img" src="<?= e(asset_url('assets/img/logo-gtc-light.png', $root)) ?>" alt="<?= e(GTC_NAME) ?>" width="202" height="50" loading="lazy">
+                <picture>
+                    <source type="image/webp" srcset="<?= e(asset_url('assets/img/logo-gtc-light-436.webp', $root)) ?>">
+                    <img class="logo__img" src="<?= e(asset_url('assets/img/logo-gtc-light-436.png', $root)) ?>" alt="<?= e(GTC_NAME) ?>" width="202" height="50" loading="lazy">
+                </picture>
             </a>
             <p class="site-footer__about">
                 <?= e(GTC_NAME) ?> vous accompagne dans vos opérations de transfert de fonds
@@ -46,6 +49,9 @@ $legalLinks = [
                 <?php foreach ($navItems as $item): ?>
                     <li><a href="<?= e($item['href']) ?>"><?= e($item['label']) ?></a></li>
                 <?php endforeach; ?>
+                <!-- Pages hors du menu principal -->
+                <li><a href="<?= e($root) ?>taux.php">Taux du jour</a></li>
+                <li><a href="<?= e($root) ?>calculateur-cbm.php">Calculateur CBM</a></li>
             </ul>
         </div>
 
@@ -94,6 +100,15 @@ $legalLinks = [
         </div>
     </div>
 </footer>
+
+<!-- ==================== BOUTONS FLOTTANTS : WhatsApp (toujours visible) et retour en haut (assets/js/main.js § 8) ==================== -->
+<div class="floaters">
+    <button type="button" class="floater floater--top" data-back-to-top aria-label="Revenir en haut de la page" hidden><?= icon('arrow') ?></button>
+    <a href="https://wa.me/<?= e(GTC_WHATSAPP) ?>?text=<?= e(rawurlencode('Bonjour GTC, ')) ?>" class="floater floater--wa" target="_blank" rel="noopener"
+       aria-label="Écrire à GTC sur WhatsApp (<?= e(GTC_WHATSAPP_DISPLAY) ?>)">
+        <?= icon('whatsapp') ?><span class="floater__label">WhatsApp</span>
+    </a>
+</div>
 
 <!-- ==================== BANNIÈRE COOKIES (affichée par assets/js/cookies.js tant qu'aucun choix n'est fait) ==================== -->
 <section class="cookie-banner" id="cookie-banner" aria-label="Gestion des cookies" hidden>

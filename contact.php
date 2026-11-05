@@ -36,10 +36,9 @@ include __DIR__ . '/includes/header.php';
 
 $hero = [
     'crumb'   => 'Contact',
-    'picture' => ['name' => 'contact', 'width' => 1600, 'height' => 800],   // assets/img/hero/contact-*.webp|jpg
-    'overlay' => 'light',
+    'image'   => 'office',   // salle de réunion (GTC_IMAGES, includes/media.php) — l'ancienne photo portait « CONTACT US » en anglais
     'eyebrow' => 'Contact',
-    'title'   => 'Contactez-nous & Rendez-nous visite',
+    'title'   => 'Contactez-nous et rendez-nous visite',
     'lead'    => "Le secrétariat de la direction Global Trading Corporation est au bout du fil pour répondre à vos préoccupations, n'hésitez pas à poser autant de questions que nécessaire.",
 ];
 
@@ -107,11 +106,13 @@ include __DIR__ . '/includes/hero.php';
 
         <!-- Formulaire -->
         <div class="form-panel">
-            <h2>Demandez-nous quelque chose.</h2>
+            <h2>Écrivez-nous</h2>
             <p class="form-panel__intro">
-                Nous collectons les soumissions de tout visiteur afin de garantir une réponse bien détaillée pour une
-                meilleure compréhension.
+                Une question, une demande de taux ou de devis ? Remplissez ce formulaire : notre équipe vous répond
+                dans les plus brefs délais.
             </p>
+            <p class="form-panel__faq"><?= icon('quote') ?> Une question sur les taux, les documents à fournir ou le suivi d'un colis ?
+                La réponse est peut-être déjà dans nos <a href="faq.php">questions fréquentes</a>.</p>
 
             <?php if ($success): ?>
                 <div class="alert alert--success" role="status">

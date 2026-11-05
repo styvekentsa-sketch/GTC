@@ -17,6 +17,7 @@ $hero = [
     'title'   => "Conditions générales d'utilisation",
     'lead'    => 'Les règles qui encadrent la consultation et l\'utilisation de ce site.',
     'crumb'   => 'CGU',
+    'image'   => 'handshake',   // photo de la bannière (poignée de main : accord d'utilisation) — GTC_IMAGES, includes/media.php
     'parent'  => ['label' => 'Informations légales', 'href' => 'mentions-legales.php'],
 ];
 include __DIR__ . '/../includes/hero.php';

@@ -42,21 +42,6 @@ function fx_format(float $amount, string $code): string
     return number_format($amount, $decimals, ',', "\u{202F}") . "\u{00A0}" . $code;
 }
 
-/**
- * Drapeau d'une devise, hébergé sur le site (assets/img/flags/{iso}.png, 80 px de large : net aussi sur écran haute densité).
- * Nouvelle devise : ajouter son drapeau dans ce dossier (ex. https://flagcdn.com/w80/{iso}.png).
- */
-function flag(string $code, int $width = 32): string
-{
-    $iso = preg_replace('/[^a-z]/', '', GTC_CURRENCIES[$code]['flag'] ?? '');
-    $h   = (int) round($width * 0.75);
-    if ($iso === '' || !is_file(__DIR__ . '/assets/img/flags/' . $iso . '.png')) {
-        return '<span class="flag flag--none" style="width:' . $width . 'px;height:' . $h . 'px" aria-hidden="true"></span>';
-    }
-    return '<img class="flag" src="' . e(asset_url('assets/img/flags/' . $iso . '.png')) . '"'
-         . ' width="' . $width . '" height="' . $h . '" alt="" loading="lazy" decoding="async">';
-}
-
 /* ==========================================================================
    Contenu
    ========================================================================== */
@@ -65,7 +50,7 @@ $hero = [
     'crumb'   => 'Services',
     'image'   => 'af-harbour',
     'eyebrow' => 'Nos services',
-    'title'   => 'Nos Solutions Financières & Commerciales',
+    'title'   => 'Nos solutions financières et commerciales',
     'lead'    => "Change de devises, transferts internationaux et import-export : GTC traite vos opérations "
                . "rapidement et au juste taux, depuis son guichet de Douala, rue Paul Soppo Priso.",
     'actions' => [
@@ -112,10 +97,12 @@ include __DIR__ . '/includes/hero.php';
             <header class="section__header">
                 <span class="section__eyebrow">Ce que nous faisons</span>
                 <h2>Nos services, une seule exigence : la fiabilité</h2>
+                <p class="section__lead">De la finance au fret international : huit métiers réunis sous un même toit à Douala, avec une équipe qui vous suit de bout en bout.</p>
             </header>
         </div>
 
-        <?php include __DIR__ . '/includes/services-carousel.php'; ?>
+        <!-- Catalogue détaillé (l'accueil présente les mêmes services en carrousel) -->
+        <?php include __DIR__ . '/includes/services-catalogue.php'; ?>
     </section>
 
     <!-- ==================== DEVISES ==================== -->
@@ -124,7 +111,7 @@ include __DIR__ . '/includes/hero.php';
             <header class="section__header">
                 <span class="section__eyebrow">Devises</span>
                 <h2>Les devises que nous traitons</h2>
-                <p class="section__lead">Sept devises disponibles au guichet de Douala et pour vos transferts.</p>
+                <p class="section__lead">Sept devises disponibles au guichet de Douala et pour vos transferts. <a href="taux.php" class="link-arrow">Voir les taux du jour</a></p>
             </header>
 
             <ul class="cur-list">

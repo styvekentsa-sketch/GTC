@@ -417,9 +417,9 @@ function dash_header(string $title, string $active = ''): void
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title><?= e($title) ?> | Dashboard GTC</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Police Inter hébergée sur le site (assets/fonts/, assets/css/fonts.css) : aucune requête vers Google -->
+    <link rel="preload" href="<?= e(site_root()) ?>assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="<?= e(asset_url('assets/css/fonts.css', site_root())) ?>">
     <link rel="icon" href="<?= e(site_root()) ?>assets/img/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="<?= e(site_root()) ?>assets/img/favicon-32.png" sizes="32x32" type="image/png">
     <link rel="apple-touch-icon" href="<?= e(site_root()) ?>assets/img/apple-touch-icon.png">
@@ -440,7 +440,7 @@ function dash_header(string $title, string $active = ''): void
 <?php if (!$hub): ?>
 <aside class="sidebar" id="sidebar" aria-label="Menu du dashboard">
     <div class="sidebar__brand">
-        <span class="sidebar__logo"><img src="<?= e(asset_url('assets/img/logo-gtc-light.png', site_root())) ?>" alt="<?= e(GTC_NAME) ?>" width="166" height="41"></span>
+        <span class="sidebar__logo"><img src="<?= e(asset_url('assets/img/logo-gtc-light-436.png', site_root())) ?>" alt="<?= e(GTC_NAME) ?>" width="166" height="41"></span>
         <span class="sidebar__name"><small>Dashboard</small></span>
     </div>
 
@@ -498,7 +498,7 @@ function dash_header(string $title, string $active = ''): void
     <header class="topbar">
         <?php if ($hub): ?>
             <a href="index.php" class="topbar__brand" aria-label="<?= e(GTC_NAME) ?> — Accueil du Dashboard">
-                <img src="<?= e(asset_url('assets/img/logo-gtc.png', site_root())) ?>" alt="" width="166" height="41">
+                <img src="<?= e(asset_url('assets/img/logo-gtc-436.png', site_root())) ?>" alt="" width="166" height="41">
             </a>
         <?php else: ?>
             <button class="topbar__menu" id="sidebar-toggle" type="button" aria-label="Ouvrir le menu"
@@ -558,9 +558,9 @@ function auth_layout_open(string $title, string $subtitle): void
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title><?= e($title) ?> | Dashboard GTC</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Police Inter hébergée sur le site (assets/fonts/, assets/css/fonts.css) : aucune requête vers Google -->
+    <link rel="preload" href="<?= e(site_root()) ?>assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="<?= e(asset_url('assets/css/fonts.css', site_root())) ?>">
     <link rel="icon" href="<?= e(site_root()) ?>assets/img/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="<?= e(site_root()) ?>assets/img/favicon-32.png" sizes="32x32" type="image/png">
     <link rel="apple-touch-icon" href="<?= e(site_root()) ?>assets/img/apple-touch-icon.png">
@@ -579,7 +579,7 @@ function auth_layout_open(string $title, string $subtitle): void
 <?= dash_root_warning() ?>
 <main class="auth-card">
     <div class="auth-card__brand">
-        <span class="sidebar__logo auth-card__logo"><img src="<?= e(asset_url('assets/img/logo-gtc.png', site_root())) ?>" alt="<?= e(GTC_NAME) ?>" width="218" height="54"></span>
+        <span class="sidebar__logo auth-card__logo"><img src="<?= e(asset_url('assets/img/logo-gtc-436.png', site_root())) ?>" alt="<?= e(GTC_NAME) ?>" width="218" height="54"></span>
     </div>
     <h1 class="auth-card__title"><?= e($title) ?></h1>
     <p class="auth-card__subtitle"><?= e($subtitle) ?></p>

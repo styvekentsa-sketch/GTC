@@ -29,8 +29,8 @@ $freight = [
 
 // ---------- Méta & données de la page ----------
 $pageTitle       = 'Calculateur CBM et fret';
-$seoTitle        = 'Calculateur CBM et poids volumétrique | Fret maritime et aérien vers Douala';
-$pageDescription = 'Calculez gratuitement le volume (m³ / CBM) et le poids volumétrique de vos colis, puis estimez le coût du fret maritime ou aérien vers Douala avec Global Trading Corporation.';
+$seoTitle        = 'Calculateur CBM et fret maritime / aérien | GTC Douala';
+$pageDescription = 'Calculez gratuitement le volume (CBM) et le poids volumétrique de vos colis, puis estimez le coût du fret maritime ou aérien vers Douala.';
 $currentPage     = 'calculateur';   // hors menu principal : lié depuis la page Suivi et la carte « Transit »
 
 include __DIR__ . '/includes/header.php';

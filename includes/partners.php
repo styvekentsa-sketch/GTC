@@ -63,6 +63,17 @@ function partner_logo_url(?string $logo, string $prefix = '', ?string $name = nu
     return $prefix . PARTNER_LOGO_URL . '/' . $file . '?v=' . filemtime(PARTNER_LOGO_DIR . '/' . $file);
 }
 
+/**
+ * Largeur d'affichage d'un logo (adresse renvoyée par partner_logo_url()) pour une hauteur donnée : attributs
+ * width/height réels, la page ne « saute » pas pendant le chargement. Null si les dimensions sont illisibles.
+ */
+function partner_logo_width(string $url, int $height): ?int
+{
+    $file = PARTNER_LOGO_DIR . '/' . basename((string) parse_url($url, PHP_URL_PATH));
+    $size = is_file($file) ? @getimagesize($file) : false;
+    return $size && $size[1] > 0 ? max(1, (int) round($size[0] * $height / $size[1])) : null;
+}
+
 /** Adresse web valide (http/https) ou chaîne vide. */
 function partner_clean_url(string $url): ?string
 {

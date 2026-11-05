@@ -50,10 +50,10 @@ $facts = [
 $team = team_members();
 
 $guarantees = [
-    ['icon' => 'store',   'title' => 'Guichet Sécurisé',     'text' => 'Accueil et transactions directes à notre agence de Douala.'],
-    ['icon' => 'eye',     'title' => 'Transparence Totale',  'text' => 'Taux appliqués confirmés avant toute validation de transaction.'],
-    ['icon' => 'receipt', 'title' => 'Traçabilité & Reçu',   'text' => 'Délivrance de bordereau/facture pour chaque opération.'],
-    ['icon' => 'phone',   'title' => 'Assistance Directe',   'text' => 'Équipe disponible sur place et par WhatsApp pour répondre à vos questions.'],
+    ['icon' => 'store',   'title' => 'Guichet sécurisé',     'text' => 'Accueil et transactions directes à notre agence de Douala.'],
+    ['icon' => 'eye',     'title' => 'Transparence totale',  'text' => 'Taux appliqués confirmés avant toute validation de transaction.'],
+    ['icon' => 'receipt', 'title' => 'Traçabilité et reçu',  'text' => 'Délivrance de bordereau/facture pour chaque opération.'],
+    ['icon' => 'phone',   'title' => 'Assistance directe',   'text' => 'Équipe disponible sur place et par WhatsApp pour répondre à vos questions.'],
 ];
 
 include __DIR__ . '/includes/hero.php';
@@ -111,7 +111,8 @@ include __DIR__ . '/includes/hero.php';
 <section class="section section--white about-section team-section" id="equipe">
     <div class="container">
         <header class="team-section__header">
-            <h2 class="team-banner">Rencontrez Notre Équipe</h2>
+            <span class="section__eyebrow">Notre équipe</span>
+            <h2>Rencontrez notre équipe</h2>
             <p class="section__lead">Les personnes qui vous reçoivent au guichet de la rue Paul Soppo Priso et suivent vos opérations.</p>
         </header>
 
