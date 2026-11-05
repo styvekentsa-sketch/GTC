@@ -238,6 +238,10 @@ function db_ensure_schema(PDO $pdo): void
         // Détails logistiques (poids, volume, colis, lieu de retrait) et libellé libre des étapes
         db_upgrade_shipments_details($pdo);
     }
+    if (!db_table_exists($pdo, 'reviews')) {
+        // Avis clients déposés sur le site (avis.php, api-reviews.php), modérés dans le Dashboard (dashboard/reviews.php)
+        db_install_reviews($pdo);
+    }
     if (!db_column_exists($pdo, 'invoices', 'shipment_id')) {
         // Reçu de paiement « Fret / Transit » rattaché à un dossier de suivi (facultatif)
         $pdo->exec('ALTER TABLE invoices ADD COLUMN shipment_id ' . db_types()['fk'] . ' NULL');
@@ -871,6 +875,32 @@ function db_upgrade_shipments_details(PDO $pdo): void
     }
     if (!db_column_exists($pdo, 'shipment_events', 'label')) {
         $pdo->exec('ALTER TABLE shipment_events ADD COLUMN label VARCHAR(150) NULL');
+    }
+}
+
+/**
+ * Avis clients : nom ou pseudo, note de 1 à 5, commentaire ; publiés après modération.
+ * status : pending (en attente, par défaut), approved (publié), rejected (refusé).
+ * ip : limite des envois répétés (includes/reviews.php) ; jamais affichée.
+ */
+function db_install_reviews(PDO $pdo): void
+{
+    ['pk' => $pk, 'fk' => $fk, 'dt' => $dt, 'suffix' => $suffix] = db_types();
+    $pdo->exec("CREATE TABLE IF NOT EXISTS reviews (
+        id {$pk},
+        author_name VARCHAR(60) NOT NULL,
+        rating SMALLINT NOT NULL,
+        comment TEXT NOT NULL,
+        status VARCHAR(10) NOT NULL DEFAULT 'pending',
+        ip VARCHAR(45) NULL,
+        created_at {$dt} NOT NULL,
+        moderated_at {$dt} NULL,
+        moderated_by {$fk} NULL,
+        moderated_by_name VARCHAR(100) NULL
+    ){$suffix}");
+    foreach (['CREATE INDEX idx_reviews_status ON reviews (status, created_at)',
+              'CREATE INDEX idx_reviews_ip ON reviews (ip, created_at)'] as $sql) {
+        $pdo->exec($sql);
     }
 }
 

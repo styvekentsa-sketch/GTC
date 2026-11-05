@@ -47,5 +47,11 @@ $testimonials = [
                 </figure>
             <?php endforeach; ?>
         </div>
+
+        <!-- Avis déposés et validés : avis.php -->
+        <div class="testimonials__more">
+            <a href="<?= e($root ?? '') ?>avis.php" class="btn btn--outline"><?= icon('star') ?> Lire tous les avis</a>
+            <a href="<?= e($root ?? '') ?>avis.php#laisser-un-avis" class="btn btn--primary"><?= icon('edit') ?> Laisser un avis</a>
+        </div>
     </div>
 </section>

@@ -127,6 +127,7 @@ $pages = [
     'calculateur-cbm.php'                 => 'calculateur-cbm.php',
     'faq.php'                             => 'faq.php',
     'taux.php'                            => 'taux.php',
+    'avis.php'                            => 'avis.php',
     'a-propos.php'                        => 'a-propos.php',
     'contact.php'                         => 'contact.php',
     'legal/mentions-legales.php'          => 'legal/mentions-legales.php',

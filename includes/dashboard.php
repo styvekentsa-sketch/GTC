@@ -361,6 +361,7 @@ function dash_modules(): array
     }
     if (can_access_messages()) {
         $modules['messages'] = ['href' => 'messages.php', 'icon' => 'mail', 'label' => 'Messages', 'title' => 'Messages', 'desc' => 'Demandes reçues par le site', 'tone' => 'blue'];
+        $modules['reviews']  = ['href' => 'reviews.php', 'icon' => 'star', 'label' => 'Avis clients', 'title' => 'Avis clients', 'desc' => 'Modérer les avis déposés sur le site', 'tone' => 'magenta'];
     }
     if (is_admin()) {
         $modules['team']     = ['href' => 'team.php',     'icon' => 'users',  'label' => 'Équipe',       'title' => 'Gestion d\'équipe', 'desc' => 'Membres affichés sur le site',  'tone' => 'green'];

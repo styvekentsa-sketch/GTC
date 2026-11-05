@@ -48,6 +48,12 @@ legal_open('politique-confidentialite');
                             <td>Le temps de traiter la demande, puis 3 ans au plus après le dernier échange</td>
                         </tr>
                         <tr>
+                            <th scope="row">Avis clients</th>
+                            <td>Nom ou pseudo, note, commentaire, adresse IP et date d'envoi (seuls le nom ou pseudo, la note, le commentaire et le mois sont publiés)</td>
+                            <td>Publier votre avis après relecture ; prévenir les envois abusifs. Base : votre consentement, en déposant l'avis.</td>
+                            <td>Tant que l'avis est publié ; vous pouvez demander son retrait à tout moment</td>
+                        </tr>
+                        <tr>
                             <th scope="row">Statistiques de fréquentation</th>
                             <td>Empreinte chiffrée et non réversible de l'adresse IP, date de la visite</td>
                             <td>Compter les visiteurs uniques par jour (voir section 3). Base : intérêt légitime.</td>

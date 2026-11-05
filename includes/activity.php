@@ -32,6 +32,7 @@ const ACTIVITY_ENTITIES = [
     'courrier'   => 'Courrier',
     'shipment'   => 'Dossier de suivi',
     'message'    => 'Message du site',
+    'review'     => 'Avis client',
     'user'       => 'Compte utilisateur',
     'team'       => 'Membre de l\'équipe',
     'partner'    => 'Partenaire',

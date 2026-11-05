@@ -51,6 +51,7 @@ $legalLinks = [
                 <?php endforeach; ?>
                 <!-- Pages hors du menu principal -->
                 <li><a href="<?= e($root) ?>taux.php">Taux du jour</a></li>
+                <li><a href="<?= e($root) ?>avis.php">Avis clients</a></li>
                 <li><a href="<?= e($root) ?>calculateur-cbm.php">Calculateur CBM</a></li>
             </ul>
         </div>
