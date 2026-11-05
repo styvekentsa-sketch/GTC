@@ -2370,7 +2370,8 @@ body.auth {
 .share-box__link { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .share-box__link input { flex: 1 1 240px; min-width: 0; font-family: ui-monospace, Consolas, monospace; font-size: 0.8125rem; background: var(--blue-soft); }
 .share-box textarea { width: 100%; min-height: 9rem; resize: vertical; line-height: 1.5; }
-.share-box__channels { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.5rem; }
+.share-box__channels { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 0.5rem; }
+.share-btn span { white-space: nowrap; }
 .share-box__to { margin-top: 0.75rem; }
 .share-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;

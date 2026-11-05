@@ -176,7 +176,7 @@ dash_header('Avis clients', 'reviews');
     <nav class="chips" aria-label="Filtrer les avis">
         <?php foreach (REVIEW_FILTERS as $key => $label): ?>
             <a href="reviews.php<?= $key === 'pending' ? '' : '?f=' . $key ?>" class="chip<?= $key === $filter ? ' is-active' : '' ?>"
-               <?= $key === $filter ? 'aria-current="page"' : '' ?>><?= $key === 'invites' ? icon('share') . ' ' : '' ?><?= e($label) ?> (<?= $counts[$key] ?>)</a>
+               <?= $key === $filter ? 'aria-current="page"' : '' ?>><?= e($label) ?> (<?= $counts[$key] ?>)</a>
         <?php endforeach; ?>
     </nav>
     <div class="toolbar__actions">
