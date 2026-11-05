@@ -10,6 +10,7 @@
  * 8. Bouton « retour en haut »
  * 9. Taux du jour (actualisation automatique)
  * 10. Avis clients (étoiles, envoi, « Afficher plus »)
+ * 11. Visite guidée « Donner mon avis » (bandeau réductible)
  */
 
 /* ==========================================================================
@@ -218,6 +219,19 @@
       return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }).format(value) + '\u00A0' + code;
     };
 
+    // Montant estimé toujours lisible en entier : la taille du texte diminue si le montant est trop long pour la case
+    // (petits écrans, grands montants), jusqu'à 12 px au plus petit ; recalculée quand la case change de taille.
+    var fitResult = function () {
+      result.style.fontSize = '';
+      if (!result.clientWidth) return;   // fenêtre fermée : ajusté à l'ouverture (ResizeObserver)
+      var size = parseFloat(getComputedStyle(result).fontSize);
+      while (result.scrollWidth > result.clientWidth + 1 && size > 12) {
+        size -= 1;
+        result.style.fontSize = size + 'px';
+      }
+    };
+    if (window.ResizeObserver) new ResizeObserver(function () { fitResult(); }).observe(result);
+
     update = function () {
       var a = parseFloat(String(amount.value).replace(',', '.'));
       var valid = isFinite(a) && a >= 0;
@@ -226,6 +240,7 @@
       var converted = valid ? a * rate : 0;
 
       result.textContent = valid ? format(converted, to.value) : '—';
+      fitResult();
       // Taux au dix-millième près, dans le sens lisible : « 1 EUR ≈ 655,957 FCFA » aussi pour FCFA → EUR
       // (plutôt que « 1 FCFA ≈ 0,0015 EUR ») ; même règle que fx_rate_text() dans services.php
       var fmtRate = function (r) { return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 4 }).format(r); };
@@ -925,6 +940,7 @@
         .then(function (d) {
           if (d.ok) {
             form.reset();
+            document.dispatchEvent(new CustomEvent('gtc:review-sent'));   // fin de la visite guidée (§ 11)
             setWord('');
             updateCounter();
             showErrors({});
@@ -979,4 +995,37 @@
         .catch(function () { more.disabled = false; more.textContent = 'Réessayer'; });
     });
   }
+})();
+
+/* ==========================================================================
+   11. Visite guidée « Donner mon avis » (includes/review-tour.php) : bandeau réductible (choix mémorisé pendant
+       la visite), espace réservé en bas de page pour ne rien masquer, bandeau retiré une fois l'avis envoyé.
+   ========================================================================== */
+(function () {
+  'use strict';
+
+  var tour = document.querySelector('[data-tour]');
+  if (!tour) return;
+  var toggle = tour.querySelector('[data-tour-toggle]');
+  var KEY = 'gtc-tour-collapsed';
+
+  var reserve = function () { document.body.style.paddingBottom = tour.isConnected ? tour.offsetHeight + 'px' : ''; };
+  var setCollapsed = function (on) {
+    tour.classList.toggle('is-collapsed', on);
+    toggle.setAttribute('aria-expanded', on ? 'false' : 'true');
+    toggle.setAttribute('aria-label', on ? 'Afficher la visite guidée' : 'Réduire la visite guidée');
+    try { sessionStorage.setItem(KEY, on ? '1' : '0'); } catch (e) { /* stockage indisponible */ }
+    reserve();
+  };
+  var saved = null;
+  try { saved = sessionStorage.getItem(KEY); } catch (e) { /* stockage indisponible */ }
+  setCollapsed(saved === '1' && !tour.classList.contains('tour--last'));
+  toggle.addEventListener('click', function () { setCollapsed(!tour.classList.contains('is-collapsed')); });
+  window.addEventListener('resize', reserve);
+
+  // Avis envoyé (main.js § 10) : la visite est terminée
+  document.addEventListener('gtc:review-sent', function () {
+    tour.remove();
+    reserve();
+  });
 })();

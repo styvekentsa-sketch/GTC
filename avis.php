@@ -30,6 +30,12 @@ $stats   = $dbOk ? review_stats() : ['count' => 0, 'average' => 0.0, 'dist' => [
 $first   = $dbOk ? reviews_approved(1, 1) : [];
 $more    = count($first) > REVIEW_PAGE_SIZE;
 $reviews = array_map('review_public', array_slice($first, 0, REVIEW_PAGE_SIZE));
+// Arrivée par un lien d'invitation (mon-avis.php) : nom du client déjà saisi, accueil personnalisé
+$tourActive = review_tour() !== null;
+$tourName   = review_tour()['name'] ?? null;
+if ($tourName && !isset($old['author_name'])) {
+    $old['author_name'] = $tourName;
+}
 $ratingWords = [1 => 'Décevant', 2 => 'Moyen', 3 => 'Correct', 4 => 'Très bien', 5 => 'Excellent'];
 
 // ---------- Méta & données de la page ----------
@@ -45,7 +51,9 @@ $hero = [
     'image'   => 'globe',   // Terre de nuit, lumières des villes — GTC_IMAGES, includes/media.php
     'eyebrow' => 'Avis clients',
     'title'   => 'Ce que nos clients pensent de nous',
-    'lead'    => 'Votre expérience compte : lisez les avis de nos clients et partagez le vôtre en une minute.',
+    'lead'    => $tourActive
+        ? 'Merci' . ($tourName ? ' ' . $tourName : '') . ' d\'avoir parcouru notre site ! Il ne reste qu\'une étape : partagez votre avis en une minute.'
+        : 'Votre expérience compte : lisez les avis de nos clients et partagez le vôtre en une minute.',
     'actions' => [['label' => 'Laisser un avis', 'href' => '#laisser-un-avis', 'class' => 'btn--accent', 'icon' => 'edit']],
 ];
 include __DIR__ . '/includes/hero.php';

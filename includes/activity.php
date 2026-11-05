@@ -33,6 +33,7 @@ const ACTIVITY_ENTITIES = [
     'shipment'   => 'Dossier de suivi',
     'message'    => 'Message du site',
     'review'     => 'Avis client',
+    'review_invite' => 'Invitation à donner un avis',
     'user'       => 'Compte utilisateur',
     'team'       => 'Membre de l\'équipe',
     'partner'    => 'Partenaire',

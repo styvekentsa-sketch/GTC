@@ -2358,3 +2358,48 @@ body.auth {
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 .stars { display: inline-flex; gap: 2px; vertical-align: middle; }
+
+/* Avis clients — invitations : création, lien général et envoi (dashboard/reviews.php?f=invites, dashboard.js § 11) */
+.invite-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 1.25rem; align-items: start; margin-bottom: 1.25rem; }
+.invite-grid > .panel { margin-bottom: 0; }
+.stats--summary + .share-box, .stats--summary + .invite-grid { margin-top: 1.25rem; }
+.share-box { margin-bottom: 1.25rem; }
+.share-box--new { border: 2px solid var(--green); box-shadow: 0 18px 40px -26px rgba(0, 150, 71, 0.6); scroll-margin-top: 90px; }
+.share-box__intro { margin: -0.5rem 0 1rem; font-size: 0.875rem; color: var(--text-muted); line-height: 1.55; }
+.share-box__label { display: block; margin: 1rem 0 0.4rem; font-size: 0.8125rem; font-weight: 600; color: var(--anthracite); }
+.share-box__link { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.share-box__link input { flex: 1 1 240px; min-width: 0; font-family: ui-monospace, Consolas, monospace; font-size: 0.8125rem; background: var(--blue-soft); }
+.share-box textarea { width: 100%; min-height: 9rem; resize: vertical; line-height: 1.5; }
+.share-box__channels { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.5rem; }
+.share-box__to { margin-top: 0.75rem; }
+.share-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  min-height: 44px; padding: 0.5rem 0.875rem; border: 1px solid transparent; border-radius: 10px;
+  font: inherit; font-size: 0.875rem; font-weight: 600; color: #fff; text-decoration: none; cursor: pointer;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+.share-btn:hover { filter: brightness(0.93); color: #fff; }
+.share-btn:active { transform: translateY(1px); }
+.share-btn .icon { font-size: 1.1rem; }
+.share-btn--whatsapp { background: #25D366; }
+.share-btn--gmail    { background: #EA4335; }
+.share-btn--email    { background: #1F2630; }
+.share-btn--sms      { background: #0051A5; }
+.share-btn--telegram { background: #229ED9; }
+.share-btn--facebook { background: #1877F2; }
+.share-btn--native,
+.share-btn--copy     { background: var(--surface); border-color: var(--line); color: var(--anthracite); }
+.share-btn--native:hover,
+.share-btn--copy:hover { color: var(--anthracite); }
+.share-btn.is-done,
+.share-box [data-copy].is-done { background: var(--green); border-color: var(--green); color: #fff; }
+tr.is-highlight > td { background: rgba(0, 150, 71, 0.07); }
+.nowrap { white-space: nowrap; }
+.review-cell { max-width: 460px; white-space: pre-line; overflow-wrap: anywhere; }
+@media (max-width: 991.98px) {
+  .invite-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 575.98px) {
+  .share-box__channels { grid-template-columns: 1fr 1fr; }
+  .share-box__link .btn { width: 100%; justify-content: center; }
+}

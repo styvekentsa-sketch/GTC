@@ -4915,6 +4915,14 @@ a[href^="tel:"] { white-space: nowrap; }
   input[type="text"], input[type="email"], input[type="tel"], input[type="search"], input[type="number"],
   select, textarea { font-size: 16px; }
 
+  /* Fenêtre « Simuler » : la colonne unique rétrécit à la largeur de l'écran (une colonne « 1fr » gardait la
+     largeur minimale des champs et des listes de devises, soit 60 px de trop sur un téléphone) */
+  .modal__grid { grid-template-columns: minmax(0, 1fr); }
+  .modal__grid > * { min-width: 0; }
+  .modal__dialog { overflow-x: hidden; overscroll-behavior: contain; }
+  .fx__row > * { min-width: 0; }
+  .fx__input, .fx__result { width: 100%; }
+
   /* Accueil : panneau « Informations pratiques » sur toute la largeur */
   .hero__panel { justify-self: stretch; width: 100%; max-width: none; }
 }
@@ -4964,6 +4972,11 @@ a[href^="tel:"] { white-space: nowrap; }
   .value-card .card__icon { grid-column: 1; grid-row: 1 / span 3; width: 48px; height: 48px; margin: 0; }
   .value-card__num { position: absolute; top: var(--space-4); right: var(--space-4); }
   .value-card > .card__title { margin-top: 0; padding-right: var(--space-6); }
+
+  /* Simulateur : colonne devise plus étroite et montant ajusté, l'estimation s'affiche en entier */
+  .cselect.fx__select { min-width: 92px; }
+  .cselect.fx__select .cselect__trigger { padding-inline: 0.75rem 0.6rem; gap: 0.35rem; }
+  .fx__input, .fx__result { padding-inline: 0.75rem; font-size: clamp(1rem, 4.6vw, 1.1875rem); }
 
   /* Témoignages : défilement horizontal au doigt (carte suivante visible) au lieu de 3 longues cartes empilées */
   #temoignages .grid {
@@ -5033,4 +5046,90 @@ a[href^="tel:"] { white-space: nowrap; }
   .site-footer__bottom .container { flex-direction: column; justify-content: center; gap: var(--space-2); }
   .site-footer__bottom { padding-bottom: calc(var(--space-5) + 64px); }   /* place pour les boutons flottants */
   .site-footer__staff { display: inline-flex; align-items: center; min-height: 36px; }
+}
+
+/* ==========================================================================
+   13. Visite guidée « Donner mon avis » (includes/review-tour.php, assets/js/main.js § 11)
+   Carte flottante en bas à gauche (ordinateur), panneau en bas de l'écran (téléphone). Réductible.
+   ========================================================================== */
+.tour {
+  position: fixed;
+  left: var(--space-5);
+  bottom: var(--space-5);
+  z-index: 880;   /* sous la bannière des cookies (900) et la fenêtre du simulateur (1000) */
+  width: min(540px, calc(100vw - 2 * var(--space-5)));
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-white);
+  box-shadow: 0 24px 60px -18px rgba(15, 23, 42, 0.45);
+  animation: tour-in 0.35s ease;
+}
+@keyframes tour-in { from { opacity: 0; transform: translateY(16px); } }
+.tour__bar { height: 4px; background-color: var(--color-slate-200); }
+.tour__bar span { display: block; height: 100%; background: linear-gradient(90deg, var(--brand-green), var(--color-accent)); transition: width 0.4s ease; }
+.tour__inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "dots tools" "body body" "actions actions";
+  gap: var(--space-3) var(--space-3);
+  padding: var(--space-4) var(--space-5) var(--space-5);
+}
+.tour__dots { grid-area: dots; display: flex; align-items: center; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.tour__dots a { display: block; width: 26px; height: 6px; border-radius: 999px; background-color: var(--color-slate-200); transition: background-color 0.2s ease; }
+.tour__dots .is-done a { background-color: rgba(0, 150, 71, 0.45); }
+.tour__dots .is-current a { width: 38px; background-color: var(--brand-green); }
+.tour__dots a:hover { background-color: var(--color-accent); }
+.tour__tools { grid-area: tools; display: flex; gap: var(--space-1); margin: -6px -8px 0 0; }
+.tour__tool {
+  display: grid; place-items: center; width: 36px; height: 36px; padding: 0;
+  border: 0; border-radius: 50%; background: transparent; color: var(--color-text-muted); cursor: pointer;
+}
+.tour__tool:hover { background-color: var(--color-slate-100, #F1F5F9); color: var(--color-navy-900); }
+.tour__tool[data-tour-toggle] .icon { transform: rotate(90deg); transition: transform 0.2s ease; }
+.tour__body { grid-area: body; }
+.tour__step { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-accent-dark); }
+.tour__title { margin-top: var(--space-1); font-size: var(--fs-lg); font-weight: 700; line-height: 1.3; color: var(--color-navy-900); }
+.tour__text { margin-top: var(--space-1); font-size: var(--fs-sm); line-height: 1.55; color: var(--color-text-muted); }
+.tour__actions { grid-area: actions; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
+.tour__next { min-height: 44px; }
+.tour__skip { font-size: var(--fs-sm); font-weight: 600; color: var(--color-navy-800); text-decoration: underline; text-underline-offset: 3px; }
+.tour__skip:hover { color: var(--color-accent-dark); }
+.tour--last { border-color: var(--color-accent); }
+
+/* Bandeau réduit : seulement la progression, l'étape et le bouton suivant */
+.tour.is-collapsed .tour__inner { grid-template-areas: "dots tools" "actions actions"; padding-block: var(--space-3); }
+.tour.is-collapsed .tour__body,
+.tour.is-collapsed .tour__skip { display: none; }
+.tour.is-collapsed .tour__tool[data-tour-toggle] .icon { transform: rotate(-90deg); }
+
+@media (max-width: 575.98px) {
+  .tour {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    border-width: 1px 0 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tour__inner { padding: var(--space-3) var(--space-4) var(--space-4); }
+  .tour__title { font-size: var(--fs-base); }
+  .tour__actions { flex-direction: column; align-items: stretch; gap: var(--space-2); }
+  .tour__next { justify-content: center; width: 100%; }
+  .tour__skip { align-self: center; padding: var(--space-1); }
+  .tour ~ .floaters { display: none; }   /* le bandeau occupe le bas de l'écran pendant la visite */
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour { animation: none; }
+}
+@media print {
+  .tour { display: none; }
+}
+
+/* Très petits téléphones (320 px) : simulateur un peu plus compact */
+@media (max-width: 359.98px) {
+  .fx { padding: var(--space-4); }
+  .cselect.fx__select { min-width: 84px; }
+  .fx__input, .fx__result { padding-inline: 0.6rem; }
 }

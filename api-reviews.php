@@ -83,7 +83,15 @@ if (review_throttled($ip)) {
     $respond(429, false, 'Vous avez déjà envoyé plusieurs avis aujourd\'hui. Merci de réessayer demain.', [], $data);
 }
 try {
-    review_create($data, $ip);
+    $reviewId = review_create($data, $ip);
+    // Avis donné à la suite d'une invitation (mon-avis.php) : rattaché à l'invitation, fin de la visite guidée
+    $tour = review_tour();
+    if ($tour !== null) {
+        if (!empty($tour['invite_id'])) {
+            review_invite_answered((int) $tour['invite_id'], $reviewId);
+        }
+        review_tour_end();
+    }
 } catch (Throwable $e) {
     error_log('[GTC] Avis non enregistré : ' . $e->getMessage());
     $respond(500, false, 'Votre avis n\'a pas pu être enregistré. Merci de réessayer dans quelques instants.', [], $data);

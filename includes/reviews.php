@@ -148,3 +148,165 @@ function review_stars(float $value, string $class = 'stars'): string
     }
     return $html . '</span>';
 }
+
+/* ==========================================================================
+   Invitations à donner son avis + visite guidée du site
+   Dashboard (dashboard/reviews.php) : création d'un lien personnel (nom du client facultatif) ou lien général,
+   envoi par WhatsApp, Gmail, e-mail, SMS, Telegram… Le client ouvre mon-avis.php?t=… : une visite guidée
+   (includes/review-tour.php, bandeau en bas des pages) le conduit de page en page jusqu'au formulaire d'avis
+   (avis.php), où son nom est déjà saisi. L'avis déposé est rattaché à l'invitation (suivi : ouverte, avis reçu).
+   ========================================================================== */
+
+/** Étapes de la visite guidée : page => [libellé court, titre, texte]. La dernière est le formulaire d'avis. */
+const REVIEW_TOUR = [
+    'index.php'    => ['Accueil',      'Bienvenue chez GTC',  'Découvrez en un coup d\'œil qui nous sommes et ce que nous faisons pour vous.'],
+    'services.php' => ['Services',     'Nos services',        'Change de devises, transferts, import-export, fret et transit : nos métiers en détail.'],
+    'taux.php'     => ['Taux du jour', 'Les taux du jour',    'Nos taux de change, annoncés clairement et mis à jour chaque jour.'],
+    'a-propos.php' => ['À propos',     'Qui sommes-nous ?',   'Notre histoire et l\'équipe qui traite vos opérations à Douala.'],
+    'avis.php'     => ['Votre avis',   'Votre avis compte',   'Dernière étape : dites-nous ce que vous pensez de GTC et de notre site.'],
+];
+
+/** Objet de l'e-mail d'invitation. */
+const REVIEW_INVITE_SUBJECT = 'Votre avis compte pour Global Trading Corporation';
+
+/** Lien public d'une invitation (adresse du site en ligne). Sans jeton : lien général, sans suivi individuel. */
+function review_invite_link(?string $token = null): string
+{
+    return rtrim(GTC_SITE_URL, '/') . '/mon-avis' . ($token ? '?t=' . rawurlencode($token) : '');
+}
+
+/** Jeton aléatoire, impossible à deviner (12 caractères, sans caractères ambigus). */
+function review_invite_token(): string
+{
+    $alphabet = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    $token = '';
+    for ($i = 0; $i < 12; $i++) {
+        $token .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+    }
+    return $token;
+}
+
+/** Crée une invitation. Retourne son identifiant. */
+function review_invite_create(string $name, string $phone, string $email, array $user): int
+{
+    do {
+        $token = review_invite_token();
+    } while (db_value('SELECT COUNT(*) FROM review_invites WHERE token = ?', [$token]));
+    db_query('INSERT INTO review_invites (token, client_name, client_phone, client_email, created_by, created_by_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [$token, $name !== '' ? $name : null, $phone !== '' ? $phone : null, $email !== '' ? $email : null, (int) $user['id'], (string) $user['name'], db_now()]);
+    return (int) db()->lastInsertId();
+}
+
+/** Invitation correspondant à un jeton (ou null). */
+function review_invite_by_token(string $token): ?array
+{
+    if (!preg_match('/^[A-Za-z0-9]{8,24}$/', $token)) {
+        return null;
+    }
+    return db_one('SELECT * FROM review_invites WHERE token = ?', [$token]) ?: null;
+}
+
+/** Statut d'une invitation pour l'affichage : [clé, libellé, ton]. */
+function review_invite_status(array $inv): array
+{
+    if ($inv['review_id']) {
+        return ['reviewed', 'Avis reçu', 'success'];
+    }
+    if ($inv['opened_at']) {
+        $n = (int) $inv['open_count'];
+        return ['opened', 'Lien ouvert' . ($n > 1 ? ' (' . $n . ' fois)' : ''), 'info'];
+    }
+    return ['sent', 'Pas encore ouvert', 'muted'];
+}
+
+/** Message d'invitation proposé (modifiable avant l'envoi). */
+function review_invite_message(?string $name, string $link): string
+{
+    $hello = $name ? 'Bonjour ' . $name . ',' : 'Bonjour,';
+    return $hello . "\n\n"
+        . 'Merci pour votre confiance envers ' . GTC_NAME . ".\n"
+        . 'Nous vous invitons à découvrir notre site en quelques clics, puis à nous laisser votre avis : '
+        . "cela ne prend qu'une minute et nous aide à mieux vous servir.\n\n"
+        . $link . "\n\n"
+        . "L'équipe GTC — Douala";
+}
+
+/** Numéro au format international pour wa.me / sms (chiffres seuls, indicatif du Cameroun ajouté si absent). */
+function review_phone_intl(?string $phone): string
+{
+    $raw = trim((string) $phone);
+    $digits = preg_replace('/\D+/', '', $raw);
+    if ($digits === '') {
+        return '';
+    }
+    if (str_starts_with($raw, '00')) {
+        $digits = substr($digits, 2);
+    } elseif (strlen($digits) === 9 && !str_starts_with($raw, '+')) {
+        $digits = '237' . $digits;   // numéro camerounais saisi sans indicatif
+    }
+    return $digits;
+}
+
+/**
+ * Liens d'envoi d'une invitation : canal => [libellé, icône, adresse].
+ * Recalculés en direct par assets/js/dashboard.js (§ 11) quand le message est modifié.
+ */
+function review_share_links(string $message, string $link, string $phone = '', string $email = ''): array
+{
+    $intl = review_phone_intl($phone);
+    $short = trim(str_replace($link, '', $message));   // Telegram ajoute le lien lui-même
+    return [
+        'whatsapp' => ['WhatsApp', 'whatsapp', 'https://wa.me/' . $intl . '?text=' . rawurlencode($message)],
+        'gmail'    => ['Gmail',    'mail',     'https://mail.google.com/mail/?view=cm&fs=1&to=' . rawurlencode($email) . '&su=' . rawurlencode(REVIEW_INVITE_SUBJECT) . '&body=' . rawurlencode($message)],
+        'email'    => ['E-mail',   'send',     'mailto:' . rawurlencode($email) . '?subject=' . rawurlencode(REVIEW_INVITE_SUBJECT) . '&body=' . rawurlencode($message)],
+        'sms'      => ['SMS',      'phone',    'sms:' . ($intl ? '+' . $intl : '') . '?body=' . rawurlencode($message)],
+        'telegram' => ['Telegram', 'send',     'https://t.me/share/url?url=' . rawurlencode($link) . '&text=' . rawurlencode($short)],
+        'facebook' => ['Facebook', 'globe',    'https://www.facebook.com/sharer/sharer.php?u=' . rawurlencode($link)],
+    ];
+}
+
+/* ---------- Visite guidée (session du visiteur) ---------- */
+
+/** Visite en cours : ['invite_id' => ?int, 'name' => ?string, 'visited' => [pages]] ou null. */
+function review_tour(): ?array
+{
+    return (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['review_tour']) && is_array($_SESSION['review_tour']))
+        ? $_SESSION['review_tour'] : null;
+}
+
+/** Démarre la visite (lien d'invitation ouvert). */
+function review_tour_start(?array $invite): void
+{
+    $_SESSION['review_tour'] = [
+        'invite_id' => $invite ? (int) $invite['id'] : null,
+        'name'      => $invite['client_name'] ?? null,
+        'visited'   => [],
+    ];
+}
+
+/** Note la page comme visitée ; retourne la visite à jour (null : pas de visite en cours). */
+function review_tour_visit(string $page): ?array
+{
+    $tour = review_tour();
+    if ($tour === null) {
+        return null;
+    }
+    if (isset(REVIEW_TOUR[$page]) && !in_array($page, $tour['visited'], true)) {
+        $tour['visited'][] = $page;
+        $_SESSION['review_tour'] = $tour;
+    }
+    return $tour;
+}
+
+/** Fin de la visite (avis déposé ou visite fermée par le visiteur). */
+function review_tour_end(): void
+{
+    unset($_SESSION['review_tour']);
+}
+
+/** Rattache un avis à son invitation (la première réponse compte). */
+function review_invite_answered(int $inviteId, int $reviewId): void
+{
+    db_query('UPDATE reviews SET invite_id = ? WHERE id = ?', [$inviteId, $reviewId]);
+    db_query('UPDATE review_invites SET review_id = ?, reviewed_at = ? WHERE id = ? AND review_id IS NULL', [$reviewId, db_now(), $inviteId]);
+}

@@ -242,6 +242,14 @@ function db_ensure_schema(PDO $pdo): void
         // Avis clients déposés sur le site (avis.php, api-reviews.php), modérés dans le Dashboard (dashboard/reviews.php)
         db_install_reviews($pdo);
     }
+    if (!db_table_exists($pdo, 'review_invites')) {
+        // Liens d'invitation à donner son avis (dashboard/reviews.php → mon-avis.php, visite guidée du site)
+        db_install_review_invites($pdo);
+    }
+    if (!db_column_exists($pdo, 'reviews', 'invite_id')) {
+        // Avis déposé à la suite d'une invitation (taux de réponse des invitations)
+        $pdo->exec('ALTER TABLE reviews ADD COLUMN invite_id ' . db_types()['fk'] . ' NULL');
+    }
     if (!db_column_exists($pdo, 'invoices', 'shipment_id')) {
         // Reçu de paiement « Fret / Transit » rattaché à un dossier de suivi (facultatif)
         $pdo->exec('ALTER TABLE invoices ADD COLUMN shipment_id ' . db_types()['fk'] . ' NULL');
@@ -902,6 +910,30 @@ function db_install_reviews(PDO $pdo): void
               'CREATE INDEX idx_reviews_ip ON reviews (ip, created_at)'] as $sql) {
         $pdo->exec($sql);
     }
+}
+
+/**
+ * Invitations à donner son avis : un lien unique par client (token), envoyé par WhatsApp, e-mail, SMS…
+ * opened_at / open_count : ouverture du lien ; review_id : avis déposé grâce à l'invitation.
+ */
+function db_install_review_invites(PDO $pdo): void
+{
+    [pk => $pk, fk => $fk, dt => $dt, suffix => $suffix] = db_types();
+    $pdo->exec("CREATE TABLE IF NOT EXISTS review_invites (
+        id {$pk},
+        token VARCHAR(24) NOT NULL,
+        client_name VARCHAR(60) NULL,
+        client_phone VARCHAR(30) NULL,
+        client_email VARCHAR(120) NULL,
+        created_by {$fk} NULL,
+        created_by_name VARCHAR(100) NULL,
+        created_at {$dt} NOT NULL,
+        opened_at {$dt} NULL,
+        open_count INTEGER NOT NULL DEFAULT 0,
+        review_id {$fk} NULL,
+        reviewed_at {$dt} NULL
+    ){$suffix}");
+    $pdo->exec('CREATE UNIQUE INDEX idx_review_invites_token ON review_invites (token)');
 }
 
 /** La table invoices limite-t-elle encore le type d'opération / mode de paiement (ENUM ou CHECK d'origine) ? */

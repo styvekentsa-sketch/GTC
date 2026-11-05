@@ -102,6 +102,8 @@ $legalLinks = [
     </div>
 </footer>
 
+<?php include __DIR__ . '/review-tour.php'; // Visite guidée « Donner mon avis » (uniquement si lancée par mon-avis.php) ?>
+
 <!-- ==================== BOUTONS FLOTTANTS : WhatsApp (toujours visible) et retour en haut (assets/js/main.js § 8) ==================== -->
 <div class="floaters">
     <button type="button" class="floater floater--top" data-back-to-top aria-label="Revenir en haut de la page" hidden><?= icon('arrow') ?></button>

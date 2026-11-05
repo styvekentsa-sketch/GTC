@@ -28,6 +28,12 @@ require_once __DIR__ . '/social.php';
 require_once __DIR__ . '/seo.php';
 track_visit();
 
+// Visite guidée « Donner mon avis » (mon-avis.php, includes/review-tour.php) : la session du visiteur est reprise
+// seulement s'il en a déjà une (aucun cookie créé pour les autres visiteurs)
+if (session_status() === PHP_SESSION_NONE && isset($_COOKIE['GTC_SITE']) && !headers_sent() && function_exists('gtc_public_session_start')) {
+    gtc_public_session_start();
+}
+
 $pageTitle       = $pageTitle       ?? 'Transfert de fonds & Échange de devises';
 $pageDescription = $pageDescription ?? 'Global Trading Corporation : transfert de fonds à l\'international et échange de devises. Douala, Cameroun.';
 $currentPage     = $currentPage     ?? 'accueil';
