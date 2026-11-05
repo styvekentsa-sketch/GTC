@@ -595,4 +595,75 @@
       });
     }
   });
+
+  /* ---------- 12. Suivi en direct des invitations à donner un avis (dashboard/reviews.php?f=invites) ---------- */
+  // Toutes les 10 s (et dès le retour sur l'onglet) : dashboard/reviews-api.php renvoie l'état des invitations
+  // affichées ; seules les lignes qui ont changé sont mises à jour (« Lien ouvert », « Avis reçu »), avec une
+  // notification. Pause quand l'onglet est masqué, espacement en cas d'erreur, arrêt si la session a expiré.
+  (function () {
+    var stats = document.querySelector('[data-invites-live]');
+    var rows = document.querySelectorAll('tr[data-invite]');
+    if (!stats || !window.fetch) return;
+    var api = stats.getAttribute('data-api');
+    var INTERVAL = 10000, MAX = 60000, delay = INTERVAL, timer = null, busy = false, stopped = false;
+
+    var notify = function (title, text, kind) {
+      var box = document.querySelector('.live-toasts');
+      if (!box) {
+        box = document.createElement('div');
+        box.className = 'live-toasts';
+        box.setAttribute('role', 'status');
+        box.setAttribute('aria-live', 'polite');
+        document.body.appendChild(box);
+      }
+      var toast = document.createElement('div');
+      toast.className = 'live-toast live-toast--' + kind;
+      var t = document.createElement('strong'); t.textContent = title;
+      var s = document.createElement('span'); s.textContent = text;
+      toast.appendChild(t); toast.appendChild(s);
+      box.appendChild(toast);
+      setTimeout(function () { toast.classList.add('is-leaving'); }, 8000);
+      setTimeout(function () { toast.remove(); }, 8600);
+    };
+
+    var apply = function (d) {
+      Object.keys(d.counts || {}).forEach(function (k) {
+        var el = stats.querySelector('[data-stat="' + k + '"]');
+        if (el && el.textContent !== String(d.counts[k])) { el.textContent = d.counts[k]; el.classList.remove('is-bumped'); void el.offsetWidth; el.classList.add('is-bumped'); }
+      });
+      rows.forEach(function (tr) {
+        var inv = d.invites && d.invites[tr.getAttribute('data-invite')];
+        if (!inv || inv.state === tr.getAttribute('data-invite-state')) return;
+        var before = (tr.getAttribute('data-invite-state') || '').split(':')[0];
+        tr.setAttribute('data-invite-state', inv.state);
+        tr.querySelector('[data-invite-status]').innerHTML = inv.status;   // HTML échappé côté serveur
+        tr.querySelector('[data-invite-review]').innerHTML = inv.review;
+        tr.classList.remove('is-live-updated'); void tr.offsetWidth; tr.classList.add('is-live-updated');
+        var who = inv.name || 'Un client';
+        if (inv.key === 'reviewed' && before !== 'reviewed') notify(who + ' a laissé son avis', 'Il attend votre validation dans « En attente ».', 'reviewed');
+        else if (inv.key === 'opened' && before === 'sent') notify(who + ' a ouvert votre lien', 'La visite guidée du site a commencé.', 'opened');
+      });
+    };
+
+    var schedule = function () { clearTimeout(timer); if (!stopped && !document.hidden) timer = setTimeout(poll, delay); };
+    var poll = function () {
+      if (busy || stopped) return;
+      busy = true;
+      var ids = Array.prototype.map.call(rows, function (tr) { return tr.getAttribute('data-invite'); }).join(',');
+      fetch(api + '?ids=' + encodeURIComponent(ids), { credentials: 'same-origin', headers: { Accept: 'application/json' }, cache: 'no-store' })
+        .then(function (r) {
+          if (r.status === 401 || r.status === 403) { stopped = true; throw new Error('session'); }
+          if (!r.ok) throw new Error('http');
+          return r.json();
+        })
+        .then(function (d) { apply(d); delay = INTERVAL; })
+        .catch(function () { delay = Math.min(delay * 2, MAX); })
+        .then(function () { busy = false; schedule(); });
+    };
+
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) { delay = INTERVAL; poll(); } else clearTimeout(timer); });
+    window.addEventListener('pageshow', function (e) { if (e.persisted) poll(); });   // retour arrière : page restaurée du cache
+    window.addEventListener('focus', function () { poll(); });
+    schedule();
+  })();
 })();

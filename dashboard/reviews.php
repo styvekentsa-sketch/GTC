@@ -199,21 +199,19 @@ if ($filter === 'invites'):
     $total   = $counts['invites'];
     $page    = min($page, max(1, (int) ceil($total / $perPage)));
     $offset  = ($page - 1) * $perPage;
-    $invites = db_all("SELECT i.*, r.rating, r.comment, r.status AS review_status FROM review_invites i LEFT JOIN reviews r ON r.id = i.review_id
-                       ORDER BY i.created_at DESC, i.id DESC LIMIT {$perPage} OFFSET {$offset}");
-    $opened   = (int) db_value('SELECT COUNT(*) FROM review_invites WHERE opened_at IS NOT NULL');
-    $answered = (int) db_value('SELECT COUNT(*) FROM review_invites WHERE review_id IS NOT NULL');
+    $invites = db_all(REVIEW_INVITES_SQL . " ORDER BY i.created_at DESC, i.id DESC LIMIT {$perPage} OFFSET {$offset}");
+    ['opened' => $opened, 'answered' => $answered] = review_invite_counts();
     $pct      = fn (int $n) => $total ? round($n / $total * 100) . " %" : '—';
     $general  = review_invite_link();
     ?>
 
-    <section class="stats stats--summary stats--compact" aria-label="Suivi des invitations">
+    <section class="stats stats--summary stats--compact" aria-label="Suivi des invitations" data-invites-live data-api="reviews-api.php">
         <article class="stat"><span class="stat__icon stat__icon--blue"><?= icon('send') ?></span>
-            <div><p class="stat__label">Invitations créées</p><p class="stat__value"><?= $total ?></p></div></article>
+            <div><p class="stat__label">Invitations créées</p><p class="stat__value" data-stat="total"><?= $total ?></p></div></article>
         <article class="stat"><span class="stat__icon stat__icon--gold"><?= icon('eye') ?></span>
-            <div><p class="stat__label">Liens ouverts</p><p class="stat__value"><?= $opened ?></p><p class="stat__note"><?= $pct($opened) ?><span class="wide-only"> des invitations</span></p></div></article>
+            <div><p class="stat__label">Liens ouverts</p><p class="stat__value" data-stat="opened"><?= $opened ?></p><p class="stat__note"><span data-stat="opened_pct"><?= $pct($opened) ?></span><span class="wide-only"> des invitations</span></p></div></article>
         <article class="stat"><span class="stat__icon stat__icon--green"><?= icon('star') ?></span>
-            <div><p class="stat__label">Avis reçus</p><p class="stat__value"><?= $answered ?></p><p class="stat__note"><span class="wide-only">Taux de réponse : </span><?= $pct($answered) ?><span class="narrow-only"> de réponse</span></p></div></article>
+            <div><p class="stat__label">Avis reçus</p><p class="stat__value" data-stat="answered"><?= $answered ?></p><p class="stat__note"><span class="wide-only">Taux de réponse : </span><span data-stat="answered_pct"><?= $pct($answered) ?></span><span class="narrow-only"> de réponse</span></p></div></article>
     </section>
 
     <?php if ($shared):
@@ -258,7 +256,8 @@ if ($filter === 'invites'):
     </div>
 
     <section class="panel">
-        <div class="panel__head"><h2 class="panel__title">Invitations envoyées</h2></div>
+        <div class="panel__head"><h2 class="panel__title">Invitations envoyées</h2>
+            <?php if ($invites): ?><span class="live-dot" title="Le suivi se met à jour automatiquement, sans recharger la page">Suivi en direct</span><?php endif; ?></div>
         <?php if (!$invites): ?>
             <p class="empty">Aucune invitation pour le moment : créez-en une ci-dessus.</p>
         <?php else: ?>
@@ -267,9 +266,8 @@ if ($filter === 'invites'):
                     <thead><tr><th>Client</th><th>Créée le</th><th>Suivi</th><th>Avis</th><th class="actions"><span class="visually-hidden">Actions</span></th></tr></thead>
                     <tbody>
                     <?php foreach ($invites as $inv):
-                        [$st, $stLabel, $tone] = review_invite_status($inv);
                         $iid = (int) $inv['id']; ?>
-                        <tr<?= $iid === $shareId ? ' class="is-highlight"' : '' ?>>
+                        <tr data-invite="<?= $iid ?>" data-invite-state="<?= e(review_invite_status($inv)[0] . ':' . (int) $inv['open_count']) ?>"<?= $iid === $shareId ? ' class="is-highlight"' : '' ?>>
                             <td data-label="Client"><span class="cell-stack">
                                 <strong><?= $inv['client_name'] ? e($inv['client_name']) : '<span class="cell-sub">Sans nom</span>' ?></strong>
                                 <?php if ($inv['client_phone'] || $inv['client_email']): ?>
@@ -277,17 +275,8 @@ if ($filter === 'invites'):
                                 <?php endif; ?>
                             </span></td>
                             <td data-label="Créée le"><span class="cell-stack"><?= e(fdate($inv['created_at'], true)) ?><small class="cell-sub">par <?= e((string) $inv['created_by_name']) ?></small></span></td>
-                            <td data-label="Suivi"><span class="cell-stack">
-                                <span class="badge badge--<?= e($tone) ?>"><?= e($stLabel) ?></span>
-                                <?php if ($inv['opened_at'] && !$inv['review_id']): ?><small class="cell-sub">le <?= e(fdate($inv['opened_at'], true)) ?></small><?php endif; ?>
-                                <?php if ($inv['reviewed_at']): ?><small class="cell-sub">le <?= e(fdate($inv['reviewed_at'], true)) ?></small><?php endif; ?>
-                            </span></td>
-                            <td data-label="Avis">
-                                <?php if ($inv['review_id'] && $inv['rating'] !== null): ?>
-                                    <span class="cell-stack"><?= review_stars((float) $inv['rating'], 'stars stars--sm') ?>
-                                        <small class="cell-sub"><?= e(mb_strimwidth((string) $inv['comment'], 0, 70, '…')) ?> · <?= e(REVIEW_STATUSES[$inv['review_status']]['label'] ?? '') ?></small></span>
-                                <?php else: ?>—<?php endif; ?>
-                            </td>
+                            <td data-label="Suivi" data-invite-status><?= review_invite_status_html($inv) ?></td>
+                            <td data-label="Avis" data-invite-review><?= review_invite_review_html($inv) ?></td>
                             <td class="actions">
                                 <?= action_menu(array_values(array_filter([
                                     ['link', $inv['review_id'] ? 'Voir le lien' : 'Envoyer / renvoyer', 'reviews.php?f=invites&share=' . $iid . '#partage', 'share'],

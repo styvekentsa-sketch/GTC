@@ -5133,3 +5133,54 @@ a[href^="tel:"] { white-space: nowrap; }
   .cselect.fx__select { min-width: 84px; }
   .fx__input, .fx__result { padding-inline: 0.6rem; }
 }
+
+/* ==========================================================================
+   14. Pages légales sur téléphone
+   La colonne du texte rétrécit à la largeur de l'écran (une colonne « 1fr » prenait la largeur minimale des
+   tableaux, 640 px : toute la page débordait et le téléphone la dézoomait). Tableaux présentés en fiches.
+   ========================================================================== */
+.legal-layout > * { min-width: 0; }
+@media (max-width: 991.98px) {
+  .legal-layout { grid-template-columns: minmax(0, 1fr); }
+}
+.legal { overflow-wrap: break-word; }
+.legal code { overflow-wrap: anywhere; }
+
+/* Tableaux → une fiche par ligne (libellés des colonnes ajoutés par assets/js/main.js § 12) */
+@media (max-width: 767.98px) {
+  .legal-table-wrap:has(.is-stacked) { overflow: visible; border: 0; border-radius: 0; }
+  .legal-table.is-stacked { min-width: 0; }
+  .legal-table.is-stacked thead { display: none; }
+  .legal-table.is-stacked,
+  .legal-table.is-stacked tbody,
+  .legal-table.is-stacked tr,
+  .legal-table.is-stacked th,
+  .legal-table.is-stacked td { display: block; width: 100%; }
+  .legal-table.is-stacked tbody { display: grid; gap: var(--space-3); }
+  .legal-table.is-stacked tr {
+    overflow: hidden;
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius-lg);
+    background-color: var(--color-white);
+  }
+  .legal-table.is-stacked tbody th,
+  .legal-table.is-stacked tbody td:first-child {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-slate-200);
+    background-color: var(--color-bg);
+    font-size: var(--fs-base);
+  }
+  .legal-table.is-stacked td { padding: var(--space-2) var(--space-4); border-bottom: 1px dashed var(--color-slate-200); }
+  .legal-table.is-stacked tr > :last-child { border-bottom: 0; padding-bottom: var(--space-3); }
+  .legal-table.is-stacked td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+  .legal-table.is-stacked tbody td:first-child::before { content: none; }   /* 1re colonne : titre de la fiche */
+}

@@ -11,6 +11,7 @@
  * 9. Taux du jour (actualisation automatique)
  * 10. Avis clients (étoiles, envoi, « Afficher plus »)
  * 11. Visite guidée « Donner mon avis » (bandeau réductible)
+ * 12. Tableaux des pages légales en fiches (téléphone)
  */
 
 /* ==========================================================================
@@ -1027,5 +1028,24 @@
   document.addEventListener('gtc:review-sent', function () {
     tour.remove();
     reserve();
+  });
+})();
+
+/* ==========================================================================
+   12. Tableaux des pages légales : sur téléphone, chaque ligne devient une fiche (style.css § 14). Le libellé de
+       chaque colonne est recopié sur ses cellules (data-label) ; sans JavaScript, le tableau défile à l'horizontale.
+   ========================================================================== */
+(function () {
+  'use strict';
+
+  document.querySelectorAll('.legal-table').forEach(function (table) {
+    var heads = Array.prototype.map.call(table.querySelectorAll('thead th'), function (th) { return th.textContent.trim(); });
+    if (!heads.length) return;
+    table.querySelectorAll('tbody tr').forEach(function (tr) {
+      Array.prototype.forEach.call(tr.children, function (cell, i) {
+        if (cell.tagName === 'TD' && heads[i]) cell.setAttribute('data-label', heads[i]);
+      });
+    });
+    table.classList.add('is-stacked');
   });
 })();

@@ -250,6 +250,10 @@ function db_ensure_schema(PDO $pdo): void
         // Avis déposé à la suite d'une invitation (taux de réponse des invitations)
         $pdo->exec('ALTER TABLE reviews ADD COLUMN invite_id ' . db_types()['fk'] . ' NULL');
     }
+    if (!db_column_exists($pdo, 'review_invites', 'last_opened_at')) {
+        // Dernière ouverture du lien d'invitation (suivi en direct, dashboard/reviews.php)
+        $pdo->exec('ALTER TABLE review_invites ADD COLUMN last_opened_at ' . db_types()['dt'] . ' NULL');
+    }
     if (!db_column_exists($pdo, 'invoices', 'shipment_id')) {
         // Reçu de paiement « Fret / Transit » rattaché à un dossier de suivi (facultatif)
         $pdo->exec('ALTER TABLE invoices ADD COLUMN shipment_id ' . db_types()['fk'] . ' NULL');

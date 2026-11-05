@@ -219,6 +219,66 @@ function review_invite_status(array $inv): array
     return ['sent', 'Pas encore ouvert', 'muted'];
 }
 
+/**
+ * Visite automatique d'un lien (aperçu de WhatsApp, Facebook, Telegram…, robot d'indexation, préchargement du
+ * navigateur) : elle ne compte pas comme une ouverture par le client. Ces applications visitent le lien dès
+ * qu'il est envoyé pour fabriquer l'aperçu ; sans ce filtre, une invitation paraîtrait « ouverte » à tort.
+ */
+function review_is_automated_visit(): bool
+{
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+        return true;   // HEAD : vérification du lien, pas une visite
+    }
+    $purpose = strtolower(($_SERVER['HTTP_PURPOSE'] ?? '') . ' ' . ($_SERVER['HTTP_SEC_PURPOSE'] ?? '') . ' ' . ($_SERVER['HTTP_X_PURPOSE'] ?? '') . ' ' . ($_SERVER['HTTP_X_MOZ'] ?? ''));
+    if (str_contains($purpose, 'prefetch') || str_contains($purpose, 'preview') || str_contains($purpose, 'prerender')) {
+        return true;
+    }
+    $ua = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
+    if (trim($ua) === '') {
+        return true;
+    }
+    return (bool) preg_match('/WhatsApp\/|facebookexternalhit|Facebot|meta-externalagent|TelegramBot|Twitterbot|Slackbot|LinkedInBot|Discordbot|SkypeUriPreview'
+        . '|Googlebot|Google-InspectionTool|bingbot|Applebot|YandexBot|DuckDuckBot|Pinterestbot|redditbot|Embedly|vkShare|BingPreview|HeadlessChrome'
+        . '|\b(bot|crawler|spider)\b/i', $ua);
+}
+
+/** Cellule « Suivi » d'une invitation (Dashboard, mise à jour en direct par dashboard/reviews-api.php). */
+function review_invite_status_html(array $inv): string
+{
+    [$key, $label, $tone] = review_invite_status($inv);
+    $sub = '';
+    if ($key === 'reviewed') {
+        $sub = 'le ' . fdate($inv['reviewed_at'], true);
+    } elseif ($key === 'opened') {
+        $sub = ((int) $inv['open_count'] > 1 ? 'dernière ouverture le ' : 'le ') . fdate($inv['last_opened_at'] ?: $inv['opened_at'], true);
+    }
+    return '<span class="cell-stack"><span class="badge badge--' . e($tone) . '">' . e($label) . '</span>'
+        . ($sub !== '' ? '<small class="cell-sub">' . e($sub) . '</small>' : '') . '</span>';
+}
+
+/** Cellule « Avis » d'une invitation : note et début du texte, ou « — ». */
+function review_invite_review_html(array $inv): string
+{
+    if (!$inv['review_id'] || $inv['rating'] === null) {
+        return '—';
+    }
+    return '<span class="cell-stack">' . review_stars((float) $inv['rating'], 'stars stars--sm')
+        . '<small class="cell-sub">' . e(mb_strimwidth((string) $inv['comment'], 0, 70, '…')) . ' · ' . e(REVIEW_STATUSES[$inv['review_status']]['label'] ?? '') . '</small></span>';
+}
+
+/** Requête des invitations avec leur avis éventuel (liste du Dashboard et suivi en direct). */
+const REVIEW_INVITES_SQL = 'SELECT i.*, r.rating, r.comment, r.status AS review_status FROM review_invites i LEFT JOIN reviews r ON r.id = i.review_id';
+
+/** Compteurs du suivi : invitations, liens ouverts, avis reçus. */
+function review_invite_counts(): array
+{
+    return [
+        'total'    => (int) db_value('SELECT COUNT(*) FROM review_invites'),
+        'opened'   => (int) db_value('SELECT COUNT(*) FROM review_invites WHERE opened_at IS NOT NULL'),
+        'answered' => (int) db_value('SELECT COUNT(*) FROM review_invites WHERE review_id IS NOT NULL'),
+    ];
+}
+
 /** Message d'invitation proposé (modifiable avant l'envoi). */
 function review_invite_message(?string $name, string $link): string
 {

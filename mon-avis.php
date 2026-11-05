@@ -29,8 +29,16 @@ $invite = null;
 $token  = (string) ($_GET['t'] ?? '');
 if ($token !== '' && db_try()) {
     $invite = review_invite_by_token($token);
+    if ($invite && review_is_automated_visit()) {
+        // Aperçu du lien (WhatsApp, Facebook, Telegram…) ou robot : pas compté, simple redirection vers l'accueil
+        // (l'aperçu affiche alors le titre et l'image du site)
+        header('Location: ./', true, 303);
+        exit;
+    }
     if ($invite) {
-        db_query('UPDATE review_invites SET open_count = open_count + 1, opened_at = COALESCE(opened_at, ?) WHERE id = ?', [db_now(), (int) $invite['id']]);
+        $now = db_now();
+        db_query('UPDATE review_invites SET open_count = open_count + 1, opened_at = COALESCE(opened_at, ?), last_opened_at = ? WHERE id = ?',
+            [$now, $now, (int) $invite['id']]);
         if ($invite['review_id']) {
             // Avis déjà donné : inutile de refaire la visite
             review_tour_end();
