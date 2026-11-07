@@ -254,6 +254,14 @@ function db_ensure_schema(PDO $pdo): void
         // Dernière ouverture du lien d'invitation (suivi en direct, dashboard/reviews.php)
         $pdo->exec('ALTER TABLE review_invites ADD COLUMN last_opened_at ' . db_types()['dt'] . ' NULL');
     }
+    if (!db_table_exists($pdo, 'clients')) {
+        // GTC-Vault : dossiers KYC (clients, pièces justificatives) et journal de sécurité (dashboard/vault/)
+        db_install_kyc($pdo);
+    }
+    if (!db_table_exists($pdo, 'kyc_captures')) {
+        // GTC-Vault : photos de pièces prises avec un téléphone (QR code, dashboard/vault/capture.php)
+        db_install_kyc_captures($pdo);
+    }
     if (!db_column_exists($pdo, 'invoices', 'shipment_id')) {
         // Reçu de paiement « Fret / Transit » rattaché à un dossier de suivi (facultatif)
         $pdo->exec('ALTER TABLE invoices ADD COLUMN shipment_id ' . db_types()['fk'] . ' NULL');
@@ -938,6 +946,121 @@ function db_install_review_invites(PDO $pdo): void
         reviewed_at {$dt} NULL
     ){$suffix}");
     $pdo->exec('CREATE UNIQUE INDEX idx_review_invites_token ON review_invites (token)');
+}
+
+/**
+ * GTC-Vault (coffre-fort KYC, dashboard/vault/) : fiches clients, pièces justificatives, journal de sécurité.
+ *
+ * - clients.uuid : identifiant public (adresses), l'id n'est jamais exposé.
+ * - client_documents : fichiers rangés dans data/kyc/ (hors web), supprimés avec le client (CASCADE) ;
+ *   l'application efface les fichiers du disque avant de supprimer le client.
+ * - created_by / uploaded_by → users(id) en RESTRICT : un compte ayant constitué des dossiers KYC ne peut pas
+ *   être supprimé (il se désactive), la traçabilité est conservée.
+ * - audit_logs : journal en ajout seul, sans clé étrangère (une trace survit au client et au compte).
+ * Types (client, pièce) : ENUM sous MySQL, texte contrôlé (CHECK) sous SQLite.
+ */
+function db_install_kyc(PDO $pdo): void
+{
+    ['pk' => $pk, 'fk' => $fk, 'dt' => $dt, 'suffix' => $suffix] = db_types();
+    $mysql   = DB_DRIVER === 'mysql';
+    $types   = ['particulier', 'entreprise'];
+    $docs    = ['cni_recto', 'cni_verso', 'passeport', 'rccm', 'statut_entreprise', 'autre'];
+    $enum    = fn (string $col, array $values) => $mysql
+        ? "ENUM('" . implode("', '", $values) . "')"
+        : "VARCHAR(20) CHECK ({$col} IN ('" . implode("', '", $values) . "'))";
+    $ascii   = $mysql ? ' CHARACTER SET ascii COLLATE ascii_bin' : '';
+    $now     = $mysql ? 'DEFAULT CURRENT_TIMESTAMP' : "DEFAULT (datetime('now', 'localtime'))";
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS clients (
+        id {$pk},
+        uuid VARCHAR(36){$ascii} NOT NULL,
+        type_client {$enum('type_client', $types)} NOT NULL DEFAULT 'particulier',
+        nom_complet VARCHAR(255) NOT NULL,
+        telephone VARCHAR(50) NOT NULL,
+        email VARCHAR(150) NULL,
+        adresse TEXT NULL,
+        numero_identifiant VARCHAR(100) NULL,
+        created_at {$dt} NOT NULL {$now},
+        updated_at {$dt} NOT NULL {$now},
+        created_by {$fk} NOT NULL,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT ON UPDATE CASCADE
+    ){$suffix}");
+    $pdo->exec('CREATE UNIQUE INDEX idx_clients_uuid ON clients (uuid)');
+    foreach (['CREATE INDEX idx_clients_nom ON clients (nom_complet)',
+              'CREATE INDEX idx_clients_telephone ON clients (telephone)',
+              'CREATE INDEX idx_clients_identifiant ON clients (numero_identifiant)',
+              'CREATE INDEX idx_clients_type_date ON clients (type_client, created_at)',
+              'CREATE INDEX idx_clients_created_by ON clients (created_by)'] as $sql) {
+        $pdo->exec($sql);
+    }
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS client_documents (
+        id {$pk},
+        client_id {$fk} NOT NULL,
+        type_document {$enum('type_document', $docs)} NOT NULL,
+        nom_original VARCHAR(255) NOT NULL,
+        chemin_fichier VARCHAR(255) NOT NULL,
+        taille_fichier INTEGER NOT NULL,
+        mime_type VARCHAR(50) NOT NULL,
+        created_at {$dt} NOT NULL {$now},
+        uploaded_by {$fk} NOT NULL,
+        FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE ON UPDATE CASCADE,
+        FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE RESTRICT ON UPDATE CASCADE
+    ){$suffix}");
+    $pdo->exec('CREATE UNIQUE INDEX idx_documents_chemin ON client_documents (chemin_fichier)');
+    $pdo->exec('CREATE INDEX idx_documents_client_type ON client_documents (client_id, type_document)');
+    $pdo->exec('CREATE INDEX idx_documents_uploaded_by ON client_documents (uploaded_by)');
+
+    $big = $mysql ? 'BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY' : $pk;
+    $pdo->exec("CREATE TABLE IF NOT EXISTS audit_logs (
+        id {$big},
+        created_at {$dt} NOT NULL,
+        user_id {$fk} NULL,
+        user_name VARCHAR(150) NULL,
+        action VARCHAR(40) NOT NULL,
+        client_uuid VARCHAR(36){$ascii} NULL,
+        client_name VARCHAR(255) NULL,
+        document_id {$fk} NULL,
+        details VARCHAR(500) NULL,
+        ip VARCHAR(45) NULL,
+        user_agent VARCHAR(255) NULL
+    ){$suffix}");
+    foreach (['CREATE INDEX idx_audit_client ON audit_logs (client_uuid, id)',
+              'CREATE INDEX idx_audit_user_date ON audit_logs (user_id, created_at)',
+              'CREATE INDEX idx_audit_action_date ON audit_logs (action, created_at)'] as $sql) {
+        $pdo->exec($sql);
+    }
+}
+
+/**
+ * GTC-Vault : captures de pièces par téléphone (QR code affiché sur le poste de l'agent).
+ * token_hash : empreinte SHA-256 du jeton du QR code (le jeton lui-même n'est jamais conservé) ;
+ * status : pending → opened (page ouverte sur le téléphone) → uploaded (photo reçue) → consumed (photo récupérée
+ * par le poste) ou cancelled ; *_ts : horodatages Unix. La photo provisoire (file_path, dans KYC_STORAGE_DIR/tmp)
+ * est effacée dès sa récupération, à l'annulation ou à l'expiration.
+ */
+function db_install_kyc_captures(PDO $pdo): void
+{
+    ['pk' => $pk, 'fk' => $fk, 'suffix' => $suffix] = db_types();
+    $pdo->exec("CREATE TABLE IF NOT EXISTS kyc_captures (
+        id {$pk},
+        token_hash CHAR(64) NOT NULL,
+        slot VARCHAR(20) NOT NULL,
+        slot_label VARCHAR(80) NOT NULL,
+        status VARCHAR(10) NOT NULL DEFAULT 'pending',
+        created_by {$fk} NOT NULL,
+        created_ts INTEGER NOT NULL,
+        expires_ts INTEGER NOT NULL,
+        opened_ts INTEGER NULL,
+        uploaded_ts INTEGER NULL,
+        file_path VARCHAR(255) NULL,
+        mime_type VARCHAR(50) NULL,
+        file_size INTEGER NULL,
+        phone_ip VARCHAR(45) NULL,
+        phone_ua VARCHAR(255) NULL
+    ){$suffix}");
+    $pdo->exec('CREATE UNIQUE INDEX idx_kyc_captures_token ON kyc_captures (token_hash)');
+    $pdo->exec('CREATE INDEX idx_kyc_captures_expires ON kyc_captures (expires_ts)');
 }
 
 /** La table invoices limite-t-elle encore le type d'opération / mode de paiement (ENUM ou CHECK d'origine) ? */

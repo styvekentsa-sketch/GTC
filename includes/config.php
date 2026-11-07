@@ -54,6 +54,12 @@ define('GTC_GEO_LNG', '');
 define('GTC_GOOGLE_VERIFICATION', '');
 define('GTC_BING_VERIFICATION', '');
 
+// GTC-Vault (coffre-fort KYC) : adresse du répertoire des clients, vue depuis le dossier dashboard/.
+// - Installé dans le Dashboard : 'vault/clients.php' (la carte n'apparaît que si ce fichier existe).
+// - Application séparée : son adresse complète, ex. 'https://vault.globaltradingcorporation.net/clients.php'.
+// - Vide : carte masquée.
+define('GTC_VAULT_URL', 'vault/clients.php');
+
 // Mentions légales des factures : à compléter avec les numéros officiels de l'entreprise.
 // Laissés vides, ils ne sont pas affichés.
 define('GTC_RCCM', 'RC/DLA/2019/B/2990');    // Registre du Commerce et du Crédit Mobilier

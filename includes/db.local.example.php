@@ -32,3 +32,8 @@
 // Par défaut : dossier « gtc-backups » à côté du site, sinon data/backups. Historique conservé : 30 jours.
 // define('GTC_BACKUP_DIR', '/home/COMPTE/gtc-backups');
 // define('GTC_BACKUP_KEEP_DAYS', 30);
+
+// GTC-Vault (dossiers KYC, dashboard/vault/) : dossier des pièces d'identité, de préférence HORS de la racine web
+// (au-dessus de public_html). Par défaut : data/kyc (interdit d'accès par .htaccess). Le dossier doit exister et être
+// accessible en écriture à PHP. Pensez à le sauvegarder : les sauvegardes .sql ne contiennent que la base, pas les fichiers.
+// define('GTC_KYC_DIR', '/home/COMPTE/gtc-kyc');

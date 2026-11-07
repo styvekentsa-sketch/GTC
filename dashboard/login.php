@@ -17,9 +17,13 @@ if (current_user()) {
     redirect('index.php');
 }
 
-/** Destination après connexion : uniquement une page du dashboard (anti-redirection ouverte). */
+/**
+ * Destination après connexion : uniquement une page du dashboard (anti-redirection ouverte),
+ * ou une page de GTC-Vault (vault/…, éventuellement la fiche d'un client : ?uuid=…).
+ */
 $next = query('next', 'index.php');
-if (!preg_match('/^[a-z0-9-]+\.php$/', $next) || in_array($next, ['login.php', 'logout.php', 'setup.php', 'password.php'], true)) {
+if (!preg_match('#^(?:[a-z0-9-]+\.php|vault/[a-z0-9-]+\.php(?:\?uuid=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?)$#', $next)
+    || in_array($next, ['login.php', 'logout.php', 'setup.php', 'password.php', 'vault/viewer.php'], true)) {
     $next = 'index.php';
 }
 

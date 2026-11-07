@@ -93,10 +93,12 @@ dash_header('Accueil', 'index');
 
     <nav class="hub__grid" aria-label="Modules du Dashboard">
         <?php $i = 0; foreach ($modules as $key => $m): ?>
-            <?php /* couleurs de la charte en alternance régulière, quels que soient les modules visibles du rôle */ ?>
-            <a href="<?= e($m['href']) ?>" class="hub-tile hub-tile--<?= ['blue', 'green', 'magenta'][$i++ % 3] ?>">
+            <?php /* couleurs de la charte en alternance régulière, quels que soient les modules visibles du rôle ;
+                     un module à couleur fixe (accent, ex. GTC-Vault en indigo) ne décale pas l'alternance */ ?>
+            <a href="<?= e($m['href']) ?>" class="hub-tile hub-tile--<?= e($m['accent'] ?? ['blue', 'green', 'magenta'][$i++ % 3]) ?>">
                 <span class="hub-tile__icon"><?= icon($m['icon']) ?></span>
                 <span class="hub-tile__title"><?= e($m['title']) ?></span>
+                <?php if (!empty($m['tag'])): ?><span class="hub-tile__tag"><?= icon('lock') ?><?= e($m['tag']) ?></span><?php endif; ?>
                 <span class="hub-tile__desc"><?= e($m['desc']) ?></span>
                 <?php if ($key === 'messages'): ?>
                     <span class="hub-tile__badge" data-unread-badge<?= $stats['unread'] ? '' : ' hidden' ?>><?= $stats['unread'] ?> non lu<?= $stats['unread'] > 1 ? 's' : '' ?></span>

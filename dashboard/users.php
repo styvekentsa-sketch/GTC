@@ -81,6 +81,13 @@ if (is_post()) {
                 . "l'auteur de ces reçus. Désactivez-le plutôt : il ne pourra plus se connecter et l'historique reste intact.");
             redirect('users.php');
         }
+        $kyc = (int) db_value('SELECT COUNT(*) FROM clients WHERE created_by = ?', [$target])
+             + (int) db_value('SELECT COUNT(*) FROM client_documents WHERE uploaded_by = ?', [$target]);
+        if ($kyc > 0) {
+            flash('error', "Le compte de {$account['name']} a constitué des dossiers KYC (GTC-Vault) : le supprimer effacerait "
+                . "la traçabilité de ces pièces d'identité. Désactivez-le plutôt : il ne pourra plus se connecter et l'historique reste intact.");
+            redirect('users.php');
+        }
         if ($account['role'] === 'admin'
             && (int) db_value("SELECT COUNT(*) FROM users WHERE role = 'admin' AND status = 'actif' AND id <> ?", [$target]) === 0) {
             flash('error', 'Impossible de supprimer le dernier administrateur actif.');

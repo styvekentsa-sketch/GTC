@@ -34,6 +34,7 @@ const ACTIVITY_ENTITIES = [
     'message'    => 'Message du site',
     'review'     => 'Avis client',
     'review_invite' => 'Invitation à donner un avis',
+    'kyc_client' => 'Dossier KYC (GTC-Vault)',
     'user'       => 'Compte utilisateur',
     'team'       => 'Membre de l\'équipe',
     'partner'    => 'Partenaire',

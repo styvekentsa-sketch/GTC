@@ -42,6 +42,31 @@ const OPERATION_ROLES = ['admin', 'caissier', 'agent'];
 /** Rôles autorisés sur la messagerie (messages du formulaire de contact). */
 const MESSAGE_ROLES = ['admin', 'secretaire'];
 
+/**
+ * Rôles autorisés sur GTC-Vault (coffre-fort KYC : dossiers clients, CNI, pièces d'identité).
+ * Mêmes rôles que KYC_VIEW_ROLES dans GTC-Vault. « conformite » n'existe pas encore dans USER_ROLES :
+ * il prendra effet dès que ce rôle sera créé. Caissiers et accueil n'y ont pas accès.
+ */
+const VAULT_ROLES = ['admin', 'conformite', 'agent'];
+
+/**
+ * Adresse de GTC-Vault vue depuis le Dashboard (GTC_VAULT_URL, includes/config.php), ou null si le module
+ * n'est pas installé : une adresse locale n'est proposée que si le fichier existe (pas de carte menant à une
+ * page introuvable). Une adresse complète (https://…) est toujours proposée.
+ */
+function vault_url(): ?string
+{
+    $url = defined('GTC_VAULT_URL') ? trim((string) GTC_VAULT_URL) : '';
+    if ($url === '') {
+        return null;
+    }
+    if (preg_match('#^https://#i', $url)) {
+        return $url;
+    }
+    $file = __DIR__ . '/../dashboard/' . ltrim((string) parse_url($url, PHP_URL_PATH), '/');
+    return !str_contains($url, '..') && is_file($file) ? $url : null;
+}
+
 /** Le compte connecté peut-il consulter les messages du site ? */
 function can_access_messages(): bool
 {
@@ -341,6 +366,8 @@ function session_identity(): string
 /**
  * Modules accessibles au compte connecté — source unique du menu latéral et du Hub d'accueil (dashboard/index.php).
  * label : libellé court du menu ; title / desc : bouton du Hub ; tone : couleur de la charte (blue, green, magenta).
+ * accent (facultatif) : couleur fixe du bouton du Hub, hors alternance (ex. 'indigo' pour GTC-Vault) ;
+ * tag (facultatif) : mention courte affichée sous le titre.
  * La secrétaire / l'accueil ne voit que la messagerie (et ses paramètres).
  */
 function dash_modules(): array
@@ -358,6 +385,12 @@ function dash_modules(): array
             'rates'      => ['href' => 'rates.php',         'icon' => 'exchange', 'label' => 'Taux de change',    'title' => 'Taux de change',             'desc' => 'Grille des devises du jour',       'tone' => 'green'],
             'printing'   => ['href' => 'printing.php',      'icon' => 'printer',  'label' => 'Impression réseau', 'title' => 'Impression réseau',          'desc' => 'Imprimantes et file d\'attente',   'tone' => 'magenta'],
         ];
+    }
+    // GTC-Vault : coffre-fort KYC, réservé à l'administration, à la conformité et aux agents (VAULT_ROLES)
+    if (in_array($user['role'] ?? '', VAULT_ROLES, true) && ($vault = vault_url()) !== null) {
+        $modules['vault'] = ['href' => $vault, 'icon' => 'vault', 'label' => 'GTC-Vault (KYC)', 'title' => 'GTC-Vault',
+                             'tag' => 'Coffre-Fort & KYC', 'desc' => 'Gestion des dossiers clients, CNI et pièces d\'identité',
+                             'tone' => 'blue', 'accent' => 'indigo'];
     }
     if (can_access_messages()) {
         $modules['messages'] = ['href' => 'messages.php', 'icon' => 'mail', 'label' => 'Messages', 'title' => 'Messages', 'desc' => 'Demandes reçues par le site', 'tone' => 'blue'];

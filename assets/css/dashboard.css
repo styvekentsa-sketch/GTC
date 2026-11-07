@@ -522,6 +522,8 @@ code {
 }
 .hub-tile--green   { --tone: var(--brand-green);   --tone-soft: #E3F4EA; }
 .hub-tile--magenta { --tone: var(--brand-magenta); --tone-soft: #F7E3F0; }
+/* GTC-Vault (coffre-fort KYC) : indigo, couleur de la sécurité et de la conformité, hors alternance de la charte */
+.hub-tile--indigo  { --tone: #4338CA; --tone-soft: #E8E7FB; }   /* 7,8:1 avec le blanc */
 /* Liseré de couleur en haut du bouton (rappel des bandes du papier à en-tête) */
 .hub-tile::before { content: ""; position: absolute; inset: 0 0 auto; height: 4px; background: var(--tone); }
 .hub-tile:hover {
@@ -547,6 +549,26 @@ code {
 .hub-tile:hover .hub-tile__icon { background: var(--tone); color: #fff; transform: rotate(-4deg); }
 .hub-tile__title { font-size: 1rem; font-weight: 700; line-height: 1.3; }
 .hub-tile__desc { font-size: 0.8125rem; line-height: 1.35; color: var(--text-muted); }
+/* Mention courte sous le titre (ex. « Coffre-Fort & KYC ») */
+.hub-tile__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: var(--tone-soft);
+  color: var(--tone);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.hub-tile__tag .icon { width: 11px; height: 11px; flex-shrink: 0; stroke-width: 2.5; }
+@media (max-width: 575.98px) {
+  .hub-tile__tag { gap: 0.1875rem; padding: 0.125rem 0.4375rem; font-size: 0.625rem; letter-spacing: 0; }
+}
 
 /* Pastille des messages non lus (mise à jour en direct : assets/js/messages-live.js) */
 .hub-tile__badge {
