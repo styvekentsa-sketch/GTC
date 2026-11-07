@@ -20,7 +20,9 @@ const CLIENTS_TYPES    = ['particulier' => 'Particuliers', 'entreprise' => 'Entr
 
 $partial = ($_GET['partial'] ?? '') === '1';
 vault_guard($partial ? 'json' : false);   // connexion du Dashboard + rôle VAULT_ROLES
-session_write_close();   // lecture seule : la session n'est plus bloquée pendant les requêtes de recherche
+if ($partial) {
+    session_write_close();   // recherche en direct : lecture seule, la session n'est pas bloquée
+}
 
 // ---------- Paramètres ----------
 $q     = trim((string) preg_replace('/\s+/u', ' ', mb_substr((string) ($_GET['q'] ?? ''), 0, 100)));
@@ -59,7 +61,7 @@ function clients_url(array $change = []): string
     global $q, $type, $page;
     $params = array_filter(array_merge(['q' => $q, 'type' => $type, 'page' => $page > 1 ? $page : null], $change),
         fn ($v) => $v !== null && $v !== '' && $v !== 1);
-    return 'clients.php' . ($params ? '?' . http_build_query($params) : '');
+    return 'vault/clients.php' . ($params ? '?' . http_build_query($params) : '');
 }
 
 /**
@@ -105,7 +107,7 @@ function mark(string $text, array $words): string
     $parts = preg_split('/(' . implode('|', $patterns) . ')/iu', $text, -1, PREG_SPLIT_DELIM_CAPTURE) ?: [$text];
     $out = '';
     foreach ($parts as $i => $part) {
-        $out .= $i % 2 ? '<mark class="rounded bg-amber-100 px-0.5 text-inherit">' . h($part) . '</mark>' : h($part);
+        $out .= $i % 2 ? '<mark class="vault-mark">' . h($part) . '</mark>' : h($part);
     }
     return $out;
 }
@@ -150,8 +152,8 @@ $isEmptyBase = !$error && $counts[''] === 0 && !$words;
 function type_badge(string $type): string
 {
     return $type === 'entreprise'
-        ? '<span class="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20">Entreprise</span>'
-        : '<span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">Particulier</span>';
+        ? '<span class="badge badge--info">Entreprise</span>'
+        : '<span class="badge badge--success">Particulier</span>';
 }
 
 /** Initiales de l'avatar : chiffres, symboles et formes juridiques ignorés (« GLOBAL IMPORT SARL » → « GI »). */
@@ -167,33 +169,25 @@ function kyc_initials(string $name): string
 
 function docs_label(int $n): string
 {
-    return $n === 0
-        ? '<span class="text-amber-700">Aucune pièce</span>'
-        : $n . ' pièce' . ($n > 1 ? 's' : '');
+    return $n === 0 ? '<span class="vault-warn">Aucune pièce</span>' : $n . ' pièce' . ($n > 1 ? 's' : '');
 }
-
-const EYE_ICON = '<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
 
 /** Pastilles de filtre, résultats, pagination : renvoyés tels quels à la recherche fluide. */
 function render_results(): string
 {
     global $rows, $total, $page, $pages, $q, $type, $words, $counts, $error, $isEmptyBase;
     ob_start(); ?>
-    <!-- Filtres par type -->
-    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <nav class="flex flex-wrap gap-2" aria-label="Filtrer par type de client">
+    <div class="vault-list-head">
+        <nav class="chips vault-chips" aria-label="Filtrer par type de client">
             <?php foreach (['' => 'Tous'] + CLIENTS_TYPES as $key => $label):
                 $active = $key === $type; ?>
                 <a href="<?= h(clients_url(['type' => $key, 'page' => null])) ?>" data-nav data-type="<?= h($key) ?>"
-                   class="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium transition focus:outline-none focus:ring-4 focus:ring-blue-100
-                          <?= $active ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 hover:text-slate-900' ?>"
-                   <?= $active ? 'aria-current="true"' : '' ?>>
-                    <?= h($label) ?>
-                    <span class="rounded-full px-1.5 text-xs <?= $active ? 'bg-white/15' : 'bg-slate-100 text-slate-500' ?>"><?= $counts[$key] ?></span>
+                   class="chip<?= $active ? ' is-active' : '' ?>"<?= $active ? ' aria-current="true"' : '' ?>>
+                    <?= h($label) ?> <span class="chip__count"><?= $counts[$key] ?></span>
                 </a>
             <?php endforeach; ?>
         </nav>
-        <p class="text-sm text-slate-500" data-summary>
+        <p class="vault-summary" data-summary>
             <?php if ($total > 0): ?>
                 <?= $total === 1 ? '1 dossier' : number_format($total, 0, ',', "\u{202F}") . ' dossiers' ?><?= $q !== '' ? ' pour « ' . h($q) . ' »' : '' ?>
                 <?php if ($total > CLIENTS_PER_PAGE): ?>
@@ -204,139 +198,91 @@ function render_results(): string
     </div>
 
     <?php if ($error): ?>
-        <div class="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-900" role="alert"><?= h($error) ?></div>
+        <div class="alert alert--error" role="alert"><?= icon('alert') ?><p><?= h($error) ?></p></div>
 
     <?php elseif ($isEmptyBase): ?>
-        <div class="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
-            <span class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
-            </span>
-            <h2 class="mt-4 text-base font-semibold text-slate-900">Aucun dossier KYC pour l'instant</h2>
-            <p class="mt-1 text-sm text-slate-500">Enregistrez votre premier client et ses pièces justificatives.</p>
-            <a href="clients-nouveau.php" class="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">Nouveau client</a>
+        <div class="empty vault-empty">
+            <span class="vault-empty__icon"><?= icon('users') ?></span>
+            <h2>Aucun dossier KYC pour l'instant</h2>
+            <p>Enregistrez votre premier client et ses pièces justificatives.</p>
+            <div class="toolbar__actions"><a href="vault/clients-nouveau.php" class="btn btn--primary"><?= icon('plus') ?> Nouveau client</a></div>
         </div>
 
     <?php elseif (!$rows): ?>
-        <div class="rounded-2xl border border-slate-200 bg-white px-6 py-14 text-center" role="status">
-            <span class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500">
-                <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3M8 11h6"/></svg>
-            </span>
-            <h2 class="mt-4 text-base font-semibold text-slate-900">Aucun client ne correspond<?= $q !== '' ? ' à « ' . h($q) . ' »' : '' ?></h2>
-            <p class="mt-1 text-sm text-slate-500">
-                Vérifiez l'orthographe, cherchez une partie du nom, du téléphone ou du N° d'identifiant<?= $type ? ', ou élargissez à tous les types' : '' ?>.
-            </p>
-            <div class="mt-5 flex flex-wrap justify-center gap-3">
-                <a href="clients.php" data-nav data-reset class="inline-flex items-center rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50">Effacer la recherche</a>
-                <a href="clients-nouveau.php" class="inline-flex items-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">Nouveau client</a>
+        <div class="empty vault-empty" role="status">
+            <span class="vault-empty__icon"><?= icon('search') ?></span>
+            <h2>Aucun client ne correspond<?= $q !== '' ? ' à « ' . h($q) . ' »' : '' ?></h2>
+            <p>Vérifiez l'orthographe, cherchez une partie du nom, du téléphone ou du N° d'identifiant<?= $type ? ', ou élargissez à tous les types' : '' ?>.</p>
+            <div class="toolbar__actions">
+                <a href="vault/clients.php" data-nav data-reset class="btn btn--ghost">Effacer la recherche</a>
+                <a href="vault/clients-nouveau.php" class="btn btn--primary"><?= icon('plus') ?> Nouveau client</a>
             </div>
         </div>
 
     <?php else: ?>
-        <!-- Ordinateur et tablette : tableau -->
-        <div class="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:block">
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead class="bg-slate-50">
-                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            <th scope="col" class="px-5 py-3">Type</th>
-                            <th scope="col" class="px-5 py-3">Nom complet</th>
-                            <th scope="col" class="px-5 py-3">Téléphone</th>
-                            <th scope="col" class="px-5 py-3">N° identifiant</th>
-                            <th scope="col" class="px-5 py-3">Enregistré le</th>
-                            <th scope="col" class="px-5 py-3 text-right"><span class="sr-only">Actions</span></th>
+        <div class="table-wrap">
+            <table class="table table--hover table--stack">
+                <thead>
+                    <tr>
+                        <th scope="col">Type</th>
+                        <th scope="col">Nom complet</th>
+                        <th scope="col">Téléphone</th>
+                        <th scope="col">N° identifiant</th>
+                        <th scope="col">Enregistré le</th>
+                        <th scope="col" class="actions"><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($rows as $r):
+                        $url = 'vault/client.php?uuid=' . rawurlencode($r['uuid']);
+                        [$day, $time] = vault_date($r['created_at']); ?>
+                        <tr data-href="<?= h($url) ?>">
+                            <td data-label="Type"><?= type_badge($r['type_client']) ?></td>
+                            <td data-label="Client">
+                                <span class="vault-client">
+                                    <?= avatar_html($r, kyc_initials($r['nom_complet']), 'sm') ?>
+                                    <span class="cell-stack">
+                                        <a href="<?= h($url) ?>" class="link-strong"><?= mark($r['nom_complet'], $words) ?></a>
+                                        <small class="cell-sub"><?= docs_label((int) $r['nb_docs']) ?></small>
+                                    </span>
+                                </span>
+                            </td>
+                            <td data-label="Téléphone" class="nowrap"><a href="tel:<?= h($r['telephone']) ?>"><?= mark(vault_phone($r['telephone']), $words) ?></a></td>
+                            <td data-label="N° identifiant"><span class="vault-mono"><?= $r['numero_identifiant'] !== null ? mark($r['numero_identifiant'], $words) : '—' ?></span></td>
+                            <td data-label="Enregistré le" class="nowrap"><span><?= h($day) ?> <small class="vault-muted"><?= h($time) ?></small></span></td>
+                            <td class="actions">
+                                <a href="<?= h($url) ?>" class="icon-btn" title="Ouvrir le dossier" aria-label="Ouvrir le dossier de <?= h($r['nom_complet']) ?>"><?= icon('eye') ?></a>
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        <?php foreach ($rows as $r):
-                            $url = 'client.php?uuid=' . rawurlencode($r['uuid']);
-                            [$day, $time] = vault_date($r['created_at']); ?>
-                            <tr class="group cursor-pointer transition hover:bg-slate-50" data-href="<?= h($url) ?>">
-                                <td class="whitespace-nowrap px-5 py-3.5"><?= type_badge($r['type_client']) ?></td>
-                                <td class="px-5 py-3.5">
-                                    <div class="flex items-center gap-3">
-                                        <?= avatar_html($r, kyc_initials($r['nom_complet']), 'h-9 w-9 text-xs') ?>
-                                        <div class="min-w-0">
-                                            <a href="<?= h($url) ?>" class="block max-w-xs truncate font-medium text-slate-900 hover:text-blue-700 focus:outline-none focus-visible:underline"><?= mark($r['nom_complet'], $words) ?></a>
-                                            <span class="text-xs text-slate-500"><?= docs_label((int) $r['nb_docs']) ?></span>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="whitespace-nowrap px-5 py-3.5 tabular-nums text-slate-700"><?= mark(vault_phone($r['telephone']), $words) ?></td>
-                                <td class="whitespace-nowrap px-5 py-3.5 font-mono text-[13px] text-slate-700"><?= $r['numero_identifiant'] !== null ? mark($r['numero_identifiant'], $words) : '<span class="text-slate-400">—</span>' ?></td>
-                                <td class="whitespace-nowrap px-5 py-3.5 text-slate-700"><?= h($day) ?> <span class="text-xs text-slate-400"><?= h($time) ?></span></td>
-                                <td class="whitespace-nowrap px-5 py-3.5 text-right">
-                                    <a href="<?= h($url) ?>" title="Ouvrir le dossier" aria-label="Ouvrir le dossier de <?= h($r['nom_complet']) ?>"
-                                       class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-500 transition hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100 group-hover:text-blue-700">
-                                        <?= EYE_ICON ?><span class="hidden lg:inline">Ouvrir</span>
-                                    </a>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
-
-        <!-- Téléphone : cartes -->
-        <ul class="space-y-3 md:hidden">
-            <?php foreach ($rows as $r):
-                $url = 'client.php?uuid=' . rawurlencode($r['uuid']);
-                [$day, $time] = vault_date($r['created_at']); ?>
-                <li class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <div class="flex items-start gap-3">
-                        <?= avatar_html($r, kyc_initials($r['nom_complet']), 'h-10 w-10 text-sm') ?>
-                        <div class="min-w-0 flex-1">
-                            <div class="flex items-start justify-between gap-2">
-                                <a href="<?= h($url) ?>" class="min-w-0 break-words font-semibold text-slate-900"><?= mark($r['nom_complet'], $words) ?></a>
-                                <?= type_badge($r['type_client']) ?>
-                            </div>
-                            <dl class="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
-                                <dt class="text-slate-500">Tél.</dt>
-                                <dd class="tabular-nums text-slate-800"><a href="tel:<?= h($r['telephone']) ?>"><?= mark(vault_phone($r['telephone']), $words) ?></a></dd>
-                                <dt class="text-slate-500">N°</dt>
-                                <dd class="break-all font-mono text-[13px] text-slate-800"><?= $r['numero_identifiant'] !== null ? mark($r['numero_identifiant'], $words) : '—' ?></dd>
-                                <dt class="text-slate-500">Le</dt>
-                                <dd class="text-slate-800"><?= h($day) ?> <span class="text-xs text-slate-400"><?= h($time) ?></span> · <span class="text-xs text-slate-500"><?= docs_label((int) $r['nb_docs']) ?></span></dd>
-                            </dl>
-                        </div>
-                    </div>
-                    <a href="<?= h($url) ?>" class="mt-3 flex items-center justify-center gap-2 rounded-xl bg-slate-50 py-2.5 text-sm font-semibold text-blue-700 ring-1 ring-inset ring-slate-200 hover:bg-blue-50">
-                        <?= EYE_ICON ?> Ouvrir le dossier
-                    </a>
-                </li>
-            <?php endforeach; ?>
-        </ul>
 
         <?php if ($pages > 1):
             // Pages affichées : 1, …, page-1, page, page+1, …, dernière
             $show = array_unique(array_filter([1, $page - 1, $page, $page + 1, $pages], fn ($p) => $p >= 1 && $p <= $pages));
             sort($show); ?>
-            <nav class="mt-5 flex items-center justify-between gap-3" aria-label="Pagination">
-                <?php $btn = 'inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium ring-1 ring-inset transition focus:outline-none focus:ring-4 focus:ring-blue-100'; ?>
+            <nav class="vault-pager" aria-label="Pagination">
                 <?php if ($page > 1): ?>
-                    <a href="<?= h(clients_url(['page' => $page - 1])) ?>" data-nav data-page class="<?= $btn ?> bg-white text-slate-700 ring-slate-300 hover:bg-slate-50" rel="prev"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span class="hidden sm:inline">Précédent</span></a>
+                    <a href="<?= h(clients_url(['page' => $page - 1])) ?>" data-nav data-page class="btn btn--ghost btn--sm" rel="prev"><?= vault_icon('chev-l') ?><span>Précédent</span></a>
                 <?php else: ?>
-                    <span class="<?= $btn ?> cursor-not-allowed bg-slate-50 text-slate-300 ring-slate-200" aria-hidden="true"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span class="hidden sm:inline">Précédent</span></span>
+                    <span class="btn btn--ghost btn--sm" aria-disabled="true"><?= vault_icon('chev-l') ?><span>Précédent</span></span>
                 <?php endif; ?>
-
-                <ol class="flex items-center gap-1">
+                <div class="pagination">
                     <?php $prev = 0; foreach ($show as $p): ?>
-                        <?php if ($p - $prev > 1): ?><li class="px-1 text-slate-400" aria-hidden="true">…</li><?php endif; ?>
-                        <li>
-                            <?php if ($p === $page): ?>
-                                <span class="flex h-9 min-w-9 items-center justify-center rounded-lg bg-slate-900 px-2 text-sm font-semibold text-white" aria-current="page"><?= $p ?></span>
-                            <?php else: ?>
-                                <a href="<?= h(clients_url(['page' => $p])) ?>" data-nav data-page aria-label="Page <?= $p ?>"
-                                   class="flex h-9 min-w-9 items-center justify-center rounded-lg px-2 text-sm font-medium text-slate-600 hover:bg-white hover:text-slate-900 hover:ring-1 hover:ring-slate-200"><?= $p ?></a>
-                            <?php endif; ?>
-                        </li>
+                        <?php if ($p - $prev > 1): ?><span class="pagination__item" aria-hidden="true">…</span><?php endif; ?>
+                        <?php if ($p === $page): ?>
+                            <span class="pagination__item is-active" aria-current="page"><?= $p ?></span>
+                        <?php else: ?>
+                            <a class="pagination__item" href="<?= h(clients_url(['page' => $p])) ?>" data-nav data-page aria-label="Page <?= $p ?>"><?= $p ?></a>
+                        <?php endif; ?>
                     <?php $prev = $p; endforeach; ?>
-                </ol>
-
+                </div>
                 <?php if ($page < $pages): ?>
-                    <a href="<?= h(clients_url(['page' => $page + 1])) ?>" data-nav data-page class="<?= $btn ?> bg-white text-slate-700 ring-slate-300 hover:bg-slate-50" rel="next"><span class="hidden sm:inline">Suivant</span><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
+                    <a href="<?= h(clients_url(['page' => $page + 1])) ?>" data-nav data-page class="btn btn--ghost btn--sm" rel="next"><span>Suivant</span><?= vault_icon('chev-r') ?></a>
                 <?php else: ?>
-                    <span class="<?= $btn ?> cursor-not-allowed bg-slate-50 text-slate-300 ring-slate-200" aria-hidden="true"><span class="hidden sm:inline">Suivant</span><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
+                    <span class="btn btn--ghost btn--sm" aria-disabled="true"><span>Suivant</span><?= vault_icon('chev-r') ?></span>
                 <?php endif; ?>
             </nav>
         <?php endif; ?>
@@ -353,66 +299,68 @@ if ($partial) {
         JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
+
+// Chiffres du répertoire (toute la base, indépendants de la recherche)
+$overview = ['total' => 0, 'particulier' => 0, 'entreprise' => 0, 'incomplete' => 0];
+if (!$error) {
+    try {
+        $o = vault_db()->query("SELECT COUNT(*) AS total,
+                                       SUM(CASE WHEN type_client = 'particulier' THEN 1 ELSE 0 END) AS particulier,
+                                       SUM(CASE WHEN type_client = 'entreprise' THEN 1 ELSE 0 END) AS entreprise,
+                                       SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM client_documents d WHERE d.client_id = c.id) THEN 1 ELSE 0 END) AS incomplete
+                                FROM clients c")->fetch();
+        $overview = array_map('intval', $o ?: $overview);
+    } catch (Throwable $e) {
+        error_log('[GTC-Vault clients] chiffres : ' . $e->getMessage());
+    }
+}
+
+vault_header('GTC-Vault · Répertoire KYC');
+session_write_close();   // en-tête affiché (messages flash consommés) : la session est libérée
 ?>
-<!DOCTYPE html>
-<html lang="fr" class="h-full">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="robots" content="noindex, nofollow">
-    <title><?= $q !== '' ? h($q) . ' · ' : '' ?>Répertoire clients KYC · GTC-Vault</title>
-    <!-- Tailwind compilé (assets/vault.css, voir assets/README-tailwind.txt) : aucun script externe -->
-    <link rel="stylesheet" href="<?= h(vault_css()) ?>">
-    <style>[hidden] { display: none !important; }</style>
-</head>
-<body class="min-h-full bg-slate-100 font-sans text-slate-900 antialiased">
 
-<!-- ==================== BARRE SUPÉRIEURE ==================== -->
-<?= vault_topbar([['Clients', null]]) ?>
-
-<main class="mx-auto max-w-6xl px-4 pb-16 pt-8 sm:px-6">
-    <!-- ==================== EN-TÊTE ==================== -->
-    <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-            <h1 class="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Répertoire Clients KYC</h1>
-            <p class="mt-1 text-sm text-slate-600">Dossiers d'identification des clients particuliers et entreprises.</p>
-        </div>
-        <a href="clients-nouveau.php"
-           class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200">
-            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-            Nouveau Client
-        </a>
-    </div>
-
-    <!-- ==================== RECHERCHE ==================== -->
-    <form method="get" action="clients.php" role="search" id="client-search" class="mb-5">
-        <input type="hidden" name="type" value="<?= h($type) ?>">
-        <label for="q" class="sr-only">Rechercher un client</label>
-        <div class="relative">
-            <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
-                <svg class="h-5 w-5" data-search-icon viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-                <svg class="hidden h-5 w-5 animate-spin text-blue-600" data-search-spinner viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".25" stroke-width="3"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
-            </span>
-            <input type="search" id="q" name="q" value="<?= h($q) ?>" maxlength="100" autocomplete="off" spellcheck="false" enterkeyhint="search"
-                   placeholder="Nom, téléphone, N° CNI ou RCCM…" title="Rechercher par nom, téléphone ou N° CNI / passeport / RCCM"
-                   class="block w-full rounded-2xl border border-slate-300 bg-white py-3.5 pl-12 pr-12 sm:pr-24 text-base text-slate-900 shadow-sm placeholder:text-slate-400
-                          focus:border-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-100 [&::-webkit-search-cancel-button]:hidden">
-            <div class="absolute inset-y-0 right-0 flex items-center gap-1 pr-3">
-                <button type="button" data-clear <?= $q === '' ? 'hidden' : '' ?> aria-label="Effacer la recherche"
-                        class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-4 focus:ring-blue-100">
-                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                </button>
-                <kbd class="hidden rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-sans text-xs text-slate-500 sm:inline" title="Raccourci : touche /">/</kbd>
-                <noscript><button type="submit" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">Rechercher</button></noscript>
+<!-- ==================== CHIFFRES ==================== -->
+<section class="stats stats--summary" aria-label="Répertoire KYC en chiffres">
+    <?php foreach ([
+        ['Dossiers KYC', $overview['total'], 'users', 'blue', 'Clients identifiés'],
+        ['Particuliers', $overview['particulier'], 'shield', 'green', 'CNI ou passeport'],
+        ['Entreprises', $overview['entreprise'], 'store', 'slate', 'RCCM et représentant légal'],
+        ['Sans pièce', $overview['incomplete'], 'alert', 'gold', $overview['incomplete'] ? 'Dossiers à compléter' : 'Tous les dossiers ont des pièces'],
+    ] as [$label, $value, $ic, $tone, $note]): ?>
+        <div class="stat">
+            <span class="stat__icon stat__icon--<?= $tone ?>"><?= icon($ic) ?></span>
+            <div>
+                <p class="stat__label"><?= h($label) ?></p>
+                <p class="stat__value"><?= number_format($value, 0, ',', "\u{202F}") ?></p>
+                <p class="stat__note"><?= h($note) ?></p>
             </div>
         </div>
-    </form>
+    <?php endforeach; ?>
+</section>
 
-    <!-- ==================== RÉSULTATS ==================== -->
-    <section id="results" aria-live="polite" aria-busy="false" class="transition-opacity">
-        <?= render_results() ?>
-    </section>
-</main>
+<!-- ==================== RECHERCHE ==================== -->
+<div class="toolbar vault-toolbar">
+    <form method="get" action="vault/clients.php" role="search" id="client-search" class="filters">
+        <input type="hidden" name="type" value="<?= h($type) ?>">
+        <div class="search vault-search">
+            <?= icon('search') ?>
+            <label for="q" class="visually-hidden">Rechercher un client</label>
+            <input type="search" id="q" name="q" value="<?= h($q) ?>" maxlength="100" autocomplete="off" spellcheck="false" enterkeyhint="search"
+                   placeholder="Nom, téléphone, N° CNI, passeport ou RCCM…" title="Rechercher par nom, téléphone ou N° CNI / passeport / RCCM">
+            <button type="button" class="vault-search__clear" data-clear <?= $q === '' ? 'hidden' : '' ?> aria-label="Effacer la recherche"><?= vault_icon('x') ?></button>
+            <kbd class="vault-search__kbd" data-kbd <?= $q !== '' ? 'hidden' : '' ?> title="Raccourci : touche /">/</kbd>
+        </div>
+        <noscript><button type="submit" class="btn btn--ghost btn--sm">Rechercher</button></noscript>
+    </form>
+    <div class="toolbar__actions">
+        <a href="vault/clients-nouveau.php" class="btn btn--primary"><?= icon('plus') ?> Nouveau client</a>
+    </div>
+</div>
+
+<!-- ==================== RÉSULTATS ==================== -->
+<section class="panel vault-results" id="results" aria-live="polite" aria-busy="false">
+    <?= render_results() ?>
+</section>
 
 <script>
 (function () {
@@ -422,26 +370,27 @@ if ($partial) {
   var input = document.getElementById('q');
   var typeInput = form.elements.type;
   var results = document.getElementById('results');
-  var clearBtn = form.querySelector('[data-clear]');
-  var icon = form.querySelector('[data-search-icon]'), spinner = form.querySelector('[data-search-spinner]');
+  var search = form.querySelector('.vault-search');
+  var clearBtn = form.querySelector('[data-clear]'), kbd = form.querySelector('[data-kbd]');
   var controller = null, timer = null, lastQuery = null;
 
   function busy(on) {
     results.setAttribute('aria-busy', on ? 'true' : 'false');
-    results.classList.toggle('opacity-60', on);
-    icon.classList.toggle('hidden', on); spinner.classList.toggle('hidden', !on);
+    results.classList.toggle('is-loading', on);
+    search.classList.toggle('is-loading', on);
   }
+  function syncClear() { clearBtn.hidden = !input.value; kbd.hidden = !!input.value; }
 
   /** Charge les résultats d'une adresse de la liste, sans recharger la page. */
   function load(url, mode) {
     if (controller) controller.abort();                       // une frappe plus récente annule la requête en cours
     controller = new AbortController();
-    var u = new URL(url, location.href);
+    var u = new URL(url, document.baseURI);
     u.searchParams.set('partial', '1');
     busy(true);
     return fetch(u, { headers: { Accept: 'application/json' }, signal: controller.signal, credentials: 'same-origin' })
       .then(function (r) {
-        if (r.status === 401) { location.href = '../login.php?next=' + encodeURIComponent('vault/clients.php'); throw new Error('401'); }
+        if (r.status === 401) { location.href = 'login.php?next=' + encodeURIComponent('vault/clients.php'); throw new Error('401'); }
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
       })
@@ -449,7 +398,7 @@ if ($partial) {
         results.innerHTML = data.html;
         typeInput.value = data.type;
         lastQuery = data.q;
-        document.title = (data.q ? data.q + ' · ' : '') + 'Répertoire clients KYC · GTC-Vault';
+        document.title = (data.q ? data.q + ' · ' : '') + 'GTC-Vault · Répertoire KYC | Dashboard GTC';
         if (mode === 'push') history.pushState({}, '', data.url);
         else if (mode === 'replace') history.replaceState({}, '', data.url);
         busy(false);
@@ -466,12 +415,12 @@ if ($partial) {
     var q = input.value.trim();
     if (q) p.set('q', q);
     if (typeInput.value) p.set('type', typeInput.value);
-    return 'clients.php' + (p.toString() ? '?' + p : '');
+    return 'vault/clients.php' + (p.toString() ? '?' + p : '');
   }
 
   // Frappe : recherche après une courte pause (pas de requête par lettre)
   input.addEventListener('input', function () {
-    clearBtn.hidden = !input.value;
+    syncClear();
     clearTimeout(timer);
     timer = setTimeout(function () {
       if (input.value.trim() === lastQuery) return;
@@ -479,7 +428,7 @@ if ($partial) {
     }, 250);
   });
   form.addEventListener('submit', function (e) { e.preventDefault(); clearTimeout(timer); load(searchUrl(), 'replace'); });
-  clearBtn.addEventListener('click', function () { input.value = ''; clearBtn.hidden = true; input.focus(); load(searchUrl(), 'replace'); });
+  clearBtn.addEventListener('click', function () { input.value = ''; syncClear(); input.focus(); load(searchUrl(), 'replace'); });
   input.addEventListener('keydown', function (e) { if (e.key === 'Escape' && input.value) { e.preventDefault(); clearBtn.click(); } });
 
   // Raccourci « / » : aller à la recherche
@@ -494,29 +443,30 @@ if ($partial) {
     var a = e.target.closest('a[data-nav]');
     if (a && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
       e.preventDefault();
-      if (a.hasAttribute('data-reset')) { input.value = ''; clearBtn.hidden = true; }
-      load(a.href, 'push').then(function () {
+      if (a.hasAttribute('data-reset')) { input.value = ''; syncClear(); }
+      load(a.getAttribute('href'), 'push').then(function () {
         if (a.hasAttribute('data-page')) results.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
       return;
     }
-    // Ligne du tableau cliquable (hors liens et sélection de texte)
+    // Ligne du tableau cliquable (hors liens, boutons et sélection de texte)
     var tr = e.target.closest('tr[data-href]');
     if (tr && !e.target.closest('a, button') && !String(window.getSelection())) {
-      if (e.ctrlKey || e.metaKey) window.open(tr.getAttribute('data-href'), '_blank');
-      else location.href = tr.getAttribute('data-href');
+      var href = new URL(tr.getAttribute('data-href'), document.baseURI).href;
+      if (e.ctrlKey || e.metaKey) window.open(href, '_blank');
+      else location.href = href;
     }
   });
 
   // Précédent / Suivant du navigateur
   window.addEventListener('popstate', function () {
     var p = new URLSearchParams(location.search);
-    input.value = p.get('q') || ''; clearBtn.hidden = !input.value;
+    input.value = p.get('q') || ''; syncClear();
     load(location.href, null);
   });
 
   lastQuery = input.value.trim();
 })();
 </script>
-</body>
-</html>
+
+<?php dash_footer(); ?>

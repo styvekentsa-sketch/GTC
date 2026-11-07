@@ -88,13 +88,10 @@ function vault_guard(string|false $api = false): array
         if ($api !== false) {
             vault_fail($api, 403, 'forbidden', 'Accès refusé.');
         }
+        // Même comportement que require_roles() du Dashboard : message puis retour à la page d'accueil du rôle
         http_response_code(403);
-        echo '<!DOCTYPE html><html lang="fr"><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Accès refusé · GTC-Vault</title>'
-           . '<body style="font-family:system-ui,sans-serif;background:#f1f5f9;display:grid;place-items:center;min-height:100vh;margin:0;padding:16px">'
-           . '<div style="max-width:420px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:32px;text-align:center">'
-           . '<h1 style="font-size:20px;margin:0 0 8px">Accès refusé</h1><p style="color:#475569;margin:0 0 20px">Votre compte n\'est pas autorisé à consulter les dossiers KYC. Cette tentative a été enregistrée.</p>'
-           . '<a href="../' . h(role_home($user['role'] ?? '')) . '" style="color:#1d4ed8;font-weight:600"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Retour au Dashboard</a></div></body></html>';
-        exit;
+        flash('error', "Votre compte n'est pas autorisé à consulter les dossiers KYC (GTC-Vault). Cette tentative a été enregistrée.");
+        redirect('../' . role_home($user['role'] ?? ''));
     }
     return $user;
 }
@@ -160,7 +157,8 @@ function vault_viewer_url(int $documentId, string $mode = 'image'): string
     $_SESSION['viewer_key'] ??= bin2hex(random_bytes(32));
     $exp = time() + VIEWER_TTL;
     $sig = hash_hmac('sha256', $documentId . '|' . $mode . '|' . $exp, $_SESSION['viewer_key']);
-    return 'viewer.php?' . http_build_query(['d' => $documentId, 'm' => $mode, 'e' => $exp, 's' => $sig]);
+    // Chemin depuis dashboard/ (pages GTC-Vault affichées avec une balise <base> vers dashboard/)
+    return 'vault/viewer.php?' . http_build_query(['d' => $documentId, 'm' => $mode, 'e' => $exp, 's' => $sig]);
 }
 
 /** Vérifie la signature et l'expiration d'un lien de consultation. */
@@ -216,23 +214,23 @@ function avatar_dir(): string
 /** Adresse de la photo de profil d'un client (null s'il n'en a pas) ; le nom du fichier sert de version. */
 function avatar_url(string $uuid, ?string $avatarPath): ?string
 {
-    return $avatarPath ? 'avatar.php?c=' . rawurlencode($uuid) . '&v=' . substr(md5($avatarPath), 0, 10) : null;
+    // Chemin depuis dashboard/ (balise <base> des pages GTC-Vault)
+    return $avatarPath ? 'vault/avatar.php?c=' . rawurlencode($uuid) . '&v=' . substr(md5($avatarPath), 0, 10) : null;
 }
 
 /**
- * Avatar d'un client : photo de profil si elle existe, sinon ses initiales sur la couleur de son type.
- * $size : classes Tailwind de taille (ex. 'h-9 w-9 text-xs'), $round : forme ('rounded-full', 'rounded-2xl').
+ * Avatar d'un client (composant member-thumb du Dashboard) : photo de profil si elle existe, sinon ses initiales,
+ * vertes pour un particulier, bleues pour une entreprise. $size : 'sm' (36 px), 'md' (44 px) ou 'lg' (72 px, fiche).
  */
-function avatar_html(array $client, string $initials, string $size, string $round = 'rounded-full'): string
+function avatar_html(array $client, string $initials, string $size = 'md'): string
 {
-    $tone = ($client['type_client'] ?? '') === 'entreprise' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700';
     $url  = avatar_url((string) $client['uuid'], $client['avatar_path'] ?? null);
+    $base = 'member-thumb vault-avatar vault-avatar--' . $size;
     if ($url) {
-        return '<img src="' . h($url) . '" alt="" width="64" height="64" loading="lazy" decoding="async" draggable="false"'
-             . ' class="' . h($size) . ' ' . $round . ' shrink-0 bg-slate-100 object-cover ring-1 ring-slate-200" data-avatar>';
+        return '<img src="' . h($url) . '" alt="" width="72" height="72" loading="lazy" decoding="async" draggable="false" class="' . $base . '" data-avatar>';
     }
-    return '<span class="flex ' . h($size) . ' shrink-0 items-center justify-center ' . $round . ' font-semibold ' . $tone . '" aria-hidden="true" data-avatar>'
-         . h($initials ?: '?') . '</span>';
+    $tone = ($client['type_client'] ?? '') === 'entreprise' ? ' vault-avatar--company' : '';
+    return '<span class="' . $base . ' member-thumb--initials' . $tone . '" aria-hidden="true" data-avatar>' . h($initials ?: '?') . '</span>';
 }
 
 /** Supprime le fichier d'une photo de profil. */
@@ -362,42 +360,41 @@ function vault_date(?string $value): array
     return [$d->format('j') . ' ' . $months[(int) $d->format('n') - 1] . ' ' . $d->format('Y'), $d->format('H:i')];
 }
 
-/** Feuille de style de GTC-Vault (Tailwind compilé, versionné par sa date de modification). */
-function vault_css(): string
+/** Feuille de style de GTC-Vault (composants propres au module, sur les variables du Dashboard). */
+const VAULT_CSS = 'assets/css/vault.css';
+
+/** En-tête du Dashboard pour une page GTC-Vault (menu latéral, barre supérieure, entrée « GTC-Vault » active). */
+function vault_header(string $title): void
 {
-    $file = __DIR__ . '/../dashboard/vault/assets/vault.css';
-    return 'assets/vault.css' . (is_file($file) ? '?v=' . filemtime($file) : '');
+    dash_header($title, 'vault', [VAULT_CSS], true);
 }
 
-/** En-tête commun des pages : retour au Dashboard, fil d'Ariane, compte connecté. $crumbs : [[libellé, lien|null], …]. */
-function vault_topbar(array $crumbs): string
+/** Icône SVG du Dashboard (includes/icons.php) ou tracé libre pour les icônes propres à GTC-Vault. */
+function vault_icon(string $name): string
 {
-    $user  = vault_user();
-    $items = ['<li><a href="../index.php" class="hover:text-white">Dashboard</a></li>'];
-    foreach ($crumbs as $i => [$label, $href]) {
-        $last = $i === array_key_last($crumbs);
-        $items[] = $last || !$href
-            ? '<li class="max-w-[16rem] truncate font-medium text-white"' . ($last ? ' aria-current="page"' : '') . '>' . h($label) . '</li>'
-            : '<li><a href="' . h($href) . '" class="hover:text-white">' . h($label) . '</a></li>';
+    $own = [
+        'id-card' => '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M15 9h3M15 13h3M6 16h7"/>',
+        'phone'   => '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>',
+        'monitor' => '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
+        'camera'  => '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3.5"/>',
+        'upload'  => '<path d="M12 16V4m0 0-4 4m4-4 4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>',
+        'pdf'     => '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',
+        'image'   => '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M15 9h3M15 13h3M6 16h7"/>',
+        'copy'    => '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
+        'user'    => '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+        'building'=> '<path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 10h.01M15 10h.01"/>',
+        'vault'   => '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><circle cx="12" cy="10.5" r="2"/><path d="M12 12.5V16"/>',
+        'send'    => '<path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/>',
+        'sun'     => '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+        'lens'    => '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+        'clock'   => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+        'chev-l'  => '<path d="m15 18-6-6 6-6"/>',
+        'chev-r'  => '<path d="m9 18 6-6-6-6"/>',
+        'x'       => '<path d="M18 6 6 18M6 6l12 12"/>',
+        'ok'      => '<path d="m5 12 5 5 9-10"/>',
+    ];
+    if (isset($own[$name])) {
+        return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $own[$name] . '</svg>';
     }
-    $initials = mb_strtoupper(implode('', array_map(fn ($w) => mb_substr($w, 0, 1), array_slice(preg_split('/\s+/u', trim($user['name'])) ?: [], 0, 2))));
-    return '<header class="bg-slate-900 text-white">
-    <div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-        <div class="flex min-w-0 items-center gap-4">
-            <a href="clients.php" class="flex shrink-0 items-center gap-2.5 font-semibold tracking-tight">
-                <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
-                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><circle cx="12" cy="10.5" r="2"/><path d="M12 12.5V16"/></svg>
-                </span>
-                GTC-Vault
-            </a>
-            <nav aria-label="Fil d\'Ariane" class="hidden min-w-0 text-sm text-slate-300 md:block">
-                <ol class="flex items-center gap-2">' . implode('<li aria-hidden="true" class="text-slate-500">/</li>', $items) . '</ol>
-            </nav>
-        </div>
-        <div class="flex shrink-0 items-center gap-3">
-            <a href="../index.php" class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-300 ring-1 ring-inset ring-white/15 hover:bg-white/10 hover:text-white" aria-label="Retour au Dashboard"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span class="hidden sm:inline">Dashboard</span></a>
-            <span class="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-xs font-semibold" title="' . h($user['name'] . ' · ' . role_label($user['role'])) . '" aria-label="Connecté : ' . h($user['name']) . '">' . h($initials ?: '?') . '</span>
-        </div>
-    </div>
-</header>';
+    return icon($name);
 }

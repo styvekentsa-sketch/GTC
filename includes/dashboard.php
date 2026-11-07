@@ -419,7 +419,8 @@ function dash_root_warning(): string
     $script  =str_replace('\\', '/', (string) realpath($_SERVER['SCRIPT_FILENAME'] ?? ''));
     $dashDir = str_replace('\\', '/', (string) realpath(__DIR__ . '/../dashboard'));
     $name    = (string) ($_SERVER['SCRIPT_NAME'] ?? '');
-    if ($dashDir === '' || stripos($script, $dashDir . '/') !== 0 || preg_match('#/dashboard/[^/]+$#i', $name)) {
+    // Adresse « /dashboard/page.php » ou « /dashboard/sous-dossier/page.php » (GTC-Vault : /dashboard/vault/…) : configuration correcte
+    if ($dashDir === '' || stripos($script, $dashDir . '/') !== 0 || preg_match('#/dashboard/(?:[^/]+/)*[^/]+$#i', $name)) {
         return '';
     }
     $root = str_replace('/', DIRECTORY_SEPARATOR, dirname($dashDir));
@@ -430,7 +431,14 @@ function dash_root_warning(): string
         . 'puis ouvrez <code>http://127.0.0.1:8080/dashboard/</code></div>';
 }
 
-function dash_header(string $title, string $active = ''): void
+/**
+ * En-tête commun des pages du Dashboard (barre latérale, barre supérieure, messages flash).
+ * $styles : feuilles de style supplémentaires (chemins depuis la racine du site, ex. 'assets/css/vault.css').
+ * $inSubfolder : page d'un sous-dossier du Dashboard (ex. dashboard/vault/) — une balise <base> fait pointer tous les
+ *   liens relatifs du menu, de la barre supérieure et des scripts communs vers dashboard/ ; les liens propres à la
+ *   page doivent alors inclure leur dossier (ex. 'vault/client.php').
+ */
+function dash_header(string $title, string $active = '', array $styles = [], bool $inSubfolder = false): void
 {
     $user = current_user();
     $unread = can_access_messages() ? (int) db_value("SELECT COUNT(*) FROM messages WHERE status = 'unread'") : 0;
@@ -448,6 +456,9 @@ function dash_header(string $title, string $active = ''): void
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
+    <?php if ($inSubfolder): /* liens relatifs du menu et des scripts communs → dossier dashboard/ */ ?>
+    <base href="<?= e(site_root()) ?>dashboard/">
+    <?php endif; ?>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title><?= e($title) ?> | Dashboard GTC</title>
@@ -467,6 +478,9 @@ function dash_header(string $title, string $active = ''): void
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="stylesheet" href="<?= e(asset_url('assets/css/custom-select.css', site_root())) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('assets/css/dashboard.css', site_root())) ?>">
+    <?php foreach ($styles as $css): ?>
+    <link rel="stylesheet" href="<?= e(asset_url($css, site_root())) ?>">
+    <?php endforeach; ?>
 </head>
 <body class="dash<?= $hub ? ' dash--hub' : '' ?>" data-session="<?= e(session_identity()) ?>" data-session-name="<?= e($user['name'] ?? '') ?>"<?= $liveAttrs ?>>
 <?= dash_root_warning() ?>

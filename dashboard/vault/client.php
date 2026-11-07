@@ -26,11 +26,11 @@ header('Referrer-Policy: same-origin');
 function client_not_found(): never
 {
     http_response_code(404);
-    echo '<!DOCTYPE html><html lang="fr"><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Dossier introuvable · GTC-Vault</title>'
-       . '<body style="font-family:system-ui,sans-serif;background:#f1f5f9;display:grid;place-items:center;min-height:100vh;margin:0;padding:16px">'
-       . '<div style="max-width:420px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:32px;text-align:center">'
-       . '<h1 style="font-size:20px;margin:0 0 8px">Dossier introuvable</h1><p style="color:#475569;margin:0 0 20px">Ce lien ne correspond à aucun dossier client. Il a peut-être été supprimé ou mal copié.</p>'
-       . '<a href="clients.php" style="color:#1d4ed8;font-weight:600"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Retour au répertoire</a></div></body></html>';
+    vault_header('GTC-Vault · Dossier introuvable');
+    echo '<div class="toolbar"><a href="vault/clients.php" class="btn btn--ghost">' . icon('arrow-left') . ' Répertoire KYC</a></div>'
+       . '<section class="panel"><div class="empty vault-empty" role="alert"><span class="vault-empty__icon">' . icon('search') . '</span>'
+       . '<h2>Dossier introuvable</h2><p>Ce lien ne correspond à aucun dossier client. Il a peut-être été supprimé ou mal copié.</p></div></section>';
+    dash_footer();
     exit;
 }
 
@@ -82,7 +82,6 @@ vault_audit('client_view', $client, null, $user['name'] . ' a ouvert la fiche du
 
 // Liens signés et jeton CSRF (photo de profil) créés : la session peut être libérée
 $csrf = csrf_token();
-session_write_close();
 
 // ---------- Complétude du dossier ----------
 $have = array_column($docs, 'type');
@@ -123,261 +122,207 @@ $initials = mb_strtoupper(implode('', array_map(fn ($w) => mb_substr($w, 0, 1),
         fn ($w) => preg_match('/^\p{L}/u', $w) && !in_array(mb_strtoupper($w), ['SARL', 'SA', 'SAS', 'SARLU', 'ETS', 'ET', 'DE', 'DU', 'LA', 'LE'], true)))
     , 0, 2))));
 
-$icon = [
-    'image' => '<svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M15 9h3M15 13h3M6 16h7"/></svg>',
-    'pdf'   => '<svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>',
-];
+vault_header('GTC-Vault · ' . $client['nom_complet']);
+session_write_close();   // en-tête affiché (messages flash consommés) : la session est libérée pour le lecteur
 ?>
-<!DOCTYPE html>
-<html lang="fr" class="h-full">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="robots" content="noindex, nofollow">
-    <title><?= h($client['nom_complet']) ?> · Dossier KYC · GTC-Vault</title>
-    <!-- Tailwind compilé (assets/vault.css, voir assets/README-tailwind.txt) : aucun script externe -->
-    <link rel="stylesheet" href="<?= h(vault_css()) ?>">
-    <style>
-        [hidden] { display: none !important; }
-        dialog::backdrop { background: rgb(15 23 42 / .85); backdrop-filter: blur(2px); }
-        /* Lecteur : pas de sélection ni de glisser-déposer des pièces ; rien à l'impression */
-        #viewer-stage, #viewer-stage * { -webkit-user-select: none; user-select: none; -webkit-user-drag: none; -webkit-touch-callout: none; }
-        @media print { #viewer, .no-print { display: none !important; } }
-    </style>
-</head>
-<body class="min-h-full bg-slate-100 font-sans text-slate-900 antialiased">
 
-<?= vault_topbar([['Clients', 'clients.php'], [$client['nom_complet'], null]]) ?>
+<div class="toolbar">
+    <a href="vault/clients.php" id="back-link" class="btn btn--ghost no-print"><?= icon('arrow-left') ?> Répertoire KYC</a>
+    <div class="toolbar__actions no-print">
+        <a href="vault/clients-nouveau.php" class="btn btn--ghost"><?= icon('plus') ?> Nouveau dossier</a>
+    </div>
+</div>
 
-<main class="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-6">
-    <a href="clients.php" id="back-link"
-       class="no-print mb-5 inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 -ml-2 text-sm font-medium text-slate-600 transition hover:bg-white hover:text-slate-900 focus:outline-none focus:ring-4 focus:ring-blue-100">
-        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
-        Retour à la liste
-    </a>
-
-    <!-- ==================== EN-TÊTE DU DOSSIER ==================== -->
-    <section class="rounded-2xl border border-slate-200 bg-white shadow-sm" aria-labelledby="client-name">
-        <div class="flex flex-col gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:p-6">
+<!-- ==================== EN-TÊTE DU DOSSIER ==================== -->
+<article class="panel" aria-labelledby="client-name">
+    <header class="detail-head">
+        <div class="vault-head">
             <!-- Photo de profil (recadrée dans la pièce d'identité) ou initiales -->
-            <div class="relative shrink-0 self-start sm:self-center" id="photo" data-initials="<?= h($initials ?: '?') ?>">
-                <?= avatar_html($client, $initials, 'h-16 w-16 text-xl', 'rounded-2xl') ?>
+            <div class="vault-head__photo" id="photo" data-initials="<?= h($initials ?: '?') ?>">
+                <?= avatar_html($client, $initials, 'lg') ?>
                 <?php if ($photoDocs): ?>
-                    <button type="button" data-avatar-edit class="no-print absolute -bottom-1.5 -right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-white text-slate-600 shadow-md ring-1 ring-slate-200 transition hover:text-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-200"
-                            aria-label="<?= $client['avatar_path'] ? 'Modifier la photo de profil' : 'Définir la photo de profil' ?>" title="Photo de profil">
-                        <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
-                    </button>
+                    <button type="button" class="vault-head__edit no-print" data-avatar-edit title="Photo de profil"
+                            aria-label="<?= $client['avatar_path'] ? 'Modifier la photo de profil' : 'Définir la photo de profil' ?>"><?= vault_icon('camera') ?></button>
                 <?php endif; ?>
             </div>
-            <div class="min-w-0 flex-1">
-                <div class="flex flex-wrap items-center gap-2.5">
-                    <h1 id="client-name" class="break-words text-2xl font-bold tracking-tight text-slate-900"><?= h($client['nom_complet']) ?></h1>
-                    <?= $isCompany
-                        ? '<span class="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20">Entreprise</span>'
-                        : '<span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">Particulier</span>' ?>
+            <div class="vault-head__main">
+                <p class="detail-head__label">Dossier KYC</p>
+                <div class="vault-head__title">
+                    <h2 id="client-name" class="detail-head__number"><?= h($client['nom_complet']) ?></h2>
+                    <?= $isCompany ? '<span class="badge badge--info" data-type-badge>Entreprise</span>' : '<span class="badge badge--success" data-type-badge>Particulier</span>' ?>
                 </div>
-                <p class="mt-1 text-sm text-slate-500">Dossier créé le <?= h($createdDay) ?> à <?= h($createdTime) ?> · Réf. <span class="font-mono text-xs"><?= h($client['uuid']) ?></span></p>
+                <p class="vault-head__meta">Dossier créé le <?= h($createdDay) ?> à <?= h($createdTime) ?> · Réf. <span class="vault-mono"><?= h($client['uuid']) ?></span></p>
                 <?php if ($photoDocs && !$client['avatar_path']): ?>
-                    <button type="button" data-avatar-edit class="no-print mt-1.5 inline-flex items-center gap-1.5 text-sm font-medium text-indigo-700 hover:text-indigo-900 focus:outline-none focus-visible:underline">
-                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
-                        Définir la photo de profil à partir de la pièce d'identité
+                    <button type="button" class="vault-head__photo-link no-print" data-avatar-edit>
+                        <?= vault_icon('user') ?> Définir la photo de profil à partir de la pièce d'identité
                     </button>
                 <?php endif; ?>
             </div>
-            <?php if ($missing): ?>
-                <div class="rounded-xl bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900 ring-1 ring-inset ring-amber-600/20 sm:max-w-xs">
-                    <p class="font-semibold">Dossier incomplet</p>
-                    <p class="mt-0.5 text-amber-800">Manque : <?= h(implode(', ', $missing)) ?></p>
-                </div>
-            <?php else: ?>
-                <span class="inline-flex items-center gap-1.5 self-start rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-800 ring-1 ring-inset ring-emerald-600/20 sm:self-center">
-                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>
-                    Dossier complet
-                </span>
-            <?php endif; ?>
         </div>
+        <?php if ($missing): ?>
+            <div class="alert alert--warning vault-head__state" data-completeness>
+                <?= icon('alert') ?>
+                <div><p><strong>Dossier incomplet</strong></p><p>Manque : <?= h(implode(', ', $missing)) ?></p></div>
+            </div>
+        <?php else: ?>
+            <span class="badge badge--success vault-head__state" data-completeness><?= icon('check') ?> Dossier complet</span>
+        <?php endif; ?>
+    </header>
 
-        <!-- Coordonnées -->
-        <dl class="grid gap-x-6 gap-y-5 p-5 sm:grid-cols-2 sm:p-6 lg:grid-cols-4">
-            <div class="min-w-0">
-                <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Téléphone</dt>
-                <dd class="mt-1 text-sm font-medium tabular-nums text-slate-900"><a href="tel:<?= h($client['telephone']) ?>" class="hover:text-blue-700"><?= h(vault_phone($client['telephone'])) ?></a></dd>
-            </div>
-            <div class="min-w-0">
-                <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">E-mail</dt>
-                <dd class="mt-1 break-all text-sm font-medium text-slate-900">
-                    <?= $client['email'] ? '<a href="mailto:' . h($client['email']) . '" class="hover:text-blue-700">' . h($client['email']) . '</a>' : '<span class="font-normal text-slate-400">Non renseigné</span>' ?>
-                </dd>
-            </div>
-            <div class="min-w-0">
-                <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500"><?= $isCompany ? 'N° RCCM' : 'N° CNI / passeport' ?></dt>
-                <dd class="mt-1 flex items-center gap-1.5">
-                    <span class="break-all font-mono text-sm font-medium text-slate-900" id="client-id-number"><?= $client['numero_identifiant'] !== null ? h($client['numero_identifiant']) : '—' ?></span>
+    <!-- Coordonnées -->
+    <div class="detail-grid vault-detail">
+        <dl class="detail-list">
+            <div><dt>Téléphone</dt><dd><a href="tel:<?= h($client['telephone']) ?>"><?= h(vault_phone($client['telephone'])) ?></a></dd></div>
+            <div><dt>E-mail</dt><dd><?= $client['email'] ? '<a href="mailto:' . h($client['email']) . '">' . h($client['email']) . '</a>' : '<span class="vault-muted">Non renseigné</span>' ?></dd></div>
+            <div><dt><?= $isCompany ? 'N° RCCM' : 'N° CNI / passeport' ?></dt>
+                <dd><span class="vault-copy">
+                    <span class="vault-mono" id="client-id-number"><?= $client['numero_identifiant'] !== null ? h($client['numero_identifiant']) : '—' ?></span>
                     <?php if ($client['numero_identifiant'] !== null): ?>
-                        <button type="button" data-copy="#client-id-number" class="no-print rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-4 focus:ring-blue-100" aria-label="Copier le numéro" title="Copier">
-                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
-                        </button>
+                        <button type="button" class="icon-btn no-print" data-copy="#client-id-number" aria-label="Copier le numéro" title="Copier"><?= vault_icon('copy') ?></button>
                     <?php endif; ?>
-                </dd>
-            </div>
-            <div class="min-w-0">
-                <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Adresse</dt>
-                <dd class="mt-1 whitespace-pre-line break-words text-sm font-medium text-slate-900"><?= $client['adresse'] ? h($client['adresse']) : '<span class="font-normal text-slate-400">Non renseignée</span>' ?></dd>
-            </div>
+                </span></dd></div>
+            <div><dt>Adresse</dt><dd><?= $client['adresse'] ? nl2br(h($client['adresse'])) : '<span class="vault-muted">Non renseignée</span>' ?></dd></div>
         </dl>
-    </section>
+        <dl class="detail-list">
+            <div><dt>Type de client</dt><dd><?= $isCompany ? 'Entreprise (personne morale)' : 'Particulier (personne physique)' ?></dd></div>
+            <div><dt>Pièces versées</dt><dd><?= count($docs) ?></dd></div>
+            <div><dt>Enregistré le</dt><dd><?= h($createdDay) ?> à <?= h($createdTime) ?></dd></div>
+            <div><dt>Dernière mise à jour</dt><dd><?= h(implode(' à ', vault_date($client['updated_at']))) ?></dd></div>
+        </dl>
+    </div>
+</article>
 
-    <div class="mt-6 grid gap-6 lg:grid-cols-3">
-        <!-- ==================== PIÈCES JUSTIFICATIVES ==================== -->
-        <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 lg:col-span-2" aria-labelledby="docs-title">
-            <div class="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 id="docs-title" class="text-base font-semibold text-slate-900">Pièces Justificatives du Dossier</h2>
-                <p class="text-xs text-slate-500"><?= count($docs) ?> pièce<?= count($docs) > 1 ? 's' : '' ?> · consultation filigranée et enregistrée</p>
-            </div>
-
-            <?php if (!$docs): ?>
-                <div class="mt-5 rounded-xl border border-dashed border-slate-300 px-6 py-10 text-center text-sm text-slate-500">Aucune pièce n'a encore été versée à ce dossier.</div>
-            <?php else: ?>
-                <ul class="mt-5 grid gap-3 sm:grid-cols-2">
-                    <?php foreach ($docs as $d): ?>
-                        <li class="flex flex-col rounded-xl border border-slate-200 p-4 transition hover:border-slate-300 hover:shadow-sm">
-                            <div class="flex items-start gap-3">
-                                <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg <?= $d['kind'] === 'pdf' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600' ?>"><?= $icon[$d['kind']] ?></span>
-                                <div class="min-w-0 flex-1">
-                                    <p class="font-semibold text-slate-900"><?= h($d['label']) ?></p>
-                                    <p class="truncate text-xs text-slate-500" title="<?= h($d['name']) ?>"><?= h($d['name']) ?></p>
-                                    <p class="mt-1 text-xs text-slate-500"><?= $d['kind'] === 'pdf' ? 'PDF' : 'Image' ?> · <?= h($d['size']) ?> · ajoutée le <?= h($d['date'][0]) ?></p>
-                                </div>
+<div class="dash-grid dash-grid--aside">
+    <!-- ==================== PIÈCES JUSTIFICATIVES ==================== -->
+    <section class="panel" aria-labelledby="docs-title">
+        <header class="panel__head">
+            <h2 class="panel__title" id="docs-title"><?= icon('file') ?> Pièces Justificatives du Dossier</h2>
+            <span class="cell-sub"><?= count($docs) ?> pièce<?= count($docs) > 1 ? 's' : '' ?> · consultation filigranée et enregistrée</span>
+        </header>
+        <?php if (!$docs): ?>
+            <p class="empty">Aucune pièce n'a encore été versée à ce dossier.</p>
+        <?php else: ?>
+            <ul class="vault-docs">
+                <?php foreach ($docs as $d): ?>
+                    <li class="vault-doc">
+                        <div class="vault-doc__top">
+                            <span class="vault-doc__icon<?= $d['kind'] === 'pdf' ? ' vault-doc__icon--pdf' : '' ?>"><?= vault_icon($d['kind'] === 'pdf' ? 'pdf' : 'image') ?></span>
+                            <div class="vault-doc__body">
+                                <p class="vault-doc__title"><?= h($d['label']) ?></p>
+                                <p class="vault-doc__name" title="<?= h($d['name']) ?>"><?= h($d['name']) ?></p>
+                                <p class="vault-doc__meta"><?= $d['kind'] === 'pdf' ? 'PDF' : 'Image' ?> · <?= h($d['size']) ?> · ajoutée le <?= h($d['date'][0]) ?></p>
                             </div>
-                            <button type="button" class="no-print mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-3.5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 focus:outline-none focus:ring-4 focus:ring-slate-300"
-                                    data-view data-kind="<?= h($d['kind']) ?>" data-src="<?= h($d['src']) ?>"
-                                    data-label="<?= h($d['label']) ?>" data-meta="<?= h(($d['kind'] === 'pdf' ? 'PDF' : 'Image') . ' · ' . $d['size'] . ' · ajoutée le ' . $d['date'][0] . ' à ' . $d['date'][1]) ?>">
-                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
-                                Consulter / Prévisualiser
-                            </button>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            <?php endif; ?>
-        </section>
-
-        <!-- ==================== JOURNAL DES CONSULTATIONS ==================== -->
-        <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6" aria-labelledby="audit-title">
-            <h2 id="audit-title" class="text-base font-semibold text-slate-900">Dernières consultations</h2>
-            <p class="mt-0.5 text-xs text-slate-500">Chaque ouverture de la fiche et de ses pièces est enregistrée.</p>
-            <ol class="mt-4 space-y-3">
-                <?php foreach ($journal as $j):
-                    [$jd, $jt] = vault_date($j['created_at']); ?>
-                    <li class="flex gap-3 text-sm">
-                        <?php [$dot, $verb] = ['document_view' => ['bg-amber-500', 'a consulté une pièce'], 'client_create' => ['bg-emerald-500', 'a créé le dossier']][$j['action']] ?? ['bg-slate-300', 'a ouvert la fiche']; ?>
-                        <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full <?= $dot ?>" aria-hidden="true"></span>
-                        <div class="min-w-0">
-                            <p class="text-slate-800"><span class="font-medium"><?= h($j['user_name']) ?></span> <?= $verb ?></p>
-                            <p class="text-xs text-slate-500"><?= h($jd) ?> à <?= h($jt) ?></p>
                         </div>
+                        <button type="button" class="btn btn--primary btn--sm btn--block no-print"
+                                data-view data-kind="<?= h($d['kind']) ?>" data-src="<?= h($d['src']) ?>"
+                                data-label="<?= h($d['label']) ?>" data-meta="<?= h(($d['kind'] === 'pdf' ? 'PDF' : 'Image') . ' · ' . $d['size'] . ' · ajoutée le ' . $d['date'][0] . ' à ' . $d['date'][1]) ?>">
+                            <?= icon('eye') ?> Consulter / Prévisualiser
+                        </button>
                     </li>
                 <?php endforeach; ?>
-            </ol>
-        </section>
-    </div>
-</main>
+            </ul>
+        <?php endif; ?>
+    </section>
+
+    <!-- ==================== JOURNAL DES CONSULTATIONS ==================== -->
+    <section class="panel" aria-labelledby="audit-title">
+        <header class="panel__head">
+            <h2 class="panel__title" id="audit-title"><?= icon('history') ?> Dernières consultations</h2>
+        </header>
+        <p class="vault-note">Chaque ouverture de la fiche et de ses pièces est enregistrée.</p>
+        <ol class="vault-journal" style="margin-top: 1rem">
+            <?php foreach ($journal as $j):
+                [$jd, $jt] = vault_date($j['created_at']);
+                [$dot, $verb] = ['document_view' => ['doc', 'a consulté une pièce'], 'client_create' => ['create', 'a créé le dossier']][$j['action']] ?? ['', 'a ouvert la fiche']; ?>
+                <li>
+                    <span class="vault-journal__dot<?= $dot ? ' vault-journal__dot--' . $dot : '' ?>" aria-hidden="true"></span>
+                    <div>
+                        <p><strong><?= h($j['user_name']) ?></strong> <?= $verb ?></p>
+                        <p class="cell-sub"><?= h($jd) ?> à <?= h($jt) ?></p>
+                    </div>
+                </li>
+            <?php endforeach; ?>
+        </ol>
+    </section>
+</div>
 
 <!-- ==================== LECTEUR SÉCURISÉ ==================== -->
-<dialog id="viewer" aria-labelledby="viewer-title"
-        class="m-0 h-full max-h-none w-full max-w-none bg-transparent p-0 sm:m-auto sm:h-[92vh] sm:w-[min(1100px,94vw)] sm:rounded-2xl">
-    <div class="flex h-full flex-col overflow-hidden bg-slate-900 text-white sm:rounded-2xl">
-        <header class="flex items-start gap-3 border-b border-white/10 px-4 py-3 sm:px-5">
-            <div class="min-w-0 flex-1">
-                <h2 id="viewer-title" class="truncate text-base font-semibold"></h2>
-                <p id="viewer-meta" class="truncate text-xs text-slate-400"></p>
-            </div>
-            <button type="button" data-close class="rounded-lg p-2 text-slate-300 hover:bg-white/10 hover:text-white focus:outline-none focus:ring-4 focus:ring-white/20" aria-label="Fermer le lecteur">
-                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-            </button>
-        </header>
-        <div id="viewer-stage" class="relative flex-1 overflow-auto bg-slate-800/60 p-3 sm:p-5">
-            <div id="viewer-loading" class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-sm text-slate-300">
-                <svg class="h-8 w-8 animate-spin text-white" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".25" stroke-width="3"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
-                Chargement sécurisé…
-            </div>
-            <div id="viewer-error" hidden class="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
-                <p class="max-w-sm text-sm text-slate-200" data-text></p>
-                <button type="button" onclick="location.reload()" class="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-100">Recharger la fiche</button>
-            </div>
-            <div id="viewer-content" class="mx-auto flex max-w-full flex-col items-center gap-4"></div>
+<dialog id="viewer" class="vault-viewer" aria-labelledby="viewer-title">
+    <header class="vault-viewer__head">
+        <div>
+            <h2 id="viewer-title" class="vault-viewer__title"></h2>
+            <p id="viewer-meta" class="vault-viewer__meta"></p>
         </div>
-        <footer class="flex items-center gap-2 border-t border-white/10 px-4 py-2.5 text-xs text-slate-400 sm:px-5">
-            <svg class="h-4 w-4 shrink-0 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.4 8.3 8 9 4.6-.7 8-4 8-9V6l-8-3Z"/></svg>
-            <span>Document confidentiel — usage interne. Consultation par <strong class="font-medium text-slate-200"><?= h($user['name']) ?></strong> enregistrée dans le journal d'audit.</span>
-        </footer>
+        <button type="button" class="vault-viewer__close" data-close aria-label="Fermer le lecteur"><?= vault_icon('x') ?></button>
+    </header>
+    <div id="viewer-stage" class="vault-viewer__stage">
+        <div id="viewer-loading" class="vault-viewer__state"><span class="vault-spin"></span>Chargement sécurisé…</div>
+        <div id="viewer-error" class="vault-viewer__state" hidden>
+            <p data-text></p>
+            <button type="button" class="btn btn--ghost btn--sm" onclick="location.reload()"><?= icon('refresh') ?> Recharger la fiche</button>
+        </div>
+        <div id="viewer-content" class="vault-viewer__content"></div>
     </div>
+    <footer class="vault-viewer__foot">
+        <?= icon('shield') ?>
+        <span>Document confidentiel — usage interne. Consultation par <strong><?= h($user['name']) ?></strong> enregistrée dans le journal d'audit.</span>
+    </footer>
 </dialog>
 
 <?php if ($photoDocs): ?>
 <!-- ==================== PHOTO DE PROFIL : RECADRAGE DANS LA PIÈCE D'IDENTITÉ ==================== -->
-<dialog id="avatar-dialog" aria-labelledby="avatar-title"
-        class="w-[min(780px,96vw)] rounded-2xl p-0 text-slate-900 shadow-2xl backdrop:bg-slate-900/70 backdrop:backdrop-blur-sm">
-    <div class="p-5 sm:p-6">
-        <div class="flex items-start gap-3">
-            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600" aria-hidden="true">
-                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
-            </span>
-            <div class="min-w-0 flex-1">
-                <h2 id="avatar-title" class="text-base font-semibold">Photo de profil</h2>
-                <p class="text-sm text-slate-600">Placez le cadre sur le visage, sur la photo de la pièce d'identité.</p>
-            </div>
-            <button type="button" data-avatar-close class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-4 focus:ring-slate-200" aria-label="Fermer">
-                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-            </button>
+<dialog id="avatar-dialog" class="vault-dialog vault-dialog--wide" aria-labelledby="avatar-title">
+    <div class="vault-dialog__head">
+        <span class="vault-dialog__icon"><?= vault_icon('user') ?></span>
+        <div>
+            <h2 id="avatar-title">Photo de profil</h2>
+            <p>Placez le cadre sur le visage, sur la photo de la pièce d'identité.</p>
         </div>
+        <button type="button" class="icon-btn" data-avatar-close aria-label="Fermer"><?= vault_icon('x') ?></button>
+    </div>
 
-        <?php if (count($photoDocs) > 1): ?>
-            <div class="mt-4 inline-flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1" role="group" aria-label="Pièce source">
-                <?php foreach ($photoDocs as $i => $pd): ?>
-                    <button type="button" data-avatar-doc="<?= $i ?>" aria-pressed="<?= $i === 0 ? 'true' : 'false' ?>"
-                            class="rounded-md px-3 py-1.5 text-sm font-medium text-slate-600 aria-pressed:bg-white aria-pressed:text-slate-900 aria-pressed:shadow-sm"><?= h($pd['label']) ?></button>
-                <?php endforeach; ?>
+    <?php if (count($photoDocs) > 1): ?>
+        <div class="vault-segbtns" role="group" aria-label="Pièce source">
+            <?php foreach ($photoDocs as $i => $pd): ?>
+                <button type="button" data-avatar-doc="<?= $i ?>" aria-pressed="<?= $i === 0 ? 'true' : 'false' ?>"><?= h($pd['label']) ?></button>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+
+    <div class="crop-layout">
+        <div id="crop-stage" class="crop-stage">
+            <img id="crop-img" alt="" draggable="false">
+            <div id="crop-box" class="crop-box" hidden tabindex="0" role="group" aria-label="Cadre de la photo : flèches pour déplacer, + et − pour agrandir ou réduire">
+                <span class="crop-box__ring"></span>
+                <span class="crop-box__handle" data-handle></span>
             </div>
+            <div id="crop-loading" class="crop-loading"><span class="vault-spin"></span></div>
+        </div>
+        <div class="crop-side">
+            <p class="vault-overline">Aperçu</p>
+            <canvas id="crop-preview" class="crop-preview" width="224" height="224"></canvas>
+            <label>Taille du cadre
+                <input type="range" id="crop-zoom" min="8" max="100" value="40">
+            </label>
+            <p>Le filigrane de l'aperçu n'apparaît pas sur la photo enregistrée.</p>
+        </div>
+    </div>
+
+    <p id="avatar-error" class="alert alert--error" role="alert" hidden></p>
+
+    <div class="vault-dialog__actions">
+        <?php if ($client['avatar_path']): ?>
+            <button type="button" class="vault-link-btn vault-link-btn--danger" data-avatar-delete>Retirer la photo</button>
         <?php endif; ?>
-
-        <div class="mt-4 grid gap-5 sm:grid-cols-[minmax(0,1fr)_168px]">
-            <div id="crop-stage" class="relative min-h-[12rem] touch-none select-none overflow-hidden rounded-xl bg-slate-900">
-                <img id="crop-img" alt="" draggable="false" class="pointer-events-none block w-full">
-                <div id="crop-box" hidden tabindex="0" role="group" aria-label="Cadre de la photo : flèches pour déplacer, + et − pour agrandir ou réduire"
-                     class="absolute cursor-move rounded-lg border-2 border-white shadow-[0_0_0_9999px_rgba(15,23,42,0.6)] outline-none focus-visible:border-indigo-300">
-                    <span class="pointer-events-none absolute inset-0 rounded-full border border-white/60"></span>
-                    <span data-handle class="absolute -bottom-2.5 -right-2.5 h-5 w-5 cursor-nwse-resize rounded-full border-2 border-white bg-indigo-600 shadow"></span>
-                </div>
-                <div id="crop-loading" class="absolute inset-0 flex items-center justify-center">
-                    <svg class="h-8 w-8 animate-spin text-white" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".25" stroke-width="3"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
-                </div>
-            </div>
-            <div class="flex flex-col items-center gap-3">
-                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Aperçu</p>
-                <canvas id="crop-preview" width="224" height="224" class="h-28 w-28 rounded-full bg-slate-100 ring-1 ring-slate-200"></canvas>
-                <label class="w-full text-xs font-medium text-slate-600">Taille du cadre
-                    <input type="range" id="crop-zoom" min="8" max="100" value="40" class="mt-1 w-full accent-indigo-600">
-                </label>
-                <p class="text-center text-[11px] leading-snug text-slate-500">Le filigrane de l'aperçu n'apparaît pas sur la photo enregistrée.</p>
-            </div>
-        </div>
-
-        <p id="avatar-error" role="alert" hidden class="mt-4 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-800 ring-1 ring-inset ring-red-600/20"></p>
-
-        <div class="mt-5 flex flex-wrap items-center justify-between gap-2">
-            <?php if ($client['avatar_path']): ?>
-                <button type="button" data-avatar-delete class="text-sm font-medium text-red-700 hover:text-red-900">Retirer la photo</button>
-            <?php else: ?><span></span><?php endif; ?>
-            <span class="flex gap-2">
-                <button type="button" data-avatar-close class="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50">Annuler</button>
-                <button type="button" data-avatar-save disabled class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-200 disabled:opacity-60">Enregistrer la photo</button>
-            </span>
-        </div>
+        <span class="vault-dialog__end">
+            <button type="button" class="btn btn--ghost btn--sm" data-avatar-close>Annuler</button>
+            <button type="button" class="btn btn--primary btn--sm" data-avatar-save disabled><?= icon('save') ?> Enregistrer la photo</button>
+        </span>
     </div>
 </dialog>
 <?php endif; ?>
 
-<script src="assets/pdfjs/pdf.min.js"></script>
+<script src="vault/assets/pdfjs/pdf.min.js"></script>
 <script>
 (function () {
   'use strict';
@@ -391,7 +336,7 @@ $icon = [
   var errorBox = document.getElementById('viewer-error');
   var session = 0, pdfDoc = null, opener = null;
 
-  if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'assets/pdfjs/pdf.worker.min.js';
+  if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'vault/assets/pdfjs/pdf.worker.min.js';
 
   /** Texte du filigrane, à l'heure de Douala au moment de la consultation. */
   function watermarkText() {
@@ -436,7 +381,6 @@ $icon = [
   function showImage(src, label) {
     var img = new Image();
     img.alt = label + ' (aperçu filigrané)';
-    img.className = 'max-w-full rounded-lg shadow-2xl';
     img.draggable = false;
     img.onload = function () { loading.hidden = true; };
     img.onerror = function () { fail('L\'aperçu n\'a pas pu être chargé. Le lien de consultation a peut-être expiré (10 minutes) : rechargez la fiche.'); };
@@ -461,7 +405,7 @@ $icon = [
         if (mine !== session) { pdf.destroy(); return; }
         pdfDoc = pdf;
         var total = Math.min(pdf.numPages, 30), chain = Promise.resolve();
-        var width = Math.min(stage.clientWidth - 24, 1000);
+        var width = Math.min(stage.clientWidth - 40, 1000);
         for (var n = 1; n <= total; n++) {
           (function (n) {
             chain = chain.then(function () {
@@ -473,7 +417,6 @@ $icon = [
                 var canvas = document.createElement('canvas');
                 canvas.width = Math.floor(vp.width); canvas.height = Math.floor(vp.height);
                 canvas.style.width = Math.floor(vp.width / dpr) + 'px';
-                canvas.className = 'max-w-full rounded-lg bg-white shadow-2xl';
                 canvas.setAttribute('role', 'img');
                 canvas.setAttribute('aria-label', 'Page ' + n + ' sur ' + pdf.numPages + ' (aperçu filigrané)');
                 return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function () {
@@ -488,7 +431,7 @@ $icon = [
         }
         return chain.then(function () {
           if (pdf.numPages > total && mine === session) {
-            var p = document.createElement('p'); p.className = 'text-sm text-slate-300';
+            var p = document.createElement('p');
             p.textContent = total + ' premières pages affichées sur ' + pdf.numPages + '.'; content.appendChild(p);
           }
         });
@@ -534,8 +477,8 @@ $icon = [
     b.addEventListener('click', function () {
       var text = document.querySelector(b.getAttribute('data-copy')).textContent.trim();
       (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () {
-        b.setAttribute('title', 'Copié !'); b.classList.add('text-emerald-600');
-        setTimeout(function () { b.setAttribute('title', 'Copier'); b.classList.remove('text-emerald-600'); }, 1500);
+        b.setAttribute('title', 'Copié !'); b.classList.add('is-copied');
+        setTimeout(function () { b.setAttribute('title', 'Copier'); b.classList.remove('is-copied'); }, 1500);
       }, function () {});
     });
   });
@@ -547,6 +490,7 @@ $icon = [
   var CSRF = <?= json_encode($csrf) ?>, UUID = <?= json_encode($client['uuid']) ?>;
   var img = document.getElementById('crop-img'), box = document.getElementById('crop-box'), stageEl = document.getElementById('crop-stage');
   var zoom = document.getElementById('crop-zoom'), preview = document.getElementById('crop-preview'), saveBtn = av.querySelector('[data-avatar-save]');
+  var saveHtml = saveBtn.innerHTML;
   var errBox = document.getElementById('avatar-error');
   var current = 0, crop = null;   // crop : { x, y, s } en fractions de la LARGEUR affichée (x, s) et de la HAUTEUR (y)
 
@@ -638,7 +582,7 @@ $icon = [
   function post(data) {
     var fd = new FormData(); fd.append('csrf_token', CSRF); fd.append('c', UUID);
     Object.keys(data).forEach(function (k) { fd.append(k, data[k]); });
-    return fetch('avatar.php', { method: 'POST', body: fd, credentials: 'same-origin' })
+    return fetch('vault/avatar.php', { method: 'POST', body: fd, credentials: 'same-origin' })
       .then(function (r) { return r.json().then(function (d) { if (!r.ok || !d.ok) throw new Error(d.error || 'Erreur'); return d; }); });
   }
   saveBtn.addEventListener('click', function () {
@@ -649,13 +593,13 @@ $icon = [
         // Avatar de l'en-tête remplacé par la nouvelle photo
         var holder = document.getElementById('photo'), old = holder.querySelector('[data-avatar]');
         var pic = new Image(); pic.src = d.url; pic.alt = ''; pic.draggable = false; pic.setAttribute('data-avatar', '');
-        pic.className = 'h-16 w-16 rounded-2xl shrink-0 bg-slate-100 object-cover ring-1 ring-slate-200';
+        pic.className = 'member-thumb vault-avatar vault-avatar--lg';
         old.replaceWith(pic);
         av.close();
-        saveBtn.textContent = 'Enregistrer la photo'; saveBtn.disabled = false;
-        document.querySelectorAll('button[data-avatar-edit]:not(.absolute)').forEach(function (b) { b.remove(); });
+        saveBtn.innerHTML = saveHtml; saveBtn.disabled = false;
+        document.querySelectorAll('[data-avatar-edit]:not(.vault-head__edit)').forEach(function (b) { b.remove(); });
       })
-      .catch(function (e) { showErr(e.message); saveBtn.textContent = 'Enregistrer la photo'; saveBtn.disabled = false; });
+      .catch(function (e) { showErr(e.message); saveBtn.innerHTML = saveHtml; saveBtn.disabled = false; });
   });
   var del = av.querySelector('[data-avatar-delete]');
   if (del) del.addEventListener('click', function () {
@@ -666,5 +610,5 @@ $icon = [
   if (location.hash === '#photo' && !<?= json_encode((bool) $client['avatar_path']) ?>) openAvatar();
 })();
 </script>
-</body>
-</html>
+
+<?php dash_footer(); ?>

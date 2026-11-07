@@ -24,7 +24,7 @@ header('Cache-Control: no-store, private, max-age=0');
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header('X-Robots-Tag: noindex, nofollow');
-header("Content-Security-Policy: default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' blob:; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
+header("Content-Security-Policy: default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' blob:; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
 
 $token = (string) ($_GET['t'] ?? '');
 $first = capture_by_token($token);
@@ -116,119 +116,105 @@ if ($valid && !$first['opened_ts']) {
 $remaining = $valid ? max(0, (int) $first['expires_ts'] - time()) : 0;
 $stepsJs = array_map(fn ($s) => ['id' => (int) $s['id'], 'label' => $s['slot_label'], 'required' => (int) $s['required'] === 1,
                                  'status' => $s['status']], $steps);
-$icon = fn (string $paths, string $class = 'h-5 w-5') => '<svg class="' . $class . '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $paths . '</svg>';
-$check = '<path d="m5 12 5 5 9-10"/>';
+$root = site_root();
 ?>
 <!DOCTYPE html>
-<html lang="fr" class="h-full">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="robots" content="noindex, nofollow">
     <meta name="referrer" content="no-referrer">
-    <meta name="theme-color" content="#0f172a">
+    <meta name="theme-color" content="#1F2630">
     <title>Capture sécurisée · GTC-Vault</title>
-    <link rel="stylesheet" href="<?= h(vault_css()) ?>">
-    <style>[hidden] { display: none !important; }</style>
+    <link rel="stylesheet" href="<?= h(asset_url('assets/css/fonts.css', $root)) ?>">
+    <link rel="stylesheet" href="<?= h(asset_url('assets/css/dashboard.css', $root)) ?>">
+    <link rel="stylesheet" href="<?= h(asset_url(VAULT_CSS, $root)) ?>">
 </head>
-<body class="min-h-full bg-slate-100 font-sans text-slate-900 antialiased">
+<body class="cap-page">
 
-<header class="bg-slate-900 px-4 py-3 text-white">
-    <div class="mx-auto flex max-w-md items-center gap-2.5 font-semibold tracking-tight">
-        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
-            <?= $icon('<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><circle cx="12" cy="10.5" r="2"/><path d="M12 12.5V16"/>') ?>
-        </span>
-        GTC-Vault <span class="font-normal text-slate-400">· Capture sécurisée</span>
+<header class="cap-top">
+    <div class="cap-top__inner">
+        <img src="<?= h(asset_url('assets/img/logo-gtc-light-436.png', $root)) ?>" alt="<?= h(GTC_NAME) ?>" width="113" height="28">
+        <span>GTC-Vault · Capture sécurisée</span>
     </div>
 </header>
 
-<main class="mx-auto max-w-md px-4 pb-10 pt-5">
+<main class="cap-main">
 <?php if (!$valid): ?>
-    <div class="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
-        <span class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-50 text-amber-600">
-            <?= $icon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', 'h-6 w-6') ?>
-        </span>
-        <h1 class="mt-4 text-lg font-semibold">Ce QR code n'est plus valide</h1>
-        <p class="mt-1.5 text-sm text-slate-600">
-            La session de capture est terminée : photos validées sur le poste de l'agent, QR code remplacé ou expiré (15 minutes).
-            Si besoin, générez un nouveau QR code sur le poste, puis flashez-le à nouveau.
-        </p>
+    <div class="cap-invalid">
+        <span class="vault-empty__icon"><?= vault_icon('clock') ?></span>
+        <h1>Ce QR code n'est plus valide</h1>
+        <p>La session de capture est terminée : photos validées sur le poste de l'agent, QR code remplacé ou expiré (15 minutes).
+           Si besoin, générez un nouveau QR code sur le poste, puis flashez-le à nouveau.</p>
     </div>
 <?php else: ?>
     <!-- Progression -->
-    <div class="mb-4 flex items-center justify-between gap-3">
-        <ol id="progress-dots" class="flex items-center gap-1.5" aria-label="Pièces de la session"></ol>
-        <p class="text-xs text-slate-500"><span id="countdown" data-remaining="<?= $remaining ?>">valable <?= (int) ceil($remaining / 60) ?> min</span></p>
+    <div class="cap-row">
+        <ol id="progress-dots" class="cap-dots" aria-label="Pièces de la session"></ol>
+        <span id="countdown" data-remaining="<?= $remaining ?>">valable <?= (int) ceil($remaining / 60) ?> min</span>
     </div>
 
-    <div id="sent-banner" hidden role="status" class="mb-4 flex items-center gap-2.5 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900 ring-1 ring-inset ring-emerald-600/20">
-        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white"><?= $icon($check, 'h-3.5 w-3.5') ?></span>
-        <span data-text></span>
-    </div>
+    <div id="sent-banner" class="alert alert--success" role="status" hidden><?= icon('check') ?><p data-text></p></div>
 
     <!-- Prise de vue d'une pièce -->
     <section id="step-shoot">
-        <p class="text-xs font-semibold uppercase tracking-wide text-indigo-700" id="step-count">Pièce à photographier</p>
-        <h1 class="mt-1 text-2xl font-bold tracking-tight" id="step-label"></h1>
-        <p class="mt-1 text-sm text-slate-600">Demandée par <?= h($agent['name']) ?></p>
+        <p class="cap-overline" id="step-count">Pièce à photographier</p>
+        <h1 class="cap-title" id="step-label"></h1>
+        <p class="cap-meta">Demandée par <?= h($agent['name']) ?></p>
 
-        <ul class="mt-5 space-y-2.5 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
-            <li class="flex gap-2.5"><?= $icon('<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M15 9h3M15 13h3M6 16h7"/>', 'mt-0.5 h-5 w-5 shrink-0 text-indigo-600') ?><span>Posez la pièce à plat, <strong>en entier</strong> dans le cadre.</span></li>
-            <li class="flex gap-2.5"><?= $icon('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>', 'mt-0.5 h-5 w-5 shrink-0 text-indigo-600') ?><span>Bonne lumière, <strong>sans reflet</strong> ni flash sur la photo.</span></li>
-            <li class="flex gap-2.5"><?= $icon('<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>', 'mt-0.5 h-5 w-5 shrink-0 text-indigo-600') ?><span>Vérifiez que le texte est <strong>net et lisible</strong>.</span></li>
+        <ul class="cap-card cap-tips">
+            <li><?= vault_icon('id-card') ?><span>Posez la pièce à plat, <strong>en entier</strong> dans le cadre.</span></li>
+            <li><?= vault_icon('sun') ?><span>Bonne lumière, <strong>sans reflet</strong> ni flash sur la photo.</span></li>
+            <li><?= vault_icon('lens') ?><span>Vérifiez que le texte est <strong>net et lisible</strong>.</span></li>
         </ul>
 
-        <div id="preview-box" hidden class="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <img id="preview" alt="Aperçu de la photo" class="max-h-[55vh] w-full bg-slate-900 object-contain">
-            <p id="preview-meta" class="border-t border-slate-100 px-4 py-2 text-xs text-slate-500"></p>
+        <div id="preview-box" class="cap-preview" hidden>
+            <img id="preview" alt="Aperçu de la photo">
+            <p id="preview-meta"></p>
         </div>
 
-        <p id="error" role="alert" hidden class="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800 ring-1 ring-inset ring-red-600/20"></p>
+        <div id="error" class="alert alert--error" role="alert" hidden><?= icon('alert') ?><p data-text></p></div>
 
-        <div class="mt-5 space-y-3">
-            <label id="shoot-btn" class="flex w-full cursor-pointer items-center justify-center gap-2.5 rounded-2xl bg-indigo-600 px-5 py-4 text-lg font-semibold text-white shadow-lg shadow-indigo-600/30 active:scale-[.98]">
-                <input type="file" id="camera" accept="image/jpeg,image/png,image/*" capture="environment" class="sr-only">
-                <?= $icon('<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3.5"/>', 'h-6 w-6') ?>
+        <div class="cap-actions">
+            <label id="shoot-btn" class="cap-btn">
+                <input type="file" id="camera" accept="image/jpeg,image/png,image/*" capture="environment" class="visually-hidden">
+                <?= vault_icon('camera') ?>
                 <span data-text>Prendre la photo</span>
             </label>
-            <button type="button" id="send-btn" hidden class="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-4 text-lg font-semibold text-white shadow-lg shadow-emerald-600/30 active:scale-[.98] disabled:opacity-70">
-                <?= $icon('<path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/>', 'h-6 w-6') ?>
+            <button type="button" id="send-btn" class="cap-btn cap-btn--send" hidden>
+                <?= vault_icon('send') ?>
                 <span data-text>Envoyer au poste de l'agent</span>
             </button>
-            <div id="progress" hidden class="h-2 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label="Envoi de la photo" aria-valuemin="0" aria-valuemax="100">
-                <div class="h-full w-0 rounded-full bg-emerald-500 transition-all"></div>
-            </div>
-            <div class="flex items-center justify-center gap-5 text-sm font-medium text-slate-600">
-                <label class="cursor-pointer underline underline-offset-4">
-                    <input type="file" id="gallery" accept="image/jpeg,image/png,image/*" class="sr-only">
+            <div id="progress" class="cap-progress" role="progressbar" aria-label="Envoi de la photo" aria-valuemin="0" aria-valuemax="100" hidden><span></span></div>
+            <div class="cap-links">
+                <label>
+                    <input type="file" id="gallery" accept="image/jpeg,image/png,image/*" class="visually-hidden">
                     Choisir une photo existante
                 </label>
-                <button type="button" id="skip-btn" hidden class="underline underline-offset-4">Passer cette pièce</button>
-                <button type="button" id="back-recap" hidden class="underline underline-offset-4">Annuler</button>
+                <button type="button" id="skip-btn" hidden>Passer cette pièce</button>
+                <button type="button" id="back-recap" hidden>Annuler</button>
             </div>
         </div>
     </section>
 
     <!-- Vérification finale -->
     <section id="step-recap" hidden>
-        <span class="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"><?= $icon($check, 'h-6 w-6') ?></span>
-        <h1 class="mt-3 text-xl font-semibold">Toutes les pièces sont transmises</h1>
-        <p class="mt-1 text-sm text-slate-600">Vérifiez que chaque photo est nette et lisible. Elles sont déjà sur le poste de <?= h($agent['name']) ?> ; reprenez-en une si besoin.</p>
-        <ul id="recap-list" class="mt-5 space-y-3"></ul>
-        <p class="mt-5 text-sm text-slate-600">Tout est bon ? Vous pouvez fermer cette page.</p>
+        <span class="cap-done-icon"><?= vault_icon('ok') ?></span>
+        <h1 class="cap-title">Toutes les pièces sont transmises</h1>
+        <p class="cap-meta">Vérifiez que chaque photo est nette et lisible. Elles sont déjà sur le poste de <?= h($agent['name']) ?> ; reprenez-en une si besoin.</p>
+        <ul id="recap-list" class="cap-recap"></ul>
+        <p class="cap-meta" style="margin-top: 1.25rem">Tout est bon ? Vous pouvez fermer cette page.</p>
     </section>
 
-    <p class="mt-6 flex items-start gap-2 text-xs leading-relaxed text-slate-500">
-        <?= $icon('<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>', 'mt-0.5 h-4 w-4 shrink-0') ?>
-        Les photos sont envoyées directement au dossier sécurisé ; rien n'est conservé dans le navigateur de ce téléphone.
-    </p>
+    <p class="vault-note cap-fine"><?= icon('lock') ?> Les photos sont envoyées directement au dossier sécurisé ; rien n'est conservé dans le navigateur de ce téléphone.</p>
 
 <script>
 (function () {
   'use strict';
   var MAX = <?= KYC_MAX_BYTES ?>, LONG_EDGE = 2200, QUALITY = 0.85;
   var STEPS = <?= json_encode($stepsJs, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-  var CHECK = '<svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>';
+  var CHECK = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>';
   var $ = function (id) { return document.getElementById(id); };
   var blob = null, previewUrl = null, current = null, retaking = false, shots = {};   // shots[id] = URL locale de la photo envoyée
   var done = function (s) { return s.status === 'uploaded' || s.status === 'consumed' || s.status === 'skipped'; };
@@ -241,14 +227,14 @@ $check = '<path d="m5 12 5 5 9-10"/>';
     if (!s) { clearInterval(tick); showError('Ce QR code a expiré. Générez-en un nouveau sur le poste de l\'agent.'); $('send-btn').disabled = true; }
   }, 1000);
 
-  function showError(msg) { $('error').textContent = msg; $('error').hidden = !msg; }
+  function showError(msg) { $('error').querySelector('[data-text]').textContent = msg; $('error').hidden = !msg; }
   function kb(n) { return n < 1048576 ? Math.round(n / 1024) + ' Ko' : (n / 1048576).toFixed(1).replace('.', ',') + ' Mo'; }
   function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
   function renderDots() {
     $('progress-dots').innerHTML = STEPS.map(function (s) {
       var on = current && s.id === current.id, ok = done(s);
-      return '<li class="h-2.5 rounded-full transition-all ' + (on ? 'w-6 bg-indigo-600' : ok ? 'w-2.5 bg-emerald-500' : 'w-2.5 bg-slate-300') + '"><span class="sr-only">' + esc(s.label) + (ok ? ' : transmise' : '') + '</span></li>';
+      return '<li class="' + (on ? 'is-current' : ok ? 'is-done' : '') + '"><span class="visually-hidden">' + esc(s.label) + (ok ? ' : transmise' : '') + '</span></li>';
     }).join('');
   }
 
@@ -261,7 +247,7 @@ $check = '<path d="m5 12 5 5 9-10"/>';
     $('preview-box').hidden = true; $('send-btn').hidden = true; $('progress').hidden = true; showError('');
     var btn = $('shoot-btn');
     btn.querySelector('[data-text]').textContent = n > 1 && !isRetake ? 'Photographier : ' + step.label : 'Prendre la photo';
-    btn.classList.add('bg-indigo-600', 'shadow-lg'); btn.classList.remove('bg-slate-700');
+    btn.classList.remove('cap-btn--again');
     $('send-btn').disabled = false; $('send-btn').querySelector('[data-text]').textContent = 'Envoyer au poste de l\'agent';
     $('skip-btn').hidden = step.required || isRetake;
     $('back-recap').hidden = !isRetake;
@@ -280,14 +266,11 @@ $check = '<path d="m5 12 5 5 9-10"/>';
     current = null; renderDots();
     $('step-shoot').hidden = true; $('step-recap').hidden = false;
     $('recap-list').innerHTML = STEPS.map(function (s) {
-      var thumb = shots[s.id]
-        ? '<img src="' + shots[s.id] + '" alt="" class="h-16 w-24 shrink-0 rounded-lg bg-slate-900 object-cover">'
-        : '<span class="flex h-16 w-24 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs text-slate-500">' + (s.status === 'skipped' ? 'Passée' : 'Transmise') + '</span>';
-      return '<li class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">' + thumb
-        + '<div class="min-w-0 flex-1"><p class="truncate font-semibold">' + esc(s.label) + '</p>'
-        + '<p class="mt-0.5 inline-flex items-center gap-1 text-xs font-medium ' + (s.status === 'skipped' ? 'text-slate-500' : 'text-emerald-700') + '">'
-        + (s.status === 'skipped' ? 'Passée' : CHECK + ' Transmise') + '</p></div>'
-        + '<button type="button" data-retake="' + s.id + '" class="shrink-0 rounded-lg px-3 py-2 text-sm font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-200">' + (s.status === 'skipped' ? 'Photographier' : 'Reprendre') + '</button></li>';
+      var skipped = s.status === 'skipped';
+      var thumb = '<span class="cap-recap__thumb">' + (shots[s.id] ? '<img src="' + shots[s.id] + '" alt="">' : (skipped ? 'Passée' : 'Transmise')) + '</span>';
+      return '<li>' + thumb + '<div class="cap-recap__body"><p class="cap-recap__label">' + esc(s.label) + '</p>'
+        + '<p class="cap-recap__state' + (skipped ? ' is-skipped' : '') + '">' + (skipped ? 'Passée' : CHECK + ' Transmise') + '</p></div>'
+        + '<button type="button" class="btn btn--ghost btn--sm" data-retake="' + s.id + '">' + (skipped ? 'Photographier' : 'Reprendre') + '</button></li>';
     }).join('');
     $('recap-list').querySelectorAll('[data-retake]').forEach(function (b) {
       b.addEventListener('click', function () { var id = +b.getAttribute('data-retake'); shoot(STEPS.filter(function (s) { return s.id === id; })[0], true); });
@@ -327,7 +310,7 @@ $check = '<path d="m5 12 5 5 9-10"/>';
       $('preview-box').hidden = false; $('send-btn').hidden = false;
       var btn = $('shoot-btn');
       btn.querySelector('[data-text]').textContent = 'Reprendre la photo';
-      btn.classList.replace('bg-indigo-600', 'bg-slate-700'); btn.classList.remove('shadow-lg');
+      btn.classList.add('cap-btn--again');
       $('send-btn').scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
   }
