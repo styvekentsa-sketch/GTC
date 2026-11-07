@@ -6,7 +6,7 @@
  * garanties concrètes (pas de témoignages clients).
  */
 $pageTitle       = 'À propos';
-$seoTitle        = 'À propos de GTC | Bureau de change rue Paul Soppo Priso, Douala';
+$seoTitle        = 'À propos de GTC | Bureau de change à Bonapriso, Douala';
 $pageDescription = 'Global Trading Corporation, agence physique rue Paul Soppo Priso à Douala : une équipe identifiée pour le change, le transfert de fonds et l\'import-export.';
 $currentPage     = 'a-propos';
 

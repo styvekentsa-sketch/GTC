@@ -6,8 +6,8 @@
  * via le conteneur .svc (voir style.css, partie « 10g. Page Services »).
  */
 $pageTitle       = 'Services';
-$seoTitle        = 'Change FCFA, EUR, USD & transfert d\'argent à Douala | GTC';
-$pageDescription = 'Change de devises FCFA, EUR, USD, CAD, Naira, Dirham de Dubaï et Yuan, transfert d\'argent international et import-export à Douala. Simulez votre change en ligne.';
+$seoTitle        = 'Change de devises et transfert d\'argent à Douala | GTC';
+$pageDescription = 'Change FCFA, EUR, USD, CAD, Naira, Dirham et Yuan, transfert d\'argent international et import-export à Douala. Simulez votre change en ligne.';
 $currentPage     = 'services';
 
 require_once __DIR__ . '/includes/config.php';

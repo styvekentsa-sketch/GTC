@@ -13,6 +13,7 @@ require_once __DIR__ . '/includes/icons.php';
 require_once __DIR__ . '/includes/media.php';
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/reviews.php';
+require_once __DIR__ . '/includes/seo.php';
 
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -40,9 +41,10 @@ $ratingWords = [1 => 'Décevant', 2 => 'Moyen', 3 => 'Correct', 4 => 'Très bien
 
 // ---------- Méta & données de la page ----------
 $pageTitle       = 'Avis clients';
-$seoTitle        = 'Avis clients : change et transfert d\'argent à Douala | GTC';
+$seoTitle        = 'Avis clients sur GTC, bureau de change à Douala';
 $pageDescription = 'Lisez les avis des clients de Global Trading Corporation à Douala et partagez votre expérience : change de devises, transfert d\'argent, fret et transit.';
 $currentPage     = 'avis';
+$pageSchema      = [seo_reviews($stats, array_slice($first, 0, REVIEW_PAGE_SIZE))];   // note moyenne + avis (includes/seo.php)
 
 include __DIR__ . '/includes/header.php';
 

@@ -54,7 +54,7 @@ function track_date(?string $value, bool $withTime = true): string
 // ---------- Méta & données de la page ----------
 $pageTitle       = 'Suivi de colis';
 $seoTitle        = 'Suivi de colis et de conteneurs à Douala | GTC';
-$pageDescription = 'Suivez votre colis ou votre conteneur confié à Global Trading Corporation : embarquement, transit maritime ou aérien, arrivée à Douala, douane et retrait en agence.';
+$pageDescription = 'Suivez votre colis ou conteneur confié à GTC : embarquement, transit maritime ou aérien, arrivée à Douala, dédouanement et retrait en agence.';
 $currentPage     = 'suivi';
 if ($code !== '') {
     $robots = 'noindex, nofollow';   // page de résultat propre à un client

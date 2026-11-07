@@ -13,6 +13,7 @@ require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/icons.php';
 require_once __DIR__ . '/includes/media.php';
 require_once __DIR__ . '/includes/rates.php';
+require_once __DIR__ . '/includes/seo.php';
 require_once __DIR__ . '/includes/settings.php';   // grille de l'entreprise (company_rates_js)
 
 $rates   = company_rates_js('FCFA');
@@ -35,6 +36,7 @@ $pageTitle       = 'Taux du jour';
 $seoTitle        = 'Taux de change du jour à Douala : EUR, USD, NGN… | GTC';
 $pageDescription = 'Taux de change du jour de GTC à Douala : achat et vente de l\'euro, du dollar, du dollar canadien, du naira, du dirham et du yuan contre le franc CFA.';
 $currentPage     = 'taux';
+$pageSchema      = [seo_exchange_rates($rates)];   // taux du guichet en données structurées (includes/seo.php)
 
 include __DIR__ . '/includes/header.php';
 

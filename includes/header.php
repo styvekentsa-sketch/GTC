@@ -42,6 +42,8 @@ $seoTitle        = $seoTitle        ?? $pageTitle . ' | ' . GTC_NAME;
 $robots          = $robots          ?? 'index, follow, max-image-preview:large, max-snippet:-1';
 $canonical       = seo_url(seo_current_path());
 $shareImage      = seo_url(SEO_SHARE_IMAGE);
+// Type de la page en données structurées (la FAQ publie déjà son propre FAQPage)
+$pageType        = $pageType ?? ($currentPage === 'faq' ? null : (['a-propos' => 'AboutPage', 'contact' => 'ContactPage'][$currentPage] ?? 'WebPage'));
 
 $navItems = [
     'accueil'  => ['label' => 'Accueil',   'href' => $root . 'index.php'],
@@ -71,6 +73,17 @@ if (!function_exists('e')) {
     <meta name="robots" content="<?= e($robots) ?>">
     <link rel="canonical" href="<?= e($canonical) ?>">
     <meta name="theme-color" content="#0F172A">
+    <!-- Référencement local : Douala, région du Littoral (Cameroun) -->
+    <meta name="geo.region" content="CM-LT">
+    <meta name="geo.placename" content="Douala">
+    <?php if (GTC_GEO_LAT !== '' && GTC_GEO_LNG !== ''): ?>
+    <meta name="geo.position" content="<?= e(GTC_GEO_LAT . ';' . GTC_GEO_LNG) ?>">
+    <meta name="ICBM" content="<?= e(GTC_GEO_LAT . ', ' . GTC_GEO_LNG) ?>">
+    <?php endif; ?>
+    <?php if ($currentPage === 'accueil'): /* Propriété du site : Google Search Console, Bing Webmaster Tools (includes/config.php) */ ?>
+    <?php if (GTC_GOOGLE_VERIFICATION !== ''): ?><meta name="google-site-verification" content="<?= e(GTC_GOOGLE_VERIFICATION) ?>"><?php endif; ?>
+    <?php if (GTC_BING_VERIFICATION !== ''): ?><meta name="msvalidate.01" content="<?= e(GTC_BING_VERIFICATION) ?>"><?php endif; ?>
+    <?php endif; ?>
 
     <!-- Partage (WhatsApp, Facebook, LinkedIn : Open Graph · X / Twitter : Twitter Cards) -->
     <meta property="og:type" content="website">
@@ -105,6 +118,8 @@ if (!function_exists('e')) {
     <!-- Données structurées (référencement local Google) -->
     <?= seo_jsonld(seo_business()) ?>
     <?php if ($currentPage === 'accueil'): ?><?= seo_jsonld(seo_website()) ?><?php endif; ?>
+    <?php if ($pageType !== null && !str_starts_with($robots, 'noindex')): ?><?= seo_jsonld(seo_webpage($pageType, $seoTitle, $pageDescription)) ?><?php endif; ?>
+    <?php foreach (array_filter($pageSchema ?? []) as $schema): ?><?= seo_jsonld($schema) ?><?php endforeach; ?>
 </head>
 <body>
 

@@ -106,6 +106,8 @@ function seo_business(): array
         '@type'       => 'FinancialService',
         '@id'         => seo_url('#entreprise'),
         'name'        => GTC_NAME,
+        'alternateName' => 'GTC',
+        'legalName'   => GTC_NAME,
         'url'         => seo_url(),
         'logo'        => seo_url('assets/img/logo-gtc-print.jpg'),
         'image'       => seo_url(SEO_SHARE_IMAGE),
@@ -113,6 +115,8 @@ function seo_business(): array
                        . "transferts de fonds vers l'Afrique, l'Europe, l'Amérique et l'Asie, accompagnement import-export.",
         'telephone'   => GTC_PHONE_LINK,
         'email'       => GTC_EMAIL,
+        'currenciesAccepted' => 'XAF, EUR, USD, CAD, NGN, AED, CNY',
+        'knowsLanguage' => 'fr',
         'address'     => [
             '@type'           => 'PostalAddress',
             'streetAddress'   => '1.229 Rue Paul Soppo Priso, Bonapriso',
@@ -166,6 +170,89 @@ function seo_website(): array
         'url'        => seo_url(),
         'inLanguage' => 'fr-CM',
         'publisher'  => ['@id' => seo_url('#entreprise')],
+    ];
+}
+
+/**
+ * Page courante (WebPage, AboutPage, ContactPage…) rattachée au site et à l'entreprise : Google relie ainsi chaque
+ * page à la même fiche (nom, adresse, avis) au lieu de les traiter comme des documents isolés.
+ */
+function seo_webpage(string $type, string $title, string $description): array
+{
+    $url = seo_url(seo_current_path());
+    return [
+        '@context'    => 'https://schema.org',
+        '@type'       => $type,
+        '@id'         => $url . '#page',
+        'url'         => $url,
+        'name'        => $title,
+        'description' => $description,
+        'inLanguage'  => 'fr-CM',
+        'isPartOf'    => ['@id' => seo_url('#site')],
+        'about'       => ['@id' => seo_url('#entreprise')],
+        'primaryImageOfPage' => seo_url(SEO_SHARE_IMAGE),
+    ];
+}
+
+/**
+ * Note moyenne et avis publiés (page Avis) : complète la fiche de l'entreprise (même @id).
+ * Rien n'est publié tant qu'aucun avis n'est validé (Google refuse une note sans avis).
+ * $stats : review_stats() · $rows : avis publiés tels que lus par reviews_approved().
+ */
+function seo_reviews(array $stats, array $rows): ?array
+{
+    if (($stats['count'] ?? 0) < 1) {
+        return null;
+    }
+    return [
+        '@context'        => 'https://schema.org',
+        '@type'           => 'FinancialService',
+        '@id'             => seo_url('#entreprise'),
+        'name'            => GTC_NAME,
+        'aggregateRating' => [
+            '@type'       => 'AggregateRating',
+            'ratingValue' => $stats['average'],
+            'reviewCount' => $stats['count'],
+            'bestRating'  => 5,
+            'worstRating' => 1,
+        ],
+        'review' => array_map(fn ($r) => [
+            '@type'        => 'Review',
+            'author'       => ['@type' => 'Person', 'name' => (string) $r['author_name']],
+            'reviewRating' => ['@type' => 'Rating', 'ratingValue' => (int) $r['rating'], 'bestRating' => 5, 'worstRating' => 1],
+            'reviewBody'   => (string) $r['comment'],
+        ] + (strtotime((string) $r['created_at']) ? ['datePublished' => date('Y-m-d', strtotime((string) $r['created_at']))] : []), array_slice($rows, 0, 10)),
+    ];
+}
+
+/**
+ * Taux du guichet (page Taux du jour) : une ExchangeRateSpecification par devise, en FCFA.
+ * Taux publié = milieu entre achat et vente ; écart = vente − achat. $rates : company_rates_js('FCFA').
+ */
+function seo_exchange_rates(array $rates): ?array
+{
+    $items = [];
+    foreach ($rates as $code => $r) {
+        $buy = (float) ($r['buy'] ?? 0);
+        $sell = (float) ($r['sell'] ?? 0);
+        if (in_array($code, ['FCFA', 'XAF'], true) || $buy <= 0 || $sell <= 0) {
+            continue;
+        }
+        $items[] = [
+            '@type'               => 'ExchangeRateSpecification',
+            'currency'            => $code,
+            'currentExchangeRate' => ['@type' => 'UnitPriceSpecification', 'price' => round(($buy + $sell) / 2, 4), 'priceCurrency' => 'XAF'],
+            'exchangeRateSpread'  => ['@type' => 'MonetaryAmount', 'value' => round($sell - $buy, 4), 'currency' => 'XAF'],
+        ];
+    }
+    if (!$items) {
+        return null;
+    }
+    return [
+        '@context'        => 'https://schema.org',
+        '@type'           => 'ItemList',
+        'name'            => 'Taux de change du jour — ' . GTC_NAME . ', Douala',
+        'itemListElement' => array_map(fn ($item, $i) => ['@type' => 'ListItem', 'position' => $i + 1, 'item' => $item], $items, array_keys($items)),
     ];
 }
 

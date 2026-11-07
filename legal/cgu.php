@@ -4,6 +4,7 @@
  */
 $root            = '../';
 $pageTitle       = "Conditions générales d'utilisation";
+$seoTitle        = "Conditions générales d'utilisation | GTC";
 $pageDescription = "Conditions générales d'utilisation du site de Global Trading Corporation : accès, informations indicatives, propriété intellectuelle et responsabilités.";
 $currentPage     = '';
 

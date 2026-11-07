@@ -48,6 +48,11 @@ define('GTC_SITE_URL', 'https://globaltradingcorporation.net');
 // À relever sur Google Maps (clic droit sur l'agence → coordonnées), ex. '4.0350' et '9.6950'.
 define('GTC_GEO_LAT', '');
 define('GTC_GEO_LNG', '');
+// Vérification de propriété du site (balise <meta> ajoutée à la page d'accueil). Laissées vides, rien n'est publié.
+// Google Search Console → Ajouter une propriété → Préfixe d'URL → « Balise HTML » : recopier la valeur de content="…".
+// Bing Webmaster Tools → même principe (balise msvalidate.01) ; Bing peut aussi importer le site depuis Search Console.
+define('GTC_GOOGLE_VERIFICATION', '');
+define('GTC_BING_VERIFICATION', '');
 
 // Mentions légales des factures : à compléter avec les numéros officiels de l'entreprise.
 // Laissés vides, ils ne sont pas affichés.

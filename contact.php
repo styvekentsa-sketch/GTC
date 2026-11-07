@@ -29,7 +29,7 @@ $fields  = array_merge(
 // ---------- Méta & données de la page ----------
 $pageTitle       = 'Contact';
 $seoTitle        = 'Contact & horaires | Bureau de change GTC à Douala';
-$pageDescription = 'Contactez Global Trading Corporation à Douala, rue Paul Soppo Priso (Bonapriso) : téléphone, WhatsApp, e-mail, horaires d\'ouverture, plan d\'accès et formulaire.';
+$pageDescription = 'Contactez GTC à Douala, rue Paul Soppo Priso (Bonapriso) : téléphone, WhatsApp, e-mail, horaires d\'ouverture, plan d\'accès et formulaire.';
 $currentPage     = 'contact';
 
 include __DIR__ . '/includes/header.php';
