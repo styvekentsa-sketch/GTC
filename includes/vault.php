@@ -177,8 +177,79 @@ function vault_watermark_text(): string
     return 'GTC - USAGE INTERNE - ' . vault_user()['name'] . ' - ' . date('d/m/Y H:i');
 }
 
+// ---------- Images des pièces ----------
+
+/**
+ * Ouvre une pièce JPEG / PNG et la remet à l'endroit d'après l'EXIF (photo prise au téléphone).
+ * Utilisée par l'aperçu filigrané (viewer.php) et le recadrage des photos de profil (avatar.php) : les mêmes
+ * coordonnées relatives désignent donc le même endroit sur l'aperçu et sur l'original.
+ */
+function kyc_open_image(string $path, string $mime): ?GdImage
+{
+    if (!function_exists('imagecreatefromjpeg')) {
+        return null;
+    }
+    ini_set('memory_limit', '256M');   // photo de 12 Mpx décompressée : ~50 Mo
+    $img = $mime === 'image/png' ? @imagecreatefrompng($path) : @imagecreatefromjpeg($path);
+    if (!$img) {
+        return null;
+    }
+    if ($mime === 'image/jpeg' && function_exists('exif_read_data')) {
+        $orientation = (int) (@exif_read_data($path)['Orientation'] ?? 1);
+        $angle = [3 => 180, 6 => -90, 8 => 90][$orientation] ?? 0;
+        if ($angle) {
+            $img = imagerotate($img, $angle, 0) ?: $img;
+        }
+    }
+    return $img;
+}
+
+// ---------- Photos de profil (recadrées dans une pièce d'identité, avatar.php) ----------
+const AVATAR_SIZE = 320;   // carré, en pixels
+
+/** Dossier des photos de profil (hors web, comme les pièces). */
+function avatar_dir(): string
+{
+    return KYC_STORAGE_DIR . '/avatars';
+}
+
+/** Adresse de la photo de profil d'un client (null s'il n'en a pas) ; le nom du fichier sert de version. */
+function avatar_url(string $uuid, ?string $avatarPath): ?string
+{
+    return $avatarPath ? 'avatar.php?c=' . rawurlencode($uuid) . '&v=' . substr(md5($avatarPath), 0, 10) : null;
+}
+
+/**
+ * Avatar d'un client : photo de profil si elle existe, sinon ses initiales sur la couleur de son type.
+ * $size : classes Tailwind de taille (ex. 'h-9 w-9 text-xs'), $round : forme ('rounded-full', 'rounded-2xl').
+ */
+function avatar_html(array $client, string $initials, string $size, string $round = 'rounded-full'): string
+{
+    $tone = ($client['type_client'] ?? '') === 'entreprise' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700';
+    $url  = avatar_url((string) $client['uuid'], $client['avatar_path'] ?? null);
+    if ($url) {
+        return '<img src="' . h($url) . '" alt="" width="64" height="64" loading="lazy" decoding="async" draggable="false"'
+             . ' class="' . h($size) . ' ' . $round . ' shrink-0 bg-slate-100 object-cover ring-1 ring-slate-200" data-avatar>';
+    }
+    return '<span class="flex ' . h($size) . ' shrink-0 items-center justify-center ' . $round . ' font-semibold ' . $tone . '" aria-hidden="true" data-avatar>'
+         . h($initials ?: '?') . '</span>';
+}
+
+/** Supprime le fichier d'une photo de profil. */
+function avatar_delete_file(?string $relative): void
+{
+    if ($relative && preg_match('/^[a-f0-9]{32}\.jpg$/', $relative)) {
+        @unlink(avatar_dir() . '/' . $relative);
+    }
+}
+
 // ---------- Capture par téléphone (QR code) : capture-api.php (poste de l'agent), capture.php (téléphone) ----------
-const CAPTURE_TTL = 600;   // un QR code vaut 10 minutes, pour une seule pièce
+// Une SESSION de capture = un QR code pour plusieurs pièces à la suite (ex. CNI recto puis verso).
+// Chaque pièce est une ligne de kyc_captures (batch_id = id de la 1re ligne, step = ordre) ; seul le jeton de la
+// 1re ligne est utilisable. États d'une pièce : pending → uploaded (photo reçue) → consumed (récupérée par le poste) ;
+// une photo reprise sur le téléphone repasse en « uploaded » ; skipped : pièce facultative passée ; cancelled.
+const CAPTURE_TTL = 900;   // un QR code vaut 15 minutes, pour toutes les pièces de la session
+const CAPTURE_MAX_STEPS = 4;
 /** Pièces photographiables et leur libellé (doc_identite : selon la pièce choisie, CNI ou passeport). */
 const CAPTURE_SLOTS = [
     'doc_identite' => ['cni' => 'CNI — recto', 'passeport' => 'Passeport — page photo'],
@@ -202,10 +273,25 @@ function capture_by_token(string $token): ?array
     return db_one('SELECT * FROM kyc_captures WHERE token_hash = ?', [hash('sha256', $token)]) ?: null;
 }
 
-/** Une capture peut-elle encore recevoir une photo ? */
+/** Une capture peut-elle encore recevoir une photo ? (session ni annulée ni expirée) */
 function capture_is_open(array $c): bool
 {
-    return in_array($c['status'], ['pending', 'opened', 'uploaded'], true) && (int) $c['expires_ts'] >= time();
+    return $c['status'] !== 'cancelled' && (int) $c['expires_ts'] >= time();
+}
+
+/** Pièces d'une session de capture, dans l'ordre. */
+function capture_batch(int $batchId): array
+{
+    return db_all('SELECT * FROM kyc_captures WHERE batch_id = ? ORDER BY step', [$batchId]);
+}
+
+/** Annule une session (toutes ses pièces) et efface les photos provisoires. */
+function capture_cancel_batch(int $batchId): void
+{
+    foreach (capture_batch($batchId) as $c) {
+        capture_delete_file($c['file_path']);
+    }
+    db_query("UPDATE kyc_captures SET status = 'cancelled', file_path = NULL WHERE batch_id = ?", [$batchId]);
 }
 
 /** Efface la photo provisoire d'une capture (fichier). */

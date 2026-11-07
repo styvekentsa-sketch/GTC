@@ -258,9 +258,21 @@ function db_ensure_schema(PDO $pdo): void
         // GTC-Vault : dossiers KYC (clients, pièces justificatives) et journal de sécurité (dashboard/vault/)
         db_install_kyc($pdo);
     }
+    if (!db_column_exists($pdo, 'clients', 'avatar_path')) {
+        // GTC-Vault : photo de profil du client, recadrée dans sa pièce d'identité (dashboard/vault/avatar.php)
+        $pdo->exec('ALTER TABLE clients ADD COLUMN avatar_path VARCHAR(255) NULL');
+    }
     if (!db_table_exists($pdo, 'kyc_captures')) {
         // GTC-Vault : photos de pièces prises avec un téléphone (QR code, dashboard/vault/capture.php)
         db_install_kyc_captures($pdo);
+    }
+    if (!db_column_exists($pdo, 'kyc_captures', 'batch_id')) {
+        // Un seul QR code pour plusieurs pièces à la suite (recto puis verso…) : session = batch_id, ordre = step
+        $pdo->exec('ALTER TABLE kyc_captures ADD COLUMN batch_id ' . db_types()['fk'] . ' NULL');
+        $pdo->exec('ALTER TABLE kyc_captures ADD COLUMN step INTEGER NOT NULL DEFAULT 0');
+        $pdo->exec('ALTER TABLE kyc_captures ADD COLUMN required SMALLINT NOT NULL DEFAULT 1');
+        $pdo->exec('UPDATE kyc_captures SET batch_id = id WHERE batch_id IS NULL');
+        $pdo->exec('CREATE INDEX idx_kyc_captures_batch ON kyc_captures (batch_id, step)');
     }
     if (!db_column_exists($pdo, 'invoices', 'shipment_id')) {
         // Reçu de paiement « Fret / Transit » rattaché à un dossier de suivi (facultatif)

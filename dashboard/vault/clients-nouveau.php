@@ -179,7 +179,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 vault_audit('client_create', ['uuid' => $uuid, 'nom_complet' => $in['nom_complet']], null,
                     $user['name'] . ' a créé le dossier KYC de ' . $in['nom_complet'] . ' (' . count($files) . ' pièce' . (count($files) > 1 ? 's' : '') . ')');
 
-                $_SESSION['kyc_flash'] = ['name' => $in['nom_complet'], 'uuid' => $uuid, 'docs' => count($files)];
+                $_SESSION['kyc_flash'] = ['name' => $in['nom_complet'], 'uuid' => $uuid, 'docs' => count($files),
+                    // Pièce d'identité en image : la photo de profil peut être recadrée tout de suite
+                    'photo' => isset($files['doc_identite']) && $files['doc_identite']['mime'] !== 'application/pdf'];
                 header('Location: ' . strtok($_SERVER['REQUEST_URI'] ?? '', '?') . '?ok=1', true, 303);
                 exit;
             } catch (Throwable $e) {
@@ -289,7 +291,10 @@ $errField = fn (string $name) => isset($errors[$name])
             <div>
                 <p class="font-semibold">Dossier de <?= h($flash['name']) ?> enregistré</p>
                 <p class="mt-0.5"><?= (int) $flash['docs'] ?> pièce<?= $flash['docs'] > 1 ? 's' : '' ?> archivée<?= $flash['docs'] > 1 ? 's' : '' ?> ·
-                    <a class="font-medium underline underline-offset-2" href="client.php?uuid=<?= h($flash['uuid']) ?>">Ouvrir la fiche</a></p>
+                    <a class="font-medium underline underline-offset-2" href="client.php?uuid=<?= h($flash['uuid']) ?>">Ouvrir la fiche</a>
+                    <?php if (!empty($flash['photo'])): ?>
+                        · <a class="font-medium underline underline-offset-2" href="client.php?uuid=<?= h($flash['uuid']) ?>#photo" data-flash-photo>Définir la photo de profil</a>
+                    <?php endif; ?></p>
             </div>
         </div>
     <?php endif; ?>
@@ -483,33 +488,38 @@ $errField = fn (string $name) => isset($errors[$name])
     </form>
 </main>
 
-<!-- ==================== CAPTURE PAR TÉLÉPHONE : QR CODE ==================== -->
+<!-- ==================== CAPTURE PAR TÉLÉPHONE : UN QR CODE POUR TOUTES LES PIÈCES ==================== -->
 <dialog id="capture-dialog" aria-labelledby="capture-title"
-        class="w-[min(440px,94vw)] rounded-2xl p-0 text-slate-900 shadow-2xl backdrop:bg-slate-900/70 backdrop:backdrop-blur-sm">
+        class="w-[min(520px,94vw)] rounded-2xl p-0 text-slate-900 shadow-2xl backdrop:bg-slate-900/70 backdrop:backdrop-blur-sm">
     <div class="p-5 sm:p-6">
         <div class="flex items-start gap-3">
-            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600" aria-hidden="true"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg></span>
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600" aria-hidden="true">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg>
+            </span>
             <div class="min-w-0 flex-1">
                 <h2 id="capture-title" class="text-base font-semibold">Scanner avec un mobile</h2>
-                <p class="truncate text-sm text-slate-600">Pièce : <strong id="capture-piece" class="font-semibold text-slate-900"></strong></p>
+                <p class="text-sm text-slate-600" id="capture-sub">Un seul QR code pour toutes les pièces, à la suite.</p>
             </div>
             <button type="button" data-capture-close class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-4 focus:ring-slate-200" aria-label="Fermer">
                 <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </button>
         </div>
 
-        <div class="mt-5 flex justify-center">
+        <!-- QR code et marche à suivre (masqués une fois toutes les pièces reçues) -->
+        <div id="capture-scan" class="mt-5 grid items-center gap-5 sm:grid-cols-[13rem_minmax(0,1fr)]">
             <div id="capture-qr" role="img" aria-label="QR code de capture"
-                 class="flex h-60 w-60 items-center justify-center rounded-2xl bg-white p-2 ring-1 ring-slate-200 transition-opacity">
+                 class="mx-auto flex h-52 w-52 items-center justify-center rounded-2xl bg-white p-2 ring-1 ring-slate-200 transition-opacity">
                 <svg class="h-8 w-8 animate-spin text-indigo-600" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".25" stroke-width="3"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
             </div>
+            <ol class="space-y-2 text-sm text-slate-700">
+                <li class="flex gap-2.5"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">1</span><span>Flashez ce QR code avec l'appareil photo du téléphone.</span></li>
+                <li class="flex gap-2.5"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">2</span><span>Photographiez chaque pièce : le téléphone passe seul à la suivante.</span></li>
+                <li class="flex gap-2.5"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">3</span><span>Vérifiez les photos ici, puis validez.</span></li>
+            </ol>
         </div>
 
-        <ol class="mt-5 space-y-1.5 text-sm text-slate-700">
-            <li class="flex gap-2.5"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">1</span> Ouvrez l'appareil photo du téléphone.</li>
-            <li class="flex gap-2.5"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">2</span> Flashez ce QR code et ouvrez le lien.</li>
-            <li class="flex gap-2.5"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">3</span> Photographiez la pièce, puis touchez « Envoyer ».</li>
-        </ol>
+        <!-- Pièces de la session : état et photo reçue -->
+        <ul id="capture-steps" class="mt-5 grid gap-3" aria-live="polite"></ul>
 
         <div id="capture-status" role="status" aria-live="polite" class="mt-5 flex items-center gap-2.5 rounded-xl bg-slate-50 px-3.5 py-2.5 text-sm ring-1 ring-inset ring-slate-200">
             <span data-dot class="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-amber-400"></span>
@@ -521,10 +531,14 @@ $errField = fn (string $name) => isset($errors[$name])
             <button type="button" data-capture-copy hidden class="text-xs font-medium text-slate-600 underline underline-offset-4 hover:text-slate-900">Copier le lien (WhatsApp…)</button>
             <span class="ml-auto flex gap-2">
                 <button type="button" data-capture-renew hidden class="rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-200">Nouveau QR code</button>
-                <button type="button" data-capture-close class="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-200">Annuler</button>
+                <button type="button" data-capture-close data-cancel-label class="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-200">Annuler</button>
+                <button type="button" data-capture-validate hidden class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200">
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>
+                    Photos correctes, valider
+                </button>
             </span>
         </div>
-        <p class="mt-4 text-[11px] leading-relaxed text-slate-500">QR code personnel, valable 10 minutes pour cette seule pièce. La photo est transmise au dossier sécurisé puis effacée du serveur de transit.</p>
+        <p class="mt-4 text-[11px] leading-relaxed text-slate-500">QR code personnel, valable 15 minutes pour les pièces de ce dossier. Les photos sont transmises au dossier sécurisé puis effacées du serveur de transit.</p>
     </div>
 </dialog>
 
@@ -724,10 +738,15 @@ $errField = fn (string $name) => isset($errors[$name])
     btn.querySelector('[data-spinner]').classList.add('hidden'); btn.querySelector('[data-label]').textContent = 'Enregistrer le dossier KYC';
   });
 
-  // ---------- Mode « Appareil photo mobile » : QR code → téléphone → photo injectée dans la pièce ----------
-  var cap = { dialog: document.getElementById('capture-dialog'), id: null, slot: null, url: '', end: 0, poll: null, tick: null, done: false, opener: null, run: 0 };
-  var capQr = document.getElementById('capture-qr'), capStatus = document.getElementById('capture-status');
+  // ---------- Mode « Appareil photo mobile » : UN QR code → le téléphone photographie toutes les pièces à la suite ----------
+  // Pièces de la session : celle cliquée d'abord, puis les autres pièces visibles encore vides (ex. recto → verso).
+  // Chaque photo reçue est placée aussitôt dans sa pièce ; une photo reprise sur le téléphone remplace la précédente.
+  var cap = { dialog: document.getElementById('capture-dialog'), id: null, url: '', end: 0, poll: null, tick: null, run: 0, opener: null, steps: [], first: null };
+  var capQr = document.getElementById('capture-qr'), capStatus = document.getElementById('capture-status'), capList = document.getElementById('capture-steps');
   var CSRF = form.elements.csrf_token.value;
+  var ICON_OK = '<svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>';
+
+  function capEsc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
   /** État affiché : tone = wait (orange), live (bleu), ok (vert), error (rouge). */
   function capState(text, tone) {
@@ -745,34 +764,72 @@ $errField = fn (string $name) => isset($errors[$name])
     capState(msg || 'QR code expiré. Générez-en un nouveau.', 'error');
     cap.dialog.querySelector('[data-capture-renew]').hidden = false;
   }
+  var stepDone = function (s) { return s.received || s.status === 'skipped'; };
+
+  /** Liste des pièces de la session : en attente / photo reçue (miniature) / passée. */
+  function capRenderSteps() {
+    var all = cap.steps.length && cap.steps.every(stepDone);
+    capList.className = 'mt-5 grid gap-3' + (all && cap.steps.length > 1 ? ' sm:grid-cols-2' : '');
+    capList.innerHTML = cap.steps.map(function (s, i) {
+      var st = s.received ? '<span class="inline-flex items-center gap-1 text-emerald-700">' + ICON_OK + ' Reçue</span>'
+        : s.status === 'skipped' ? '<span class="text-slate-500">Passée</span>'
+        : (cap.next && cap.next.id === s.id ? '<span class="text-blue-700">En cours sur le téléphone…</span>' : '<span class="text-slate-500">En attente</span>');
+      var thumb = s.thumb ? '<img src="' + s.thumb + '" alt="" class="' + (all ? 'h-28 w-full' : 'h-12 w-16') + ' rounded-lg bg-slate-100 object-cover ring-1 ring-slate-200">'
+        : '<span class="flex ' + (all ? 'h-28 w-full' : 'h-12 w-16') + ' shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-400">' + (i + 1) + '</span>';
+      return all
+        ? '<li class="rounded-xl border border-slate-200 p-2.5">' + thumb + '<p class="mt-2 truncate text-sm font-semibold">' + capEsc(s.label) + '</p><p class="text-xs font-medium">' + st + '</p></li>'
+        : '<li class="flex items-center gap-3 rounded-xl border border-slate-200 p-2.5">' + thumb
+          + '<div class="min-w-0 flex-1"><p class="truncate text-sm font-semibold">' + capEsc(s.label) + (s.required ? '' : ' <span class="font-normal text-slate-400">(facultative)</span>') + '</p><p class="text-xs font-medium">' + st + '</p></div></li>';
+    }).join('');
+    // Toutes les pièces reçues : QR code masqué, vérification et validation
+    cap.dialog.querySelector('#capture-scan').hidden = all;
+    cap.dialog.querySelector('[data-capture-validate]').hidden = !all;
+    cap.dialog.querySelector('[data-cancel-label]').hidden = all;
+    if (all) capState('Toutes les pièces sont arrivées. Vérifiez qu\'elles sont nettes, puis validez (une photo reprise sur le téléphone remplacera la précédente).', 'ok');
+  }
+
+  /** Pièces à photographier : la pièce cliquée, puis les autres pièces visibles encore vides, dans l'ordre du formulaire. */
+  function capSequence(slot) {
+    var r = rules(), seq = [slot];
+    r.visible.forEach(function (k) { if (k !== slot && !slots[k].input.files.length && seq.length < 4) seq.push(k); });
+    return seq;
+  }
 
   function captureOpen(slot, opener) {
     var run = ++cap.run;
     capStop();
-    cap.slot = slot; cap.id = null; cap.done = false; cap.opener = opener || cap.opener;
-    document.getElementById('capture-piece').textContent = slots[slot].el.querySelector('[id$="-label"]').textContent;
+    var seq = capSequence(slot), r = rules();
+    cap.id = null; cap.opener = opener || cap.opener; cap.first = slot; cap.next = null;
+    cap.steps = seq.map(function (k) { return { id: null, slot: k, label: slots[k].el.querySelector('[id$="-label"]').textContent, required: r.required.indexOf(k) !== -1, status: 'pending', version: '', received: false, thumb: null }; });
+    document.getElementById('capture-sub').textContent = seq.length > 1
+      ? 'Un seul QR code pour ' + seq.length + ' pièces, à la suite : ' + cap.steps.map(function (s) { return s.label; }).join(', ') + '.'
+      : 'Pièce : ' + cap.steps[0].label + '.';
     capQr.classList.remove('opacity-20');
     capQr.innerHTML = '<svg class="h-8 w-8 animate-spin text-indigo-600" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".25" stroke-width="3"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>';
     cap.dialog.querySelector('[data-capture-renew]').hidden = true;
     cap.dialog.querySelector('[data-capture-copy]').hidden = true;
     capStatus.querySelector('[data-timer]').textContent = '';
     capState('Préparation du QR code…', 'wait');
+    capRenderSteps();
     if (!cap.dialog.open) cap.dialog.showModal();
 
     var fd = new FormData();
-    fd.append('csrf_token', CSRF); fd.append('slot', slot); fd.append('piece', val('piece_identite'));
+    fd.append('csrf_token', CSRF); fd.append('slots', seq.join(',')); fd.append('piece', val('piece_identite'));
+    fd.append('optional', seq.filter(function (k) { return r.required.indexOf(k) === -1; }).join(','));
     fetch('capture-api.php?action=create', { method: 'POST', body: fd, credentials: 'same-origin' })
-      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); })
+      .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, status: res.status, d: d }; }); })
       .then(function (res) {
         if (run !== cap.run) return;
         if (!res.ok) { capExpired(res.d.message || (res.status === 401 ? 'Session expirée : reconnectez-vous.' : 'Le QR code n\'a pas pu être créé.')); return; }
         cap.id = res.d.id; cap.url = res.d.url; cap.end = Date.now() + res.d.expires_in * 1000;
+        res.d.steps.forEach(function (s, i) { cap.steps[i].id = s.id; cap.steps[i].label = s.label; cap.steps[i].required = s.required; });
         if (typeof qrcode !== 'function') { capExpired('Le générateur de QR code n\'a pas pu être chargé.'); return; }
         var qr = qrcode(0, 'M'); qr.addData(cap.url); qr.make();
         capQr.innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
         var svg = capQr.querySelector('svg'); svg.setAttribute('width', '100%'); svg.setAttribute('height', '100%'); svg.setAttribute('aria-hidden', 'true');
         cap.dialog.querySelector('[data-capture-copy]').hidden = false;
         capState('En attente du téléphone…', 'wait');
+        capRenderSteps();
         capTick(); cap.tick = setInterval(capTick, 1000);
         capPoll(run);
       })
@@ -782,7 +839,7 @@ $errField = fn (string $name) => isset($errors[$name])
   function capTick() {
     var s = Math.max(0, Math.round((cap.end - Date.now()) / 1000));
     capStatus.querySelector('[data-timer]').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
-    if (!s && !cap.done) capExpired();
+    if (!s) capExpired(cap.steps.some(function (x) { return x.received; }) ? 'QR code expiré. Les photos reçues restent dans le formulaire.' : null);
   }
 
   function capPoll(run) {
@@ -792,56 +849,71 @@ $errField = fn (string $name) => isset($errors[$name])
         .then(function (r) { if (r.status === 401) throw new Error('401'); return r.json(); })
         .then(function (d) {
           if (run !== cap.run) return;
-          if (d.status === 'pending') { capState('En attente du téléphone…', 'wait'); capPoll(run); }
-          else if (d.status === 'opened') { capState('Téléphone connecté · prise de la photo en cours…', 'live'); capPoll(run); }
-          else if (d.status === 'uploaded') { capFetch(run); }
-          else if (d.status === 'expired') capExpired();
-          else capExpired('Ce QR code n\'est plus actif. Générez-en un nouveau.');
+          if (d.status === 'expired' || d.status === 'cancelled') { capExpired(d.status === 'expired' ? null : 'Ce QR code n\'est plus actif. Générez-en un nouveau.'); return; }
+          var fetches = [];
+          d.steps.forEach(function (ds) {
+            var s = cap.steps.filter(function (x) { return x.id === ds.id; })[0];
+            if (!s) return;
+            s.status = ds.status;
+            // Photo reçue (ou reprise : nouvelle version) → récupérée et placée dans sa pièce
+            if (ds.status === 'uploaded' && ds.version && ds.version !== s.version) { s.version = ds.version; fetches.push(capFetch(run, s)); }
+          });
+          // Pièce « en cours sur le téléphone » : seulement une fois le QR code flashé
+          cap.next = d.status === 'opened' ? (cap.steps.filter(function (x) { return !stepDone(x) && x.status === 'pending'; })[0] || null) : null;
+          if (!cap.steps.every(stepDone)) {
+            var got = cap.steps.filter(stepDone).length;
+            capState(d.status === 'opened'
+              ? (got ? got + ' sur ' + cap.steps.length + ' reçue' + (got > 1 ? 's' : '') + ' · ' : 'Téléphone connecté · ') + (cap.next ? 'photo « ' + cap.next.label + ' » en cours…' : 'réception…')
+              : 'En attente du téléphone…', d.status === 'opened' ? 'live' : 'wait');
+          }
+          capRenderSteps();
+          Promise.all(fetches).then(function () { if (run === cap.run) capPoll(run); });
         })
         .catch(function (e) { if (run !== cap.run) return; if (e.message === '401') capExpired('Session expirée : reconnectez-vous.'); else capPoll(run); });
     }, 1500);
   }
 
-  /** Photo reçue : téléchargée une seule fois, puis placée dans la pièce comme un fichier choisi sur le poste. */
-  function capFetch(run) {
-    capStop();
-    capState('Photo reçue · ajout au dossier…', 'live');
-    fetch('capture-api.php?action=file&id=' + cap.id, { cache: 'no-store', credentials: 'same-origin' })
+  /** Photo reçue : téléchargée (une fois par version), puis placée dans sa pièce comme un fichier choisi sur le poste. */
+  function capFetch(run, s) {
+    return fetch('capture-api.php?action=file&id=' + s.id, { cache: 'no-store', credentials: 'same-origin' })
       .then(function (r) { if (!r.ok) throw new Error('http'); return r.blob(); })
       .then(function (blob) {
         if (run !== cap.run) return;
-        cap.done = true; cap.id = null;
         var type = blob.type === 'image/png' ? 'image/png' : 'image/jpeg';
-        var file = new File([blob], 'photo-mobile-' + cap.slot.replace('doc_', '') + (type === 'image/png' ? '.png' : '.jpg'), { type: type, lastModified: Date.now() });
-        var s = slots[cap.slot];
-        if (!s.accept([file], 'mobile')) { capExpired('Photo refusée : ' + s.error.textContent); return; }
-        capQr.classList.add('opacity-20');
-        capStatus.querySelector('[data-timer]').textContent = '';
-        capState('Photo ajoutée à « ' + document.getElementById('capture-piece').textContent + ' »', 'ok');
-        setTimeout(function () { if (run === cap.run && cap.dialog.open) cap.dialog.close(); }, 1200);
+        var file = new File([blob], 'photo-mobile-' + s.slot.replace('doc_', '') + (type === 'image/png' ? '.png' : '.jpg'), { type: type, lastModified: Date.now() });
+        if (!slots[s.slot].accept([file], 'mobile')) { capState('Photo « ' + s.label + ' » refusée : ' + slots[s.slot].error.textContent, 'error'); return; }
+        if (s.thumb) URL.revokeObjectURL(s.thumb);
+        s.thumb = URL.createObjectURL(file); s.received = true;
+        capRenderSteps();
       })
-      .catch(function () { if (run === cap.run) capExpired('La photo n\'a pas pu être récupérée. Générez un nouveau QR code.'); });
+      .catch(function () { if (run === cap.run) capState('La photo « ' + s.label + ' » n\'a pas pu être récupérée : reprenez-la sur le téléphone.', 'error'); });
   }
 
-  /** Fermeture : QR code encore actif → annulé côté serveur (photo provisoire effacée). */
+  /** Fermeture (validation ou annulation) : la session est close côté serveur (plus aucun envoi possible). */
   cap.dialog.addEventListener('close', function () {
     cap.run++;
     capStop();
-    if (cap.id && !cap.done) {
+    if (cap.id) {
       var fd = new FormData(); fd.append('csrf_token', CSRF); fd.append('id', cap.id);
       fetch('capture-api.php?action=cancel', { method: 'POST', body: fd, credentials: 'same-origin', keepalive: true }).catch(function () {});
     }
     cap.id = null;
+    cap.steps.forEach(function (s) { if (s.thumb) URL.revokeObjectURL(s.thumb); s.thumb = null; });
     if (cap.opener) cap.opener.focus();
   });
   cap.dialog.querySelectorAll('[data-capture-close]').forEach(function (b) { b.addEventListener('click', function () { cap.dialog.close(); }); });
+  cap.dialog.querySelector('[data-capture-validate]').addEventListener('click', function () { cap.dialog.close(); });
   cap.dialog.addEventListener('click', function (e) { if (e.target === cap.dialog) cap.dialog.close(); });
-  cap.dialog.querySelector('[data-capture-renew]').addEventListener('click', function () { captureOpen(cap.slot); });
+  cap.dialog.querySelector('[data-capture-renew]').addEventListener('click', function () {
+    // Nouveau QR code : uniquement pour les pièces pas encore reçues
+    var left = cap.steps.filter(function (s) { return !stepDone(s); });
+    captureOpen(left.length ? left[0].slot : cap.first);
+  });
   cap.dialog.querySelector('[data-capture-copy]').addEventListener('click', function () {
     var b = this;
     (navigator.clipboard ? navigator.clipboard.writeText(cap.url) : Promise.reject()).then(function () {
       b.textContent = 'Lien copié'; setTimeout(function () { b.textContent = 'Copier le lien (WhatsApp…)'; }, 1800);
-    }, function () { window.prompt('Lien de capture (valable 10 minutes) :', cap.url); });
+    }, function () { window.prompt('Lien de capture (valable 15 minutes) :', cap.url); });
   });
 
   applyType();

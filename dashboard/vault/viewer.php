@@ -97,18 +97,10 @@ if (!function_exists('imagecreatefromjpeg')) {
 }
 ini_set('memory_limit', '256M');   // photo de 12 Mpx décompressée : ~50 Mo
 
-$img = $mime === 'image/png' ? @imagecreatefrompng($path) : @imagecreatefromjpeg($path);
+// Image ouverte et remise à l'endroit (EXIF) — même lecture que le recadrage des photos de profil (avatar.php)
+$img = kyc_open_image($path, $mime);
 if (!$img) {
     viewer_fail(422, 'Image illisible.');
-}
-
-// Photo prise au téléphone : remise à l'endroit d'après l'EXIF
-if ($mime === 'image/jpeg' && function_exists('exif_read_data')) {
-    $orientation = (int) (@exif_read_data($path)['Orientation'] ?? 1);
-    $angle = [3 => 180, 6 => -90, 8 => 90][$orientation] ?? 0;
-    if ($angle) {
-        $img = imagerotate($img, $angle, 0) ?: $img;
-    }
 }
 
 // Réduction (affichage écran) et fond blanc sous la transparence des PNG

@@ -132,7 +132,7 @@ try {
 
     [$where, $params] = clients_where($words, $type);
     $offset = ($page - 1) * CLIENTS_PER_PAGE;
-    $st = $pdo->prepare("SELECT c.uuid, c.type_client, c.nom_complet, c.telephone, c.numero_identifiant, c.created_at,
+    $st = $pdo->prepare("SELECT c.uuid, c.type_client, c.nom_complet, c.telephone, c.numero_identifiant, c.created_at, c.avatar_path,
                                 (SELECT COUNT(*) FROM client_documents d WHERE d.client_id = c.id) AS nb_docs
                          FROM clients c {$where}
                          ORDER BY c.created_at DESC, c.id DESC
@@ -254,8 +254,7 @@ function render_results(): string
                                 <td class="whitespace-nowrap px-5 py-3.5"><?= type_badge($r['type_client']) ?></td>
                                 <td class="px-5 py-3.5">
                                     <div class="flex items-center gap-3">
-                                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold
-                                                     <?= $r['type_client'] === 'entreprise' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700' ?>" aria-hidden="true"><?= h(kyc_initials($r['nom_complet'])) ?></span>
+                                        <?= avatar_html($r, kyc_initials($r['nom_complet']), 'h-9 w-9 text-xs') ?>
                                         <div class="min-w-0">
                                             <a href="<?= h($url) ?>" class="block max-w-xs truncate font-medium text-slate-900 hover:text-blue-700 focus:outline-none focus-visible:underline"><?= mark($r['nom_complet'], $words) ?></a>
                                             <span class="text-xs text-slate-500"><?= docs_label((int) $r['nb_docs']) ?></span>
@@ -285,8 +284,7 @@ function render_results(): string
                 [$day, $time] = vault_date($r['created_at']); ?>
                 <li class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div class="flex items-start gap-3">
-                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold
-                                     <?= $r['type_client'] === 'entreprise' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700' ?>" aria-hidden="true"><?= h(kyc_initials($r['nom_complet'])) ?></span>
+                        <?= avatar_html($r, kyc_initials($r['nom_complet']), 'h-10 w-10 text-sm') ?>
                         <div class="min-w-0 flex-1">
                             <div class="flex items-start justify-between gap-2">
                                 <a href="<?= h($url) ?>" class="min-w-0 break-words font-semibold text-slate-900"><?= mark($r['nom_complet'], $words) ?></a>

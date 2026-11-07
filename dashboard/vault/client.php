@@ -41,7 +41,7 @@ if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
 
 // ---------- Client et pièces (une requête, jointure) ----------
 $st = vault_db()->prepare('SELECT c.id, c.uuid, c.type_client, c.nom_complet, c.telephone, c.email, c.adresse, c.numero_identifiant,
-                                  c.created_at, c.updated_at,
+                                  c.created_at, c.updated_at, c.avatar_path,
                                   d.id AS doc_id, d.type_document, d.nom_original, d.taille_fichier, d.mime_type, d.created_at AS doc_created_at
                            FROM clients c
                            LEFT JOIN client_documents d ON d.client_id = c.id
@@ -72,9 +72,16 @@ foreach ($rows as $r) {
     ];
 }
 
+// Pièces en image dans lesquelles recadrer la photo de profil (CNI recto et passeport en premier)
+$order = ['cni_recto' => 0, 'passeport' => 1];
+$photoDocs = array_values(array_filter($docs, fn ($d) => $d['kind'] === 'image' && $d['type'] !== 'cni_verso'));
+usort($photoDocs, fn ($a, $b) => ($order[$a['type']] ?? 9) <=> ($order[$b['type']] ?? 9));
+$photoDocs = array_map(fn ($d) => ['id' => $d['id'], 'type' => $d['type'], 'label' => $d['label'], 'src' => $d['src']], $photoDocs);
+
 vault_audit('client_view', $client, null, $user['name'] . ' a ouvert la fiche du client ' . $client['nom_complet'] . ' (' . count($docs) . ' pièce' . (count($docs) > 1 ? 's' : '') . ')');
 
-// Liens signés créés : la session peut être libérée
+// Liens signés et jeton CSRF (photo de profil) créés : la session peut être libérée
+$csrf = csrf_token();
 session_write_close();
 
 // ---------- Complétude du dossier ----------
@@ -152,8 +159,16 @@ $icon = [
     <!-- ==================== EN-TÊTE DU DOSSIER ==================== -->
     <section class="rounded-2xl border border-slate-200 bg-white shadow-sm" aria-labelledby="client-name">
         <div class="flex flex-col gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:p-6">
-            <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-lg font-bold
-                         <?= $isCompany ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700' ?>" aria-hidden="true"><?= h($initials ?: '?') ?></span>
+            <!-- Photo de profil (recadrée dans la pièce d'identité) ou initiales -->
+            <div class="relative shrink-0 self-start sm:self-center" id="photo" data-initials="<?= h($initials ?: '?') ?>">
+                <?= avatar_html($client, $initials, 'h-16 w-16 text-xl', 'rounded-2xl') ?>
+                <?php if ($photoDocs): ?>
+                    <button type="button" data-avatar-edit class="no-print absolute -bottom-1.5 -right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-white text-slate-600 shadow-md ring-1 ring-slate-200 transition hover:text-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-200"
+                            aria-label="<?= $client['avatar_path'] ? 'Modifier la photo de profil' : 'Définir la photo de profil' ?>" title="Photo de profil">
+                        <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+                    </button>
+                <?php endif; ?>
+            </div>
             <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-2.5">
                     <h1 id="client-name" class="break-words text-2xl font-bold tracking-tight text-slate-900"><?= h($client['nom_complet']) ?></h1>
@@ -162,6 +177,12 @@ $icon = [
                         : '<span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">Particulier</span>' ?>
                 </div>
                 <p class="mt-1 text-sm text-slate-500">Dossier créé le <?= h($createdDay) ?> à <?= h($createdTime) ?> · Réf. <span class="font-mono text-xs"><?= h($client['uuid']) ?></span></p>
+                <?php if ($photoDocs && !$client['avatar_path']): ?>
+                    <button type="button" data-avatar-edit class="no-print mt-1.5 inline-flex items-center gap-1.5 text-sm font-medium text-indigo-700 hover:text-indigo-900 focus:outline-none focus-visible:underline">
+                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                        Définir la photo de profil à partir de la pièce d'identité
+                    </button>
+                <?php endif; ?>
             </div>
             <?php if ($missing): ?>
                 <div class="rounded-xl bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900 ring-1 ring-inset ring-amber-600/20 sm:max-w-xs">
@@ -291,6 +312,70 @@ $icon = [
         </footer>
     </div>
 </dialog>
+
+<?php if ($photoDocs): ?>
+<!-- ==================== PHOTO DE PROFIL : RECADRAGE DANS LA PIÈCE D'IDENTITÉ ==================== -->
+<dialog id="avatar-dialog" aria-labelledby="avatar-title"
+        class="w-[min(780px,96vw)] rounded-2xl p-0 text-slate-900 shadow-2xl backdrop:bg-slate-900/70 backdrop:backdrop-blur-sm">
+    <div class="p-5 sm:p-6">
+        <div class="flex items-start gap-3">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600" aria-hidden="true">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+            </span>
+            <div class="min-w-0 flex-1">
+                <h2 id="avatar-title" class="text-base font-semibold">Photo de profil</h2>
+                <p class="text-sm text-slate-600">Placez le cadre sur le visage, sur la photo de la pièce d'identité.</p>
+            </div>
+            <button type="button" data-avatar-close class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-4 focus:ring-slate-200" aria-label="Fermer">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+        </div>
+
+        <?php if (count($photoDocs) > 1): ?>
+            <div class="mt-4 inline-flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1" role="group" aria-label="Pièce source">
+                <?php foreach ($photoDocs as $i => $pd): ?>
+                    <button type="button" data-avatar-doc="<?= $i ?>" aria-pressed="<?= $i === 0 ? 'true' : 'false' ?>"
+                            class="rounded-md px-3 py-1.5 text-sm font-medium text-slate-600 aria-pressed:bg-white aria-pressed:text-slate-900 aria-pressed:shadow-sm"><?= h($pd['label']) ?></button>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
+        <div class="mt-4 grid gap-5 sm:grid-cols-[minmax(0,1fr)_168px]">
+            <div id="crop-stage" class="relative min-h-[12rem] touch-none select-none overflow-hidden rounded-xl bg-slate-900">
+                <img id="crop-img" alt="" draggable="false" class="pointer-events-none block w-full">
+                <div id="crop-box" hidden tabindex="0" role="group" aria-label="Cadre de la photo : flèches pour déplacer, + et − pour agrandir ou réduire"
+                     class="absolute cursor-move rounded-lg border-2 border-white shadow-[0_0_0_9999px_rgba(15,23,42,0.6)] outline-none focus-visible:border-indigo-300">
+                    <span class="pointer-events-none absolute inset-0 rounded-full border border-white/60"></span>
+                    <span data-handle class="absolute -bottom-2.5 -right-2.5 h-5 w-5 cursor-nwse-resize rounded-full border-2 border-white bg-indigo-600 shadow"></span>
+                </div>
+                <div id="crop-loading" class="absolute inset-0 flex items-center justify-center">
+                    <svg class="h-8 w-8 animate-spin text-white" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".25" stroke-width="3"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+                </div>
+            </div>
+            <div class="flex flex-col items-center gap-3">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Aperçu</p>
+                <canvas id="crop-preview" width="224" height="224" class="h-28 w-28 rounded-full bg-slate-100 ring-1 ring-slate-200"></canvas>
+                <label class="w-full text-xs font-medium text-slate-600">Taille du cadre
+                    <input type="range" id="crop-zoom" min="8" max="100" value="40" class="mt-1 w-full accent-indigo-600">
+                </label>
+                <p class="text-center text-[11px] leading-snug text-slate-500">Le filigrane de l'aperçu n'apparaît pas sur la photo enregistrée.</p>
+            </div>
+        </div>
+
+        <p id="avatar-error" role="alert" hidden class="mt-4 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-800 ring-1 ring-inset ring-red-600/20"></p>
+
+        <div class="mt-5 flex flex-wrap items-center justify-between gap-2">
+            <?php if ($client['avatar_path']): ?>
+                <button type="button" data-avatar-delete class="text-sm font-medium text-red-700 hover:text-red-900">Retirer la photo</button>
+            <?php else: ?><span></span><?php endif; ?>
+            <span class="flex gap-2">
+                <button type="button" data-avatar-close class="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50">Annuler</button>
+                <button type="button" data-avatar-save disabled class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-200 disabled:opacity-60">Enregistrer la photo</button>
+            </span>
+        </div>
+    </div>
+</dialog>
+<?php endif; ?>
 
 <script src="assets/pdfjs/pdf.min.js"></script>
 <script>
@@ -454,6 +539,131 @@ $icon = [
       }, function () {});
     });
   });
+
+  // ---------- Photo de profil : recadrage dans la pièce d'identité ----------
+  var av = document.getElementById('avatar-dialog');
+  if (!av) return;
+  var DOCS = <?= json_encode($photoDocs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+  var CSRF = <?= json_encode($csrf) ?>, UUID = <?= json_encode($client['uuid']) ?>;
+  var img = document.getElementById('crop-img'), box = document.getElementById('crop-box'), stageEl = document.getElementById('crop-stage');
+  var zoom = document.getElementById('crop-zoom'), preview = document.getElementById('crop-preview'), saveBtn = av.querySelector('[data-avatar-save]');
+  var errBox = document.getElementById('avatar-error');
+  var current = 0, crop = null;   // crop : { x, y, s } en fractions de la LARGEUR affichée (x, s) et de la HAUTEUR (y)
+
+  /** Cadre proposé : emplacement habituel de la photo sur la pièce (CNI : à gauche ; passeport : page photo). */
+  function defaultCrop(type, ratio) {           // ratio = hauteur / largeur de l'image
+    var s, x, yc;
+    if (type === 'cni_recto') { s = 0.27; x = 0.04; yc = 0.56; }
+    else if (type === 'passeport') { s = 0.26; x = 0.05; yc = 0.52; }
+    else { s = Math.min(0.5, 0.5 * ratio); x = (1 - s) / 2; yc = 0.5; }
+    var y = yc - (s / ratio) / 2;                  // s est relatif à la largeur : en hauteur il vaut s / ratio
+    return clampCrop({ x: x, y: y, s: s }, ratio);
+  }
+  function clampCrop(c, ratio) {
+    var maxS = Math.min(1, ratio);                 // le carré tient dans la largeur et dans la hauteur
+    c.s = Math.max(0.05, Math.min(c.s, maxS));
+    c.x = Math.max(0, Math.min(c.x, 1 - c.s));
+    c.y = Math.max(0, Math.min(c.y, 1 - c.s / ratio));
+    return c;
+  }
+  function ratio() { return img.naturalHeight / img.naturalWidth || 1; }
+
+  function render() {
+    if (!crop) return;
+    var W = img.clientWidth, H = img.clientHeight;
+    box.style.left = (crop.x * W) + 'px'; box.style.top = (crop.y * H) + 'px';
+    box.style.width = box.style.height = (crop.s * W) + 'px';
+    zoom.value = Math.round(crop.s / Math.min(1, ratio()) * 100);
+    var ctx = preview.getContext('2d'), N = img.naturalWidth;
+    ctx.clearRect(0, 0, preview.width, preview.height);
+    ctx.drawImage(img, crop.x * N, crop.y * img.naturalHeight, crop.s * N, crop.s * N, 0, 0, preview.width, preview.height);
+  }
+
+  function load(i) {
+    current = i; crop = null; box.hidden = true; saveBtn.disabled = true; errBox.hidden = true;
+    document.getElementById('crop-loading').hidden = false;
+    av.querySelectorAll('[data-avatar-doc]').forEach(function (b) { b.setAttribute('aria-pressed', String(+b.getAttribute('data-avatar-doc') === i)); });
+    img.onload = function () {
+      document.getElementById('crop-loading').hidden = true;
+      crop = defaultCrop(DOCS[i].type, ratio());
+      box.hidden = false; saveBtn.disabled = false;
+      render(); box.focus({ preventScroll: true });
+    };
+    img.onerror = function () {
+      document.getElementById('crop-loading').hidden = true;
+      showErr('La pièce n\'a pas pu être chargée (lien expiré au bout de 10 minutes) : rechargez la fiche.');
+    };
+    img.src = DOCS[i].src;
+  }
+  function showErr(m) { errBox.textContent = m; errBox.hidden = !m; }
+
+  // Déplacement et redimensionnement (souris, doigt, stylet)
+  var drag = null;
+  box.addEventListener('pointerdown', function (e) {
+    e.preventDefault(); box.setPointerCapture(e.pointerId);
+    drag = { mode: e.target.hasAttribute('data-handle') ? 'resize' : 'move', x0: e.clientX, y0: e.clientY, c: { x: crop.x, y: crop.y, s: crop.s } };
+  });
+  box.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    var W = img.clientWidth, H = img.clientHeight, dx = (e.clientX - drag.x0), dy = (e.clientY - drag.y0);
+    if (drag.mode === 'move') crop = clampCrop({ x: drag.c.x + dx / W, y: drag.c.y + dy / H, s: drag.c.s }, ratio());
+    else crop = clampCrop({ x: drag.c.x, y: drag.c.y, s: drag.c.s + Math.max(dx, dy) / W }, ratio());
+    render();
+  });
+  ['pointerup', 'pointercancel'].forEach(function (t) { box.addEventListener(t, function () { drag = null; }); });
+  // Clavier : flèches (Maj : pas plus grand), + / − pour la taille
+  box.addEventListener('keydown', function (e) {
+    var st = e.shiftKey ? 0.05 : 0.01, c = { x: crop.x, y: crop.y, s: crop.s };
+    if (e.key === 'ArrowLeft') c.x -= st; else if (e.key === 'ArrowRight') c.x += st;
+    else if (e.key === 'ArrowUp') c.y -= st; else if (e.key === 'ArrowDown') c.y += st;
+    else if (e.key === '+' || e.key === '=') { c.s += st; c.x -= st / 2; c.y -= st / 2 / ratio(); }
+    else if (e.key === '-') { c.s -= st; c.x += st / 2; c.y += st / 2 / ratio(); }
+    else return;
+    e.preventDefault(); crop = clampCrop(c, ratio()); render();
+  });
+  // Taille du cadre (autour de son centre)
+  zoom.addEventListener('input', function () {
+    if (!crop) return;
+    var r = ratio(), s = Math.min(1, r) * zoom.value / 100, cx = crop.x + crop.s / 2, cy = crop.y + crop.s / r / 2;
+    crop = clampCrop({ x: cx - s / 2, y: cy - s / r / 2, s: s }, r); render();
+  });
+  if (window.ResizeObserver) new ResizeObserver(render).observe(stageEl);
+
+  function openAvatar() { showErr(''); av.showModal(); load(0); }
+  document.querySelectorAll('[data-avatar-edit]').forEach(function (b) { b.addEventListener('click', openAvatar); });
+  av.querySelectorAll('[data-avatar-doc]').forEach(function (b) { b.addEventListener('click', function () { load(+b.getAttribute('data-avatar-doc')); }); });
+  av.querySelectorAll('[data-avatar-close]').forEach(function (b) { b.addEventListener('click', function () { av.close(); }); });
+  av.addEventListener('click', function (e) { if (e.target === av) av.close(); });
+
+  function post(data) {
+    var fd = new FormData(); fd.append('csrf_token', CSRF); fd.append('c', UUID);
+    Object.keys(data).forEach(function (k) { fd.append(k, data[k]); });
+    return fetch('avatar.php', { method: 'POST', body: fd, credentials: 'same-origin' })
+      .then(function (r) { return r.json().then(function (d) { if (!r.ok || !d.ok) throw new Error(d.error || 'Erreur'); return d; }); });
+  }
+  saveBtn.addEventListener('click', function () {
+    if (!crop) return;
+    saveBtn.disabled = true; saveBtn.textContent = 'Enregistrement…'; showErr('');
+    post({ action: 'save', doc: DOCS[current].id, x: crop.x.toFixed(5), y: crop.y.toFixed(5), size: crop.s.toFixed(5) })
+      .then(function (d) {
+        // Avatar de l'en-tête remplacé par la nouvelle photo
+        var holder = document.getElementById('photo'), old = holder.querySelector('[data-avatar]');
+        var pic = new Image(); pic.src = d.url; pic.alt = ''; pic.draggable = false; pic.setAttribute('data-avatar', '');
+        pic.className = 'h-16 w-16 rounded-2xl shrink-0 bg-slate-100 object-cover ring-1 ring-slate-200';
+        old.replaceWith(pic);
+        av.close();
+        saveBtn.textContent = 'Enregistrer la photo'; saveBtn.disabled = false;
+        document.querySelectorAll('button[data-avatar-edit]:not(.absolute)').forEach(function (b) { b.remove(); });
+      })
+      .catch(function (e) { showErr(e.message); saveBtn.textContent = 'Enregistrer la photo'; saveBtn.disabled = false; });
+  });
+  var del = av.querySelector('[data-avatar-delete]');
+  if (del) del.addEventListener('click', function () {
+    post({ action: 'delete' }).then(function () { location.reload(); }).catch(function (e) { showErr(e.message); });
+  });
+
+  // Arrivée depuis « Définir la photo de profil » (création du dossier) : recadrage ouvert directement
+  if (location.hash === '#photo' && !<?= json_encode((bool) $client['avatar_path']) ?>) openAvatar();
 })();
 </script>
 </body>
