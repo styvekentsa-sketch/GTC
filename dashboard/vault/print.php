@@ -50,14 +50,12 @@ if (!$client) {
 
 // ---------- Pièces du dossier : liens signés propres à l'impression ----------
 $docs = [];
-foreach (db_all('SELECT id, type_document, nom_original, taille_fichier, mime_type, created_at FROM client_documents WHERE client_id = ? ORDER BY created_at, id', [(int) $client['id']]) as $d) {
+foreach (db_all('SELECT id, type_document, mime_type FROM client_documents WHERE client_id = ? ORDER BY created_at, id', [(int) $client['id']]) as $d) {
     $isPdf  = $d['mime_type'] === 'application/pdf';
     $docs[] = [
         'id'    => (int) $d['id'],
         'type'  => $d['type_document'],
         'label' => KYC_DOC_LABELS[$d['type_document']] ?? 'Document',
-        'name'  => (string) $d['nom_original'],
-        'meta'  => ($isPdf ? 'PDF' : 'Image') . ' · ' . vault_size((int) $d['taille_fichier']) . ' · versée le ' . implode(' à ', vault_date($d['created_at'])),
         'kind'  => $isPdf ? 'pdf' : 'image',
         'src'   => vault_viewer_url((int) $d['id'], $isPdf ? 'pdf' : 'print'),
     ];
@@ -168,11 +166,11 @@ $fields = [
                 <p class="kp-empty">Aucune pièce n'a été versée à ce dossier.</p>
             <?php endif; ?>
             <?php if ($idDocs): ?>
-                <!-- Pièce d'identité : recto et verso ensemble, cadres identiques, bloc jamais coupé -->
+                <!-- Pièce d'identité : recto et verso ensemble, sans légende technique (fichier, taille, date), bloc jamais coupé.
+                     La carte est détourée côté serveur (viewer.php, mode print) et imprimée au plus près de sa taille réelle -->
                 <section class="kp-id-pair<?= count($idDocs) === 1 ? ' kp-id-pair--single' : '' ?>" aria-label="Pièce d'identité">
                     <?php foreach ($idDocs as $d): ?>
                         <figure class="kp-piece kp-piece--image kp-id" data-piece data-kind="image" data-src="<?= h($d['src']) ?>" data-label="<?= h($d['label']) ?>">
-                            <figcaption><strong><?= h($d['label']) ?></strong> <span><?= h($d['name']) ?> · <?= h($d['meta']) ?></span></figcaption>
                             <div class="kp-piece__media">
                                 <img src="<?= h($d['src']) ?>" alt="<?= h($d['label']) ?> (filigranée)" data-wait>
                             </div>
@@ -183,7 +181,7 @@ $fields = [
             <?php endif; ?>
             <?php foreach ($otherDocs as $d): ?>
                 <figure class="kp-piece kp-piece--<?= h($d['kind']) ?>" data-piece data-kind="<?= h($d['kind']) ?>" data-src="<?= h($d['src']) ?>" data-label="<?= h($d['label']) ?>">
-                    <figcaption><strong><?= h($d['label']) ?></strong> <span><?= h($d['name']) ?> · <?= h($d['meta']) ?></span></figcaption>
+                    <figcaption><strong><?= h($d['label']) ?></strong></figcaption>
                     <div class="kp-piece__media">
                         <?php if ($d['kind'] === 'image'): ?>
                             <img src="<?= h($d['src']) ?>" alt="<?= h($d['label']) ?> (filigranée)" data-wait>

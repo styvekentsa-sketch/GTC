@@ -113,3 +113,20 @@
 .kp-identity { margin-top: 3mm; padding: 3mm 4mm; }
 .kp-title { margin: 4mm 0 2mm; }
 .kp-confidential { margin-top: 2mm; padding: 1.5mm 3mm; font-size: 8px; line-height: 1.35; }
+
+/* ==========================================================================
+   Lisibilité des pièces d'identité (sans légende technique) : la carte arrive détourée de la photo
+   (viewer.php, mode print) et s'imprime au plus près de sa taille réelle (85,6 × 54 mm) : chaque cadre prend
+   jusqu'à toute la largeur de sa colonne (≈ 81 mm) et 64 mm de haut (≈ 242 px, sous la limite de 350 px) :
+   ≈ 75 % de la taille réelle (2 fois plus grand qu'avant le détourage) : le dossier d'un particulier (fiche, recto, verso, mention) tient sur UNE page.
+   Pas de hauteur fixe : une carte en paysage n'est plus réduite par un cadre trop bas.
+   ========================================================================== */
+.kp-id-pair { align-items: start; gap: 1.5mm 5mm; padding: 2mm 3mm; margin-bottom: 3mm; }
+.kp-id .kp-piece__media { height: auto; min-height: 30mm; padding: 0; background: none; }
+.kp-id .kp-piece__media img { width: auto; height: auto; max-width: 100%; max-height: 64mm; object-fit: contain; border: 1px solid var(--line); border-radius: 1.5mm; }
+.kp-id-pair--single .kp-id .kp-piece__media img { max-width: 110mm; }
+.kp-id-pair--single .kp-id .kp-piece__media { height: auto; align-items: center; }
+/* Impression sans lissage excessif : texte fin de la carte plus net */
+@media print {
+  .kp-id .kp-piece__media img { image-rendering: auto; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
