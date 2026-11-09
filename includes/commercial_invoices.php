@@ -6,7 +6,9 @@
  * dashboard/print-commercial-invoice.php (impression avec l'en-tête officiel).
  *
  * Distinct des « Reçus de caisse » (table invoices, dashboard/invoices.php) : opérations de guichet.
+ * Client lié à son dossier GTC-Vault (vault_client_id, kyc_status) : includes/kyc_link.php.
  */
+require_once __DIR__ . '/kyc_link.php';
 
 /** Types de document : libellé, préfixe de numéro, titre imprimé, phrase du montant en lettres. */
 const CINV_TYPES = [
@@ -208,6 +210,7 @@ function cinv_input(): array
         'client_email'   => mb_strtolower(post('client_email')),
         'client_address' => post('client_address'),
         'client_niu'     => strtoupper(post('client_niu')),
+        'client_id_number' => strtoupper(post('client_id_number')),
         'issue_date'     => post('issue_date', date('Y-m-d')),
         'due_date'       => post('due_date'),
         'currency'       => post('currency', 'XAF'),
@@ -236,6 +239,14 @@ function cinv_input(): array
     }
     if ($d['client_niu'] !== '' && !preg_match('/^[A-Z0-9]{6,30}$/', $d['client_niu'])) {
         $e['client_niu'] = 'NIU invalide (lettres et chiffres).';
+    }
+    if ($d['client_id_number'] !== '' && !preg_match('/^[A-Z0-9\/.\s-]{4,100}$/u', $d['client_id_number'])) {
+        $e['client_id_number'] = 'N° de pièce invalide (lettres, chiffres, / . -).';
+    }
+    // Dossier GTC-Vault choisi dans la recherche (includes/kyc_link.php) : relu côté serveur
+    [$d['vault'], $vaultError] = kyc_link_from_post();
+    if ($vaultError) {
+        $e['vault_client'] = $vaultError;
     }
     $issue = DateTimeImmutable::createFromFormat('!Y-m-d', $d['issue_date']);
     if (!$issue || $issue->format('Y-m-d') !== $d['issue_date']) {
@@ -389,11 +400,16 @@ function cinv_save(array $d, array $calc, array $user, ?int $id = null): int
             'doc_type' => $d['doc_type'], 'status' => $d['status'], 'client_name' => $d['client_name'],
             'client_phone' => $d['client_phone'] ?: null, 'client_email' => $d['client_email'] ?: null,
             'client_address' => $d['client_address'] ?: null, 'client_niu' => $d['client_niu'] ?: null,
+            'client_id_number' => $d['client_id_number'] ?: null, 'vault_client_id' => $d['vault']['id'] ?? null,
             'issue_date' => $d['issue_date'], 'due_date' => $d['due_date'] ?: null, 'currency' => $d['currency'],
             'tax_rate' => $d['tax_rate'], 'subtotal' => $calc['subtotal'], 'tax_amount' => $calc['tax_amount'],
             'total' => $calc['total'], 'notes' => $d['notes'] ?: null,
             'columns_json' => json_encode($calc['columns'], JSON_UNESCAPED_UNICODE), 'updated_at' => db_now(),
         ];
+        // État du dossier KYC à l'émission : fixé quand le dossier est lié, conservé tant que le même dossier reste lié
+        $prevLink = $id !== null ? db_one('SELECT vault_client_id, kyc_status FROM commercial_invoices WHERE id = ?', [$id]) : null;
+        $fields['kyc_status'] = !$d['vault'] ? null
+            : ($prevLink && (int) $prevLink['vault_client_id'] === $d['vault']['id'] && $prevLink['kyc_status'] ? $prevLink['kyc_status'] : $d['vault']['status']);
         if ($id === null) {
             $fields += ['invoice_number' => cinv_next_number($d['doc_type'], $d['issue_date']),
                         'created_by' => (int) $user['id'], 'created_by_name' => $user['name'], 'created_at' => db_now()];

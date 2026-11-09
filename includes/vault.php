@@ -433,7 +433,7 @@ const VAULT_CSS = 'assets/css/vault.css';
 /** En-tête du Dashboard pour une page GTC-Vault (menu latéral, barre supérieure, entrée « GTC-Vault » active). */
 function vault_header(string $title): void
 {
-    dash_header($title, 'vault', [VAULT_CSS], true);
+    dash_header($title, 'vault', [VAULT_CSS, 'assets/css/kyc-link.css'], true);   // kyc-link.css : badge de conformité (documents financiers liés)
 }
 
 /** Icône SVG du Dashboard (includes/icons.php) ou tracé libre pour les icônes propres à GTC-Vault. */

@@ -18,6 +18,7 @@ require_once __DIR__ . '/../includes/settings.php';
 require_once __DIR__ . '/../includes/printers.php';
 require_once __DIR__ . '/../includes/csv_export.php';
 require_once __DIR__ . '/../includes/shipments.php';   // reçus « Fret / Transit » rattachés à un dossier de suivi
+require_once __DIR__ . '/../includes/kyc_link.php';    // passerelle GTC-Vault : client lié à son dossier KYC
 
 $user   = require_login();   // exige une session valide ($_SESSION['logged_in'] === true)
 require_roles(OPERATION_ROLES);   // pas d'accès pour le rôle Secrétaire / Accueil
@@ -49,6 +50,8 @@ function invoice_input(): array
     $d = [
         'client_name'     => post('client_name'),
         'client_phone'    => post('client_phone'),
+        'client_address'  => post('client_address'),
+        'client_id_number' => strtoupper(post('client_id_number')),
         'operation_type'  => post('operation_type'),
         'amount_given'    => parse_number(post('amount_given')),
         'source_currency' => post('source_currency', 'XAF'),
@@ -89,6 +92,17 @@ function invoice_input(): array
     }
     if ($d['client_phone'] !== '' && !preg_match('/^[0-9+().\s-]{6,50}$/', $d['client_phone'])) {
         $e['client_phone'] = 'Numéro de téléphone invalide.';
+    }
+    if (mb_strlen($d['client_address']) > 255) {
+        $e['client_address'] = 'Adresse trop longue (255 caractères au plus).';
+    }
+    if ($d['client_id_number'] !== '' && !preg_match('/^[A-Z0-9\/.\s-]{4,100}$/u', $d['client_id_number'])) {
+        $e['client_id_number'] = 'N° de pièce invalide (lettres, chiffres, / . -).';
+    }
+    // Dossier GTC-Vault choisi dans la recherche : relu côté serveur (identité et état KYC jamais repris du navigateur)
+    [$d['vault'], $vaultError] = kyc_link_from_post();
+    if ($vaultError) {
+        $e['vault_client'] = $vaultError;
     }
     if (!isset(OPERATION_TYPES[$d['operation_type']])) {
         $e['operation_type'] = "Choisissez le type d'opération.";
@@ -135,6 +149,8 @@ function invoice_input(): array
         }
     }
     $d['client_phone'] = $d['client_phone'] === '' ? null : $d['client_phone'];
+    $d['client_address'] = $d['client_address'] === '' ? null : $d['client_address'];
+    $d['client_id_number'] = $d['client_id_number'] === '' ? null : $d['client_id_number'];
     $d['transaction_reason'] = $d['transaction_reason'] === '' ? null : $d['transaction_reason'];
     $d['sender_name'] = null;   // champ retiré : le motif peut contenir le nom de l'expéditeur (colonne gardée pour l'historique)
     return [$d, $e];
@@ -162,13 +178,15 @@ if (is_post()) {
                     db_query(
                         'INSERT INTO invoices (invoice_number, client_name, client_phone, operation_type, source_currency,
                          target_currency, amount_given, exchange_rate, rate_direction, amount_received, fees, payment_method,
-                         transaction_reason, sender_name, printer_id, status, issue_date, agent_id, agent_name, created_at, shipment_id)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                         transaction_reason, sender_name, printer_id, status, issue_date, agent_id, agent_name, created_at, shipment_id,
+                         client_address, client_id_number, vault_client_id, kyc_status)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                         [$number, $form['client_name'], $form['client_phone'], $form['operation_type'], $form['source_currency'],
                          $form['target_currency'], $form['amount_given'], $form['exchange_rate'], $form['rate_direction'],
                          $form['amount_received'], $form['fees'], $form['payment_method'], $form['transaction_reason'], $form['sender_name'],
                          $form['printer_id'] ?: null, 'paid', date('Y-m-d'),
-                         (int) $_SESSION['user_id'], (string) $_SESSION['user_name'], db_now(), $form['shipment_id']]
+                         (int) $_SESSION['user_id'], (string) $_SESSION['user_name'], db_now(), $form['shipment_id'],
+                         $form['client_address'], $form['client_id_number'], $form['vault']['id'] ?? null, $form['vault']['status'] ?? null]
                     );
                     $newId = (int) db()->lastInsertId();
                     activity_log('create', 'invoice', $newId, $number, array_filter([
@@ -176,7 +194,13 @@ if (is_post()) {
                         'montant' => invoice_amounts_text($form),
                         'paiement' => $form['payment_method'],
                         'dossier'  => $form['shipment_code'],
+                        'GTC-Vault' => $form['vault'] ? KYC_LINK_STATES[$form['vault']['status']]['label'] : '',
                     ]));
+                    // Traçabilité croisée : le reçu apparaît dans le journal et la fiche du dossier KYC
+                    if ($form['vault']) {
+                        kyc_link_audit($form['vault'], 'Reçu de caisse', $number,
+                            (OPERATION_TYPES[$form['operation_type']] ?? $form['operation_type']) . ', ' . invoice_amounts_text($form), $user);
+                    }
                     flash('success', "Reçu {$number} enregistré.");
                     redirect('print-invoice.php?' . http_build_query(array_filter(['id' => $newId, 'printer_id' => $form['printer_id'], 'autoprint' => 1])));
                 } catch (PDOException $ex) {
@@ -240,6 +264,7 @@ function invoice_row(array $inv): string
         <td data-label="Client"><span class="cell-stack">
             <?= e($inv['client_name']) ?>
             <?php if ($inv['client_phone']): ?><small class="cell-sub"><?= e($inv['client_phone']) ?></small><?php endif; ?>
+            <?php if (!empty($inv['kyc_status'])): ?><?= kyc_badge($inv['kyc_status'], [], true) ?><?php endif; ?>
         </span></td>
         <td data-label="Opération"><?= e(OPERATION_TYPES[$inv['operation_type']] ?? $inv['operation_type']) ?></td>
         <td data-label="Montants" class="num"><span class="cell-stack">
@@ -278,7 +303,7 @@ if ($action === 'view') {
         redirect('invoices.php');
     }
 
-    dash_header('Reçu de caisse ' . $inv['invoice_number'], 'invoices');
+    dash_header('Reçu de caisse ' . $inv['invoice_number'], 'invoices', ['assets/css/kyc-link.css']);
     ?>
     <div class="toolbar">
         <a href="invoices.php?action=list" class="btn btn--ghost"><?= icon('arrow-left') ?> Tous les reçus</a>
@@ -313,6 +338,9 @@ if ($action === 'view') {
             <dl class="detail-list">
                 <div><dt>Client</dt><dd><?= e($inv['client_name']) ?></dd></div>
                 <div><dt>Téléphone / WhatsApp</dt><dd><?= e($inv['client_phone'] ?? '—') ?></dd></div>
+                <?php if (!empty($inv['client_id_number'])): ?><div><dt>N° CNI / passeport / RCCM</dt><dd><?= e($inv['client_id_number']) ?></dd></div><?php endif; ?>
+                <?php if (!empty($inv['client_address'])): ?><div><dt>Adresse</dt><dd><?= e($inv['client_address']) ?></dd></div><?php endif; ?>
+                <div><dt>Dossier GTC-Vault</dt><dd data-kyc-detail><?= kyc_link_summary(!empty($inv['vault_client_id']) ? (kyc_clients_by_ids([(int) $inv['vault_client_id']])[(int) $inv['vault_client_id']] ?? null) : null, $inv['kyc_status'] ?? null) ?></dd></div>
                 <div><dt>Mode de paiement</dt><dd><?= e(PAYMENT_METHODS[$inv['payment_method']] ?? $inv['payment_method']) ?></dd></div>
                 <div><dt>Motif</dt><dd><?= e(invoice_reason_text($inv)) ?></dd></div>
                 <?php if (!empty($inv['shipment_id']) && ($shp = shipment_find((int) $inv['shipment_id']))): ?>
@@ -359,9 +387,9 @@ if ($action === 'list') {
     $where  = [];
     $params = [];
     if ($q !== '') {
-        $where[] = '(invoice_number LIKE ? OR client_name LIKE ? OR client_phone LIKE ? OR agent_name LIKE ? OR sender_name LIKE ? OR transaction_reason LIKE ?)';
+        $where[] = '(invoice_number LIKE ? OR client_name LIKE ? OR client_phone LIKE ? OR agent_name LIKE ? OR sender_name LIKE ? OR transaction_reason LIKE ? OR client_id_number LIKE ?)';
         $like    = '%' . $q . '%';
-        array_push($params, $like, $like, $like, $like, $like, $like);
+        array_push($params, $like, $like, $like, $like, $like, $like, $like);
     }
     if (isset(OPERATION_TYPES[$type])) {
         $where[]  = 'operation_type = ?';
@@ -418,7 +446,7 @@ if ($action === 'list') {
     $offset   = ($page - 1) * $perPage;
     $rows     = db_all("SELECT * FROM invoices {$whereSql} ORDER BY id DESC LIMIT {$perPage} OFFSET {$offset}", $params);
 
-    dash_header('Tous les reçus', 'invoices');
+    dash_header('Tous les reçus', 'invoices', ['assets/css/kyc-link.css']);
     ?>
     <div class="toolbar">
         <form method="get" class="filters" role="search">
@@ -471,7 +499,7 @@ if ($action === 'list') {
 $prefilled = false;
 if ($form === null) {
     $form = [
-        'client_name' => '', 'client_phone' => '', 'operation_type' => 'Exchange',
+        'client_name' => '', 'client_phone' => '', 'client_address' => '', 'client_id_number' => '', 'vault' => null, 'operation_type' => 'Exchange',
         // Devise source par défaut : FCFA (la plupart des opérations du guichet) ; une autre devise se choisit dans la liste
         'amount_given' => '', 'source_currency' => 'XAF', 'target_currency' => settings_currency(),
         'exchange_rate' => '', 'rate_direction' => 'multiply', 'fees' => '0', 'payment_method' => 'Espèces', 'transaction_reason' => '',
@@ -522,7 +550,7 @@ $currencyOptions = function (string $selected): string {
     return $html;
 };
 
-dash_header('Reçus de caisse', 'invoices');
+dash_header('Reçus de caisse', 'invoices', ['assets/css/kyc-link.css']);
 ?>
 
 <?php if ($errors): ?>
@@ -551,6 +579,10 @@ dash_header('Reçus de caisse', 'invoices');
     <fieldset class="form-section">
         <legend>Client</legend>
         <div class="form-grid">
+            <!-- Passerelle GTC-Vault : recherche du dossier KYC, remplissage des champs, badge de conformité -->
+            <?= kyc_link_field($form['vault'] ?? null,
+                ['name' => 'client_name', 'phone' => 'client_phone', 'address' => 'client_address', 'idNumber' => 'client_id_number'],
+                $errors['vault_client'] ?? null) ?>
             <div class="field">
                 <label for="client_name">Nom &amp; Prénom *</label>
                 <input id="client_name" name="client_name" required maxlength="150" autocomplete="off" value="<?= e($form['client_name']) ?>"<?= $inv('client_name') ?>>
@@ -560,6 +592,16 @@ dash_header('Reçus de caisse', 'invoices');
                 <label for="client_phone">Téléphone / WhatsApp</label>
                 <input id="client_phone" name="client_phone" type="tel" maxlength="50" autocomplete="off" placeholder="+237 6XX XX XX XX" value="<?= e($form['client_phone'] ?? '') ?>"<?= $inv('client_phone') ?>>
                 <?= $err('client_phone') ?>
+            </div>
+            <div class="field">
+                <label for="client_id_number">N° CNI / passeport / RCCM</label>
+                <input id="client_id_number" name="client_id_number" maxlength="100" autocomplete="off" style="text-transform: uppercase" value="<?= e((string) ($form['client_id_number'] ?? '')) ?>"<?= $inv('client_id_number') ?>>
+                <?= $err('client_id_number') ?>
+            </div>
+            <div class="field">
+                <label for="client_address">Adresse</label>
+                <input id="client_address" name="client_address" maxlength="255" autocomplete="off" placeholder="Quartier, ville" value="<?= e((string) ($form['client_address'] ?? '')) ?>"<?= $inv('client_address') ?>>
+                <?= $err('client_address') ?>
             </div>
             <div class="field">
                 <label for="operation_type">Type d'opération *</label>
@@ -706,4 +748,5 @@ dash_header('Reçus de caisse', 'invoices');
 </section>
 
 <script src="<?= e(asset_url('assets/js/printers.js', site_root())) ?>" defer></script>
+<script src="<?= e(asset_url('assets/js/kyc-link.js', site_root())) ?>" defer></script>
 <?php dash_footer(); ?>

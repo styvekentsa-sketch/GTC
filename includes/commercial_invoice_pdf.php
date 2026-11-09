@@ -118,7 +118,8 @@ function cinv_pdf(array $inv, string $printedBy): string
     $cx = 110;
     $cw = $R - $cx;
     $clientLines = [];
-    foreach ([$inv['client_address'], $inv['client_phone'] ? 'Tél. : ' . $inv['client_phone'] : '', $inv['client_email'], $inv['client_niu'] ? 'NIU : ' . $inv['client_niu'] : ''] as $line) {
+    foreach ([$inv['client_address'], $inv['client_phone'] ? 'Tél. : ' . $inv['client_phone'] : '', $inv['client_email'], $inv['client_niu'] ? 'NIU : ' . $inv['client_niu'] : '',
+             !empty($inv['client_id_number']) ? 'N° pièce : ' . $inv['client_id_number'] : ''] as $line) {
         if ((string) $line !== '') {
             $clientLines = array_merge($clientLines, $pdf->wrap((string) $line, 9, false, $cw - 8));
         }

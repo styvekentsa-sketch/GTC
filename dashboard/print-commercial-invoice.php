@@ -92,6 +92,7 @@ $curLbl  = currency_label($cur);
             <?php if ($inv['client_phone']): ?><p>Tél. : <?= e($inv['client_phone']) ?></p><?php endif; ?>
             <?php if ($inv['client_email']): ?><p><?= e($inv['client_email']) ?></p><?php endif; ?>
             <?php if ($inv['client_niu']): ?><p>NIU : <?= e($inv['client_niu']) ?></p><?php endif; ?>
+            <?php if (!empty($inv['client_id_number'])): ?><p>N° pièce : <?= e($inv['client_id_number']) ?></p><?php endif; ?>
         </div>
     </section>
 

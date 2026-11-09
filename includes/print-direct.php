@@ -49,6 +49,11 @@ function print_invoice_data(array $inv, array $user): array
         'agent'   => $inv['agent_name'],
         'client'  => $inv['client_name'],
         'phone'   => (string) $inv['client_phone'],
+        // Passerelle GTC-Vault : N° de pièce et adresse repris du dossier KYC (lignes absentes si non renseignés)
+        'extra'   => array_values(array_filter([
+            !empty($inv['client_id_number']) ? 'N° pièce : ' . $inv['client_id_number'] : '',
+            (string) ($inv['client_address'] ?? ''),
+        ])),
         'rows'    => $rows,
         'total'   => money($inv['amount_received'], $inv['target_currency']),
         'total_label' => invoice_total_label($inv),
@@ -424,6 +429,10 @@ function pdf_draw_receipt(GtcPdf $pdf, array $d, ?array $logo, float $x, float $
     } else {
         $y += $last * 4.5;
     }
+    foreach ($d['extra'] ?? [] as $line) {
+        $y += 3.8;
+        $pdf->text($x + 13, $y - 0.3, $pdf->wrap($line, 8, false, $w - 13, 1)[0] ?? '', 8, false, 'left', 0.3);
+    }
 
     // Tableau
     $y += 2;
@@ -572,6 +581,11 @@ function invoice_escpos(array $d): string
             $t .= $enc($l) . "\n";
         }
         $t .= $boldOff . ($d['phone'] !== '' ? $enc('Tél. / WhatsApp : ' . $d['phone']) . "\n" : '');
+        foreach ($d['extra'] ?? [] as $line) {
+            foreach ($wrapU($line, $cols) as $l) {
+                $t .= $enc($l) . "\n";
+            }
+        }
         $t .= str_repeat('-', $cols) . "\n";
         foreach ($d['rows'] as $k => $v) {
             $t .= $enc($kv($k, $v));

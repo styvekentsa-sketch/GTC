@@ -13,6 +13,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../includes/vault.php';
+require_once __DIR__ . '/../../includes/commercial_invoices.php';   // passerelle facturation (includes/kyc_link.php)
 
 $user = vault_guard();   // connexion du Dashboard + rôle VAULT_ROLES
 
@@ -85,30 +86,23 @@ vault_audit('client_view', $client, null, $user['name'] . ' a ouvert la fiche du
 $csrf = csrf_token();
 
 // ---------- Complétude du dossier ----------
-$have = array_column($docs, 'type');
-$has = fn (string $t) => in_array($t, $have, true);
-$missing = [];
-if ($client['type_client'] === 'entreprise') {
-    if (!$has('rccm')) {
-        $missing[] = 'Registre du commerce (RCCM)';
-    }
-    if (!$has('cni_recto') && !$has('passeport')) {
-        $missing[] = 'Pièce d\'identité du représentant légal';
-    }
-} elseif (!$has('passeport')) {
-    if (!$has('cni_recto')) {
-        $missing[] = $has('cni_verso') ? 'CNI — recto' : 'CNI (recto et verso) ou passeport';
-    }
-    if ($has('cni_recto') && !$has('cni_verso')) {
-        $missing[] = 'CNI — verso';
-    }
+// Règle unique (includes/kyc_link.php), reprise par le badge de conformité des reçus et des factures
+$missing = kyc_missing((string) $client['type_client'], array_column($docs, 'type'));
+
+// ---------- Documents financiers liés (passerelle facturation : reçus de caisse, factures commerciales) ----------
+$finance = [];
+try {
+    $finance = kyc_finance_documents((int) $client['id'], 20);
+} catch (Throwable $e) {
+    error_log('[GTC-Vault client] documents financiers : ' . $e->getMessage());
 }
+$canOpenFinance = in_array($user['role'] ?? '', OPERATION_ROLES, true);
 
 // ---------- Dernières consultations de ce dossier ----------
 $journal = [];
 try {
     $st = vault_db()->prepare("SELECT created_at, user_name, action, details FROM audit_logs
-                               WHERE client_uuid = ? AND action IN ('client_create', 'client_view', 'document_view')
+                               WHERE client_uuid = ? AND action IN ('client_create', 'client_view', 'document_view', 'finance_link')
                                ORDER BY id DESC LIMIT 8");
     $st->execute([$uuid]);
     $journal = $st->fetchAll();
@@ -240,7 +234,8 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
         <ol class="vault-journal" style="margin-top: 1rem">
             <?php foreach ($journal as $j):
                 [$jd, $jt] = vault_date($j['created_at']);
-                [$dot, $verb] = ['document_view' => ['doc', 'a consulté une pièce'], 'client_create' => ['create', 'a créé le dossier']][$j['action']] ?? ['', 'a ouvert la fiche']; ?>
+                [$dot, $verb] = ['document_view' => ['doc', 'a consulté une pièce'], 'client_create' => ['create', 'a créé le dossier'],
+                    'finance_link' => ['create', 'a émis un document financier']][$j['action']] ?? ['', 'a ouvert la fiche']; ?>
                 <li>
                     <span class="vault-journal__dot<?= $dot ? ' vault-journal__dot--' . $dot : '' ?>" aria-hidden="true"></span>
                     <div>
@@ -252,6 +247,36 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
         </ol>
     </section>
 </div>
+
+<!-- ==================== DOCUMENTS FINANCIERS LIÉS (traçabilité croisée) ==================== -->
+<section class="panel no-print" aria-labelledby="finance-title" data-finance>
+    <header class="panel__head">
+        <h2 class="panel__title" id="finance-title"><?= icon('receipt') ?> Documents financiers liés</h2>
+        <span class="cell-sub">Reçus de caisse et factures émis pour ce client · état du dossier KYC à l'émission</span>
+    </header>
+    <?php if (!$finance): ?>
+        <p class="empty">Aucun reçu ni facture n'a encore été rattaché à ce dossier.</p>
+    <?php else: ?>
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th>Document</th><th>Date</th><th class="num">Montant</th><th>Agent</th><th>Dossier KYC à l'émission</th></tr></thead>
+                <tbody>
+                    <?php foreach ($finance as $f): [$fd, $ft] = vault_date($f['date']); ?>
+                        <tr>
+                            <td data-label="Document"><span class="cell-stack">
+                                <?= $canOpenFinance ? '<a href="' . h($f['url']) . '" class="link-strong">' . h($f['number']) . '</a>' : '<strong>' . h($f['number']) . '</strong>' ?>
+                                <small class="cell-sub"><?= h($f['label']) ?></small></span></td>
+                            <td data-label="Date"><?= h($fd) ?> à <?= h($ft) ?></td>
+                            <td data-label="Montant" class="num"><?= h($f['amount']) ?></td>
+                            <td data-label="Agent"><?= h($f['agent']) ?></td>
+                            <td data-label="Dossier KYC"><?= $f['kyc'] ? kyc_badge($f['kyc'], [], true) : '<span class="cell-sub">—</span>' ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
+</section>
 
 <!-- ==================== LECTEUR SÉCURISÉ ==================== -->
 <dialog id="viewer" class="vault-viewer" aria-labelledby="viewer-title">

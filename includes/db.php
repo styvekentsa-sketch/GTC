@@ -278,10 +278,44 @@ function db_ensure_schema(PDO $pdo): void
         // Reçu de paiement « Fret / Transit » rattaché à un dossier de suivi (facultatif)
         $pdo->exec('ALTER TABLE invoices ADD COLUMN shipment_id ' . db_types()['fk'] . ' NULL');
     }
+    if (!db_column_exists($pdo, 'invoices', 'vault_client_id')) {
+        // Passerelle GTC-Vault ↔ facturation (includes/kyc_link.php) : dossier KYC lié au reçu, état du dossier
+        // à l'émission (complete / incomplete), adresse et N° de pièce du client repris du dossier
+        db_link_vault_columns($pdo, 'invoices', true);
+    }
+    if (!db_column_exists($pdo, 'commercial_invoices', 'vault_client_id')) {
+        db_link_vault_columns($pdo, 'commercial_invoices', false);
+    }
     // Changement de mot de passe plus jamais imposé à la connexion : annule le statut « provisoire »
     // des comptes existants (une seule fois : plus aucun code ne remet ce champ à 1)
     if ($pdo->query('SELECT 1 FROM users WHERE must_change_password <> 0 LIMIT 1')->fetchColumn()) {
         $pdo->exec('UPDATE users SET must_change_password = 0 WHERE must_change_password <> 0');
+    }
+}
+
+/**
+ * Liaison d'un document financier à un dossier GTC-Vault (table clients) :
+ *   vault_client_id   dossier KYC du client (NULL : client saisi à la main) ;
+ *   kyc_status        état du dossier au moment de l'émission (complete / incomplete), conservé tel quel ;
+ *   client_id_number  N° CNI / passeport / RCCM imprimé sur le document ;
+ *   client_address    (reçus de caisse uniquement : les factures commerciales l'ont déjà).
+ * Pas de clé étrangère : un document comptable ne doit jamais être supprimé ni bloqué par le coffre-fort ;
+ * la trace détaillée (agent, date, état) est aussi écrite dans audit_logs (action « finance_link »).
+ */
+function db_link_vault_columns(PDO $pdo, string $table, bool $withAddress): void
+{
+    $fk = db_types()['fk'];
+    $columns = ["vault_client_id {$fk} NULL", 'kyc_status VARCHAR(12) NULL', 'client_id_number VARCHAR(100) NULL'];
+    if ($withAddress) {
+        $columns[] = 'client_address VARCHAR(255) NULL';
+    }
+    foreach ($columns as $column) {
+        $pdo->exec("ALTER TABLE {$table} ADD COLUMN {$column}");
+    }
+    try {
+        $pdo->exec("CREATE INDEX idx_{$table}_vault ON {$table} (vault_client_id)");
+    } catch (PDOException) {
+        // index déjà présent
     }
 }
 

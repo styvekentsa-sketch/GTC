@@ -41,11 +41,18 @@ if (is_post()) {
         }
         [$form, $calc, $errors] = cinv_input();
         if (!$errors) {
+            $prevVault = $editId ? (int) db_value('SELECT vault_client_id FROM commercial_invoices WHERE id = ?', [$editId]) : 0;
             $savedId = cinv_save($form, $calc, $user, $editId);
             $number  = db_value('SELECT invoice_number FROM commercial_invoices WHERE id = ?', [$savedId]);
             activity_log($editId ? 'update' : 'create', 'commercial', $savedId, $number, [
                 'type' => CINV_TYPES[$form['doc_type']]['label'], 'client' => $form['client_name'], 'total' => money($calc['total'], $form['currency']),
+                'GTC-Vault' => $form['vault'] ? KYC_LINK_STATES[$form['vault']['status']]['label'] : '',
             ]);
+            // Traçabilité croisée : document émis pour ce dossier, ou dossier lié après coup (modification)
+            if ($form['vault'] && $form['vault']['id'] !== $prevVault) {
+                kyc_link_audit($form['vault'], CINV_TYPES[$form['doc_type']]['label'], (string) $number,
+                    money($calc['total'], $form['currency']), $user, $editId ? 'rattaché(e) au dossier' : 'émis(e)');
+            }
             flash('success', CINV_TYPES[$form['doc_type']]['label'] . " {$number} " . ($editId ? 'modifiée.' : 'enregistrée.'));
             redirect(post('then') === 'print' ? "print-commercial-invoice.php?id={$savedId}&autoprint=1" : 'invoices-list.php');
         }
@@ -106,9 +113,12 @@ if ($action === 'new' || $action === 'edit') {
     if ($form === null) {
         $form = $existing ?? [
             'doc_type' => in_array(query('type'), array_keys(CINV_TYPES), true) ? query('type') : 'invoice', 'status' => 'issued',
-            'client_name' => '', 'client_phone' => '', 'client_email' => '', 'client_address' => '', 'client_niu' => '',
+            'client_name' => '', 'client_phone' => '', 'client_email' => '', 'client_address' => '', 'client_niu' => '', 'client_id_number' => '', 'vault' => null,
             'issue_date' => date('Y-m-d'), 'due_date' => '', 'currency' => 'XAF', 'tax_rate' => 0, 'notes' => '',
         ];
+        if ($existing) {
+            $form['vault'] = !empty($existing['vault_client_id']) ? (kyc_clients_by_ids([(int) $existing['vault_client_id']])[(int) $existing['vault_client_id']] ?? null) : null;
+        }
         $items   = $existing['items'] ?? [];
         $columns = $existing['columns'] ?? CINV_DEFAULT_COLUMNS;
     } else {
@@ -132,7 +142,7 @@ if ($action === 'new' || $action === 'edit') {
     $err  = fn (string $k) => isset($errors[$k]) && is_string($errors[$k]) ? '<p class="field__error">' . e($errors[$k]) . '</p>' : '';
     $inv  = fn (string $k) => isset($errors[$k]) ? ' aria-invalid="true"' : '';
 
-    dash_header($existing ? 'Modifier ' . $existing['invoice_number'] : 'Nouvelle facture', 'commercial');
+    dash_header($existing ? 'Modifier ' . $existing['invoice_number'] : 'Nouvelle facture', 'commercial', ['assets/css/kyc-link.css']);
     ?>
     <div class="toolbar">
         <a href="invoices-list.php" class="btn btn--ghost"><?= icon('arrow-left') ?> Toutes les factures</a>
@@ -208,6 +218,10 @@ if ($action === 'new' || $action === 'edit') {
         <fieldset class="form-section">
             <legend>Client</legend>
             <div class="form-grid">
+                <!-- Passerelle GTC-Vault : recherche du dossier KYC, remplissage des champs, badge de conformité -->
+                <?= kyc_link_field($form['vault'] ?? null,
+                    ['name' => 'client_name', 'phone' => 'client_phone', 'email' => 'client_email', 'address' => 'client_address', 'idNumber' => 'client_id_number'],
+                    isset($errors['vault_client']) && is_string($errors['vault_client']) ? $errors['vault_client'] : null) ?>
                 <div class="field">
                     <label for="client_name">Nom / Raison sociale *</label>
                     <input id="client_name" name="client_name" required maxlength="150" autocomplete="off" value="<?= e($form['client_name']) ?>"<?= $inv('client_name') ?>>
@@ -227,6 +241,11 @@ if ($action === 'new' || $action === 'edit') {
                     <label for="client_niu">NIU du client <small>(entreprise)</small></label>
                     <input id="client_niu" name="client_niu" maxlength="30" style="text-transform: uppercase" value="<?= e((string) $form['client_niu']) ?>"<?= $inv('client_niu') ?>>
                     <?= $err('client_niu') ?>
+                </div>
+                <div class="field">
+                    <label for="client_id_number">N° CNI / passeport / RCCM</label>
+                    <input id="client_id_number" name="client_id_number" maxlength="100" autocomplete="off" style="text-transform: uppercase" value="<?= e((string) ($form['client_id_number'] ?? '')) ?>"<?= $inv('client_id_number') ?>>
+                    <?= $err('client_id_number') ?>
                 </div>
                 <div class="field field--full">
                     <label for="client_address">Adresse</label>
@@ -340,6 +359,7 @@ if ($action === 'new' || $action === 'edit') {
         </div>
     <?php endif; ?>
     <script src="<?= e(asset_url('assets/js/commercial-invoice.js', site_root())) ?>" defer></script>
+    <script src="<?= e(asset_url('assets/js/kyc-link.js', site_root())) ?>" defer></script>
     <?php
     dash_footer();
     exit;
@@ -418,7 +438,7 @@ $month    = db_one("SELECT COUNT(*) AS n, COALESCE(SUM(total), 0) AS amount FROM
 $unpaid   = db_one("SELECT COUNT(*) AS n, COALESCE(SUM(total), 0) AS amount FROM commercial_invoices
                     WHERE doc_type = 'invoice' AND status = 'issued' AND currency = 'XAF'");
 
-dash_header('Factures', 'commercial');
+dash_header('Factures', 'commercial', ['assets/css/kyc-link.css']);
 ?>
 <section class="stats stats--summary cinv-stats" aria-label="Synthèse des factures">
     <article class="stat">
@@ -484,7 +504,8 @@ dash_header('Factures', 'commercial');
                         <td data-label="Date"><span class="cell-stack"><?= e(fdate($c['issue_date'])) ?>
                             <?php if ($c['due_date']): ?><small class="cell-sub">Échéance <?= e(fdate($c['due_date'])) ?></small><?php endif; ?></span></td>
                         <td data-label="Client"><span class="cell-stack"><?= e($c['client_name']) ?>
-                            <?php if ($c['client_phone']): ?><small class="cell-sub"><?= e($c['client_phone']) ?></small><?php endif; ?></span></td>
+                            <?php if ($c['client_phone']): ?><small class="cell-sub"><?= e($c['client_phone']) ?></small><?php endif; ?>
+                            <?php if (!empty($c['kyc_status'])): ?><?= kyc_badge($c['kyc_status'], [], true) ?><?php endif; ?></span></td>
                         <td data-label="Total TTC" class="num"><strong><?= e(money((float) $c['total'], $c['currency'])) ?></strong></td>
                         <td data-label="Statut">
                             <form method="post" class="inline-form">
