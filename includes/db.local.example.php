@@ -37,3 +37,8 @@
 // (au-dessus de public_html). Par défaut : data/kyc (interdit d'accès par .htaccess). Le dossier doit exister et être
 // accessible en écriture à PHP. Pensez à le sauvegarder : les sauvegardes .sql ne contiennent que la base, pas les fichiers.
 // define('GTC_KYC_DIR', '/home/COMPTE/gtc-kyc');
+
+// Assistant de rédaction des courriers (dashboard/courriers.php) : clé API Claude d'Anthropic
+// (https://platform.claude.com → API Keys). Sans clé, l'assistant reste affiché mais désactivé.
+// define('GTC_ANTHROPIC_API_KEY', 'sk-ant-...');
+// define('GTC_AI_MODEL', 'claude-opus-5-5');   // facultatif

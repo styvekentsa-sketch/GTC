@@ -186,6 +186,8 @@
     sync();
   });
   textarea.form.addEventListener('submit', sync);
+  // Texte remplacé par l'assistant de rédaction (assets/js/courrier-assistant.js) : l'éditeur recharge le textarea
+  textarea.addEventListener('rte:set', function () { setHtml(textarea.value); });
 
   editor.addEventListener('paste', function (e) {
     var data = e.clipboardData;
