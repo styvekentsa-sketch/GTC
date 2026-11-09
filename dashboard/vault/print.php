@@ -77,6 +77,14 @@ $complete = $isCompany ? ($has('rccm') && ($has('cni_recto') || $has('passeport'
 $avatar = avatar_url($client['uuid'], $client['avatar_path'] ?? null);
 $auto = ($_GET['auto'] ?? '') === '1';
 $root = site_root();
+
+// Pièce d'identité imprimée d'un seul tenant : CNI recto + verso côte à côte (ou passeport seul), jamais coupée
+// entre deux pages ; les autres pièces (RCCM, statuts, pièces en PDF) suivent
+$idOrder  = ['cni_recto' => 0, 'cni_verso' => 1, 'passeport' => 2];
+$idDocs   = array_values(array_filter($docs, fn ($d) => $d['kind'] === 'image' && isset($idOrder[$d['type']])));
+usort($idDocs, fn ($a, $b) => $idOrder[$a['type']] <=> $idOrder[$b['type']]);
+$otherDocs = array_values(array_filter($docs, fn ($d) => !in_array($d, $idDocs, true)));
+$trace = 'Imprimé par ' . $user['name'] . ' le ' . $printDay . ' à ' . $printTime;
 $fields = [
     [$isCompany ? 'Raison sociale' : 'Nom complet', $client['nom_complet']],
     ['Type de client', $isCompany ? 'Entreprise (personne morale)' : 'Particulier (personne physique)'],
@@ -109,6 +117,9 @@ $fields = [
     <button type="button" class="ci-btn ci-btn--primary" data-print><?= icon('printer') ?> Imprimer</button>
     <p class="kp-hint" data-state>Préparation des pièces…</p>
 </nav>
+
+<!-- Traçabilité répétée en bas de CHAQUE page imprimée (position fixe), au-dessus du pied de page officiel -->
+<p class="kp-trace-page" data-trace-page><?= h($trace) ?> · Dossier KYC réf. <?= h(substr($client['uuid'], 0, 8)) ?> · Document confidentiel — usage interne</p>
 
 <main class="ci-sheet">
     <?= letterhead_html(GTC_NAME) ?>
@@ -156,7 +167,21 @@ $fields = [
             <?php if (!$docs): ?>
                 <p class="kp-empty">Aucune pièce n'a été versée à ce dossier.</p>
             <?php endif; ?>
-            <?php foreach ($docs as $d): ?>
+            <?php if ($idDocs): ?>
+                <!-- Pièce d'identité : recto et verso ensemble, cadres identiques, bloc jamais coupé -->
+                <section class="kp-id-pair<?= count($idDocs) === 1 ? ' kp-id-pair--single' : '' ?>" aria-label="Pièce d'identité">
+                    <?php foreach ($idDocs as $d): ?>
+                        <figure class="kp-piece kp-piece--image kp-id" data-piece data-kind="image" data-src="<?= h($d['src']) ?>" data-label="<?= h($d['label']) ?>">
+                            <figcaption><strong><?= h($d['label']) ?></strong> <span><?= h($d['name']) ?> · <?= h($d['meta']) ?></span></figcaption>
+                            <div class="kp-piece__media">
+                                <img src="<?= h($d['src']) ?>" alt="<?= h($d['label']) ?> (filigranée)" data-wait>
+                            </div>
+                        </figure>
+                    <?php endforeach; ?>
+                    <p class="kp-trace" data-trace>Pièces filigranées « GTC - USAGE INTERNE » · <?= h($trace) ?> · Réf. <?= h(substr($client['uuid'], 0, 8)) ?></p>
+                </section>
+            <?php endif; ?>
+            <?php foreach ($otherDocs as $d): ?>
                 <figure class="kp-piece kp-piece--<?= h($d['kind']) ?>" data-piece data-kind="<?= h($d['kind']) ?>" data-src="<?= h($d['src']) ?>" data-label="<?= h($d['label']) ?>">
                     <figcaption><strong><?= h($d['label']) ?></strong> <span><?= h($d['name']) ?> · <?= h($d['meta']) ?></span></figcaption>
                     <div class="kp-piece__media">

@@ -57,3 +57,59 @@
 /* Légende toujours avec le début de sa pièce ; pages PDF à 165 mm : la mention finale tient sur la dernière page */
 .kp-piece figcaption { break-after: avoid; page-break-after: avoid; }
 .kp-piece--pdf canvas { max-height: 165mm; }
+
+/* ==========================================================================
+   Pièce d'identité : recto et verso imprimés ENSEMBLE (bloc jamais coupé entre deux pages)
+   Deux cadres identiques de 62 mm de haut (≈ 235 px, sous la limite de 350 px), image entière et proportionnelle :
+   le bloc complet mesure ≈ 80 mm et tient sous la fiche d'identité de la 1re page, ou en tête de la 2de.
+   ========================================================================== */
+.kp-id-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3mm 5mm;
+  margin: 0 0 5mm;
+  padding: 3mm;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.kp-id-pair--single { grid-template-columns: minmax(0, 1fr); }
+.kp-id { margin: 0; }
+.kp-id figcaption { flex-direction: column; gap: 0.3mm; min-height: 9mm; }
+.kp-id figcaption span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.kp-id .kp-piece__media { display: flex; align-items: center; justify-content: center; height: 62mm; border-radius: 2mm; background: var(--soft); }
+.kp-id-pair--single .kp-id .kp-piece__media { height: 80mm; }
+.kp-id .kp-piece__media img { width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 1.5mm; }
+.kp-trace { grid-column: 1 / -1; margin: 0; font-size: 9px; color: var(--muted); text-align: center; }
+
+/* Traçabilité sur chaque page imprimée : ligne fixe juste au-dessus des rayures du pied de page officiel */
+.kp-trace-page { display: none; }
+@media print {
+  .kp-trace-page {
+    display: block;
+    position: fixed;
+    left: 0;
+    bottom: 45.5mm;
+    width: 210mm;
+    margin: 0;
+    z-index: 2;
+    font: 600 8px/1.2 Arial, Helvetica, sans-serif;
+    letter-spacing: 0.02em;
+    text-align: center;
+    color: #5B6575;
+  }
+}
+
+/* Ajustement : bloc d'identité ≈ 70 mm (cadres de 52 mm, 58 mm pour une pièce seule) et mention finale compacte —
+   un dossier de particulier (CNI recto + verso) tient sur UNE page, la pièce du représentant reste en page 1 */
+.kp-id .kp-piece__media { height: 52mm; }
+.kp-id-pair--single .kp-id .kp-piece__media { height: 58mm; }
+.kp-id-pair { gap: 2mm 5mm; padding: 2.5mm 3mm; margin-bottom: 4mm; }
+.kp-id figcaption { min-height: 8mm; }
+.kp-confidential { margin-top: 3mm; padding: 2mm 3mm; font-size: 8.5px; line-height: 1.4; }
+/* Quelques millimètres gagnés sur les espacements : la mention finale tient sous la pièce d'identité */
+.kp-head { padding-bottom: 3mm; }
+.kp-identity { margin-top: 3mm; padding: 3mm 4mm; }
+.kp-title { margin: 4mm 0 2mm; }
+.kp-confidential { margin-top: 2mm; padding: 1.5mm 3mm; font-size: 8px; line-height: 1.35; }
