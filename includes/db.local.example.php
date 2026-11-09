@@ -38,7 +38,12 @@
 // accessible en écriture à PHP. Pensez à le sauvegarder : les sauvegardes .sql ne contiennent que la base, pas les fichiers.
 // define('GTC_KYC_DIR', '/home/COMPTE/gtc-kyc');
 
-// Assistant de rédaction des courriers (dashboard/courriers.php) : clé API Claude d'Anthropic
+// Assistant de rédaction des courriers (dashboard/courriers.php) : SUSPENDU par défaut. Pour l'activer :
+// define('GTC_AI_ASSISTANT', true);
+// puis la clé API Claude d'Anthropic
 // (https://platform.claude.com → API Keys). Sans clé, l'assistant reste affiché mais désactivé.
-// define('GTC_ANTHROPIC_API_KEY', 'sk-ant-...');
+// define('GTC_AI_API_KEY', 'sk-ant-...');          // ou variable d'environnement GTC_AI_API_KEY (SetEnv dans .htaccess)
 // define('GTC_AI_MODEL', 'claude-opus-5-5');   // facultatif
+// Poste Windows uniquement, si l'assistant signale « injoignable » (erreur de certificat SSL) : liste des certificats
+// racine, par ex. celle fournie avec Git. Inutile chez Hostinger.
+// define('GTC_AI_CA_BUNDLE', 'C:/Program Files/Git/usr/ssl/certs/ca-bundle.crt');

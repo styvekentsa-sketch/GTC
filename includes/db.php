@@ -278,6 +278,16 @@ function db_ensure_schema(PDO $pdo): void
         // Reçu de paiement « Fret / Transit » rattaché à un dossier de suivi (facultatif)
         $pdo->exec('ALTER TABLE invoices ADD COLUMN shipment_id ' . db_types()['fk'] . ' NULL');
     }
+    if ($pdo->query("SELECT 1 FROM clients WHERE adresse LIKE '%@%' LIMIT 1")->fetchColumn()) {
+        // GTC-Vault : adresse e-mail glissée dans le champ « Adresse » (saisie ou remplissage automatique du navigateur)
+        db_repair_client_addresses($pdo);
+    }
+    if (!db_column_exists($pdo, 'clients', 'archived_at')) {
+        // GTC-Vault : dossier archivé (masqué du répertoire et de la facturation, conservé et restaurable)
+        $pdo->exec('ALTER TABLE clients ADD COLUMN archived_at ' . db_types()['dt'] . ' NULL');
+        $pdo->exec('ALTER TABLE clients ADD COLUMN archived_by ' . db_types()['fk'] . ' NULL');
+        $pdo->exec('CREATE INDEX idx_clients_archived ON clients (archived_at)');
+    }
     if (!db_column_exists($pdo, 'invoices', 'vault_client_id')) {
         // Passerelle GTC-Vault ↔ facturation (includes/kyc_link.php) : dossier KYC lié au reçu, état du dossier
         // à l'émission (complete / incomplete), adresse et N° de pièce du client repris du dossier
@@ -290,6 +300,29 @@ function db_ensure_schema(PDO $pdo): void
     // des comptes existants (une seule fois : plus aucun code ne remet ce champ à 1)
     if ($pdo->query('SELECT 1 FROM users WHERE must_change_password <> 0 LIMIT 1')->fetchColumn()) {
         $pdo->exec('UPDATE users SET must_change_password = 0 WHERE must_change_password <> 0');
+    }
+}
+
+/**
+ * Réparation des adresses de GTC-Vault : retire toute adresse e-mail de la colonne « adresse » (lignes conservées).
+ * L'e-mail du client garde sa propre colonne ; s'il était vide, celui trouvé dans l'adresse y est reporté.
+ * Opération idempotente : une adresse déjà propre n'est jamais modifiée.
+ */
+function db_repair_client_addresses(PDO $pdo): void
+{
+    $pattern = '/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/iu';
+    $rows = $pdo->query("SELECT id, email, adresse FROM clients WHERE adresse LIKE '%@%'")->fetchAll(PDO::FETCH_ASSOC);
+    $update = $pdo->prepare('UPDATE clients SET adresse = ?, email = ? WHERE id = ?');
+    foreach ($rows as $r) {
+        if (!preg_match_all($pattern, (string) $r['adresse'], $found)) {
+            continue;   // « @ » qui n'est pas un e-mail : adresse laissée telle quelle
+        }
+        $lines = array_filter(array_map(fn ($l) => trim($l, " \t,;-"), preg_split('/\R/u', (string) preg_replace($pattern, '', (string) $r['adresse'])) ?: []),
+            fn ($l) => $l !== '');
+        $address = $lines ? implode("\n", $lines) : null;
+        $email = trim((string) $r['email']) !== '' ? $r['email'] : mb_strtolower($found[0][0]);
+        $update->execute([$address, $email, (int) $r['id']]);
+        error_log('[GTC-Vault] adresse du client #' . $r['id'] . ' nettoyée (e-mail retiré du champ « Adresse »)');
     }
 }
 

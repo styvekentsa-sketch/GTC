@@ -510,3 +510,18 @@ fieldset.field { min-width: 0; border: 0; }
   .dash-grid--aside { grid-template-columns: 1fr; }
   .vault-avatar { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ==========================================================================
+   14. Archivage des dossiers (clients.php : onglet « Archivés », menu ⋮ ; client.php : bandeau, boutons)
+   ========================================================================== */
+.vault-chip--archive { margin-left: 0.5rem; }
+.vault-chip--archive svg { width: 14px; height: 14px; }
+.vault-chip--archive.is-active { background: #EEF0F3; border-color: #D5DBE3; color: var(--anthracite); }
+.vault-row-actions { display: inline-flex; align-items: center; gap: 0.375rem; }
+.vault-archived { font-weight: 600; color: var(--text-muted); }
+tr.is-archived .vault-client .avatar, tr.is-archived .badge { opacity: 0.65; filter: grayscale(0.6); }
+tr.is-archived .link-strong { color: var(--text); }
+.toolbar__actions .inline-form { display: inline-flex; flex-wrap: wrap; gap: 0.5rem; }
+@media (max-width: 640px) {
+  .vault-chip--archive { margin-left: 0; }
+}

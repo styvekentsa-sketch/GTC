@@ -108,6 +108,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         }
         if (mb_strlen($in['adresse']) > 2000) {
             $errors['adresse'] = 'Adresse trop longue (2 000 caractères au maximum).';
+        } elseif (preg_match('/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/iu', $in['adresse'])) {
+            // Saisie ou remplissage automatique du navigateur : l'e-mail se retrouverait sur les reçus et factures
+            $errors['adresse'] = 'L\'adresse ne doit pas contenir d\'e-mail : indiquez-le dans le champ « E-mail ».';
         }
         if (!preg_match('~^[A-Z0-9][A-Z0-9 ./\-]{2,99}$~', $in['numero_identifiant'])) {
             $errors['numero_identifiant'] = 'Numéro invalide : lettres, chiffres, espaces, « / », « - » ou « . » (3 caractères minimum).';
@@ -331,7 +334,7 @@ vault_header('GTC-Vault · Nouveau dossier KYC');
 
                 <div class="field">
                     <label for="email">E-mail <span class="field__hint">(facultatif)</span></label>
-                    <input type="email" id="email" name="email" maxlength="150" autocomplete="off" inputmode="email"
+                    <input type="email" id="email" name="email" maxlength="150" autocomplete="email" inputmode="email"
                            value="<?= h($old['email'] ?? '') ?>" placeholder="nom@exemple.com"<?= $invalid('email') ?> aria-describedby="email-error">
                     <?= $errField('email') ?>
                 </div>
@@ -347,7 +350,7 @@ vault_header('GTC-Vault · Nouveau dossier KYC');
 
                 <div class="field field--full">
                     <label for="adresse">Adresse <span class="field__hint">(facultatif)</span></label>
-                    <textarea id="adresse" name="adresse" rows="3" maxlength="2000" placeholder="Quartier, rue, ville, pays"<?= $invalid('adresse') ?> aria-describedby="adresse-error"><?= h($old['adresse'] ?? '') ?></textarea>
+                    <textarea id="adresse" name="adresse" rows="3" maxlength="2000" autocomplete="street-address" placeholder="Quartier, rue, ville, pays"<?= $invalid('adresse') ?> aria-describedby="adresse-error"><?= h($old['adresse'] ?? '') ?></textarea>
                     <?= $errField('adresse') ?>
                 </div>
             </div>
@@ -485,6 +488,7 @@ vault_header('GTC-Vault · Nouveau dossier KYC');
     nom_complet: function (v) { v = v.trim(); return v.length >= 2 ? '' : (isCompany() ? 'Indiquez la raison sociale.' : 'Indiquez le nom complet.'); },
     telephone: function (v) { var d = v.replace(/\D/g, ''); return d.length >= 6 && d.length <= 15 ? '' : 'Numéro invalide (6 à 15 chiffres, sans l\'indicatif).'; },
     email: function (v) { v = v.trim(); return !v || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v) ? '' : 'Adresse e-mail invalide.'; },
+    adresse: function (v) { return /[^\s@]+@[^\s@]+\.[^\s@]{2,}/.test(v) ? 'L\'adresse ne doit pas contenir d\'e-mail : indiquez-le dans le champ « E-mail ».' : ''; },
     numero_identifiant: function (v) { return /^[A-Z0-9][A-Z0-9 .\/\-]{2,99}$/i.test(v.trim()) ? '' : 'Numéro invalide : lettres, chiffres, espaces, « / », « - » ou « . » (3 caractères minimum).'; }
   };
 

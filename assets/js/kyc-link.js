@@ -115,7 +115,10 @@
     var id = fill[key];
     var el = id && document.getElementById(id);
     if (!el) return;
-    el.value = value || '';
+    value = value || '';
+    // Champ sur une ligne : les retours à la ligne deviennent « , » (sinon le navigateur colle les lignes : « RueQuartier »)
+    if (el.tagName === 'INPUT') value = value.split(/\s*[\r\n]+\s*/).filter(Boolean).join(', ');
+    el.value = value;
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
     el.removeAttribute('aria-invalid');

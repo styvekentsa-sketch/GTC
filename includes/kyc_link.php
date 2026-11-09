@@ -63,6 +63,21 @@ function kyc_doc_types(array $clientIds): array
     return $map;
 }
 
+/** Motif d'une adresse e-mail (repérage dans un texte libre). */
+const KYC_EMAIL_PATTERN = '/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/iu';
+
+/**
+ * Adresse physique seule, sur une ligne : toute adresse e-mail est retirée (saisie ou remplissage automatique du
+ * navigateur qui l'aurait glissée dans le champ « Adresse »), les lignes sont jointes par « , ».
+ *   « styvekentsa@gmail.com\nNdogbong » → « Ndogbong » ; « Rue Joss\nBonanjo, Douala » → « Rue Joss, Bonanjo, Douala »
+ */
+function kyc_clean_address(?string $adresse): string
+{
+    $text = (string) preg_replace(KYC_EMAIL_PATTERN, '', (string) $adresse);
+    $lines = array_filter(array_map(fn ($l) => trim($l, " \t,;-"), preg_split('/\R/u', $text) ?: []), fn ($l) => $l !== '');
+    return trim((string) preg_replace('/\s{2,}/u', ' ', implode(', ', $lines)), ' ,;');
+}
+
 /** Libellé du numéro d'identification selon le type de client. */
 function kyc_id_label(string $type): string
 {
@@ -80,7 +95,7 @@ function kyc_client_public(array $c, array $docTypes): array
         'typeLabel' => $c['type_client'] === 'entreprise' ? 'Entreprise' : 'Particulier',
         'phone'     => (string) $c['telephone'],
         'email'     => (string) ($c['email'] ?? ''),
-        'address'   => (string) ($c['adresse'] ?? ''),
+        'address'   => kyc_clean_address($c['adresse'] ?? ''),   // colonne « adresse » seule, jamais l'e-mail
         'idNumber'  => (string) ($c['numero_identifiant'] ?? ''),
         'idLabel'   => kyc_id_label((string) $c['type_client']),
         'status'    => $missing ? 'incomplete' : 'complete',
@@ -115,7 +130,7 @@ function kyc_client_search(string $q, int $limit = 8): array
         $params[] = '%' . $digits . '%';
     }
     $rows = db_all('SELECT id, uuid, type_client, nom_complet, telephone, email, adresse, numero_identifiant FROM clients
-                    WHERE (' . implode(' AND ', $where) . ')' . $phoneSql . '
+                    WHERE archived_at IS NULL AND ((' . implode(' AND ', $where) . ')' . $phoneSql . ')   -- dossiers archivés exclus de la facturation
                     ORDER BY nom_complet LIMIT ' . max(1, min(20, $limit)), $params);
     $docs = kyc_doc_types(array_column($rows, 'id'));
     return array_map(fn ($r) => kyc_client_public($r, $docs[(int) $r['id']] ?? []), $rows);

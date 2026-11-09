@@ -43,9 +43,11 @@ if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
 // ---------- Client et pièces (une requête, jointure) ----------
 $st = vault_db()->prepare('SELECT c.id, c.uuid, c.type_client, c.nom_complet, c.telephone, c.email, c.adresse, c.numero_identifiant,
                                   c.created_at, c.updated_at, c.avatar_path, c.created_by, u.name AS created_by_name,
+                                  c.archived_at, ua.name AS archived_by_name,
                                   d.id AS doc_id, d.type_document, d.nom_original, d.taille_fichier, d.mime_type, d.created_at AS doc_created_at
                            FROM clients c
                            LEFT JOIN users u ON u.id = c.created_by
+                           LEFT JOIN users ua ON ua.id = c.archived_by
                            LEFT JOIN client_documents d ON d.client_id = c.id
                            WHERE c.uuid = ?
                            ORDER BY d.created_at ASC, d.id ASC');
@@ -102,7 +104,7 @@ $canOpenFinance = in_array($user['role'] ?? '', OPERATION_ROLES, true);
 $journal = [];
 try {
     $st = vault_db()->prepare("SELECT created_at, user_name, action, details FROM audit_logs
-                               WHERE client_uuid = ? AND action IN ('client_create', 'client_view', 'document_view', 'finance_link')
+                               WHERE client_uuid = ? AND action IN ('client_create', 'client_view', 'document_view', 'finance_link', 'client_archive', 'client_restore')
                                ORDER BY id DESC LIMIT 8");
     $st->execute([$uuid]);
     $journal = $st->fetchAll();
@@ -124,6 +126,22 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
 <div class="toolbar">
     <a href="vault/clients.php" id="back-link" class="btn btn--ghost no-print"><?= icon('arrow-left') ?> Répertoire KYC</a>
     <div class="toolbar__actions no-print">
+        <!-- Archiver / restaurer (rôles GTC-Vault), supprimer définitivement (administrateurs) : vault/client-action.php -->
+        <form method="post" action="vault/client-action.php" class="inline-form">
+            <?= csrf_field() ?>
+            <input type="hidden" name="uuid" value="<?= h($client['uuid']) ?>">
+            <input type="hidden" name="back" value="vault/client.php?uuid=<?= h($client['uuid']) ?>">
+            <?php if ($client['archived_at']): ?>
+                <button type="submit" name="op" value="restore" class="btn btn--ghost" data-client-restore><?= icon('refresh') ?> Restaurer</button>
+            <?php else: ?>
+                <button type="submit" name="op" value="archive" class="btn btn--ghost" data-client-archive
+                        data-confirm="Archiver le dossier de <?= h($client['nom_complet']) ?> ?&#10;&#10;Il sera retiré du répertoire et de la recherche de la facturation, mais conservé intact et restaurable."><?= icon('archive') ?> Archiver</button>
+            <?php endif; ?>
+            <?php if (is_admin()): ?>
+                <button type="submit" name="op" value="delete" class="btn btn--danger" data-client-delete
+                        data-confirm="Supprimer DÉFINITIVEMENT le dossier de <?= h($client['nom_complet']) ?><?= $docs ? ' et ses ' . count($docs) . ' pièce' . (count($docs) > 1 ? 's' : '') . ' d\'identité' : '' ?> ?&#10;&#10;Cette action est irréversible. Pour retirer simplement le dossier du répertoire, préférez « Archiver »."><?= icon('trash') ?> Supprimer</button>
+            <?php endif; ?>
+        </form>
         <a href="vault/clients-nouveau.php" class="btn btn--ghost"><?= icon('plus') ?> Nouveau dossier</a>
         <!-- Dossier complet imprimé (print.php : papier à en-tête, identité, pièces filigranées), impression journalisée -->
         <a href="vault/print.php?uuid=<?= h($client['uuid']) ?>" class="btn btn--primary" data-print-dossier target="_blank" rel="noopener">
@@ -132,6 +150,14 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
         </a>
     </div>
 </div>
+
+<?php if ($client['archived_at']): [$ad, $at] = vault_date($client['archived_at']); ?>
+    <div class="alert alert--warning" role="status" data-archived-banner>
+        <?= icon('archive') ?>
+        <p><strong>Dossier archivé</strong> le <?= h($ad) ?> à <?= h($at) ?><?= $client['archived_by_name'] ? ' par ' . h($client['archived_by_name']) : '' ?> :
+            il n'apparaît plus dans le répertoire ni dans la recherche de la facturation. Ses pièces restent consultables ; « Restaurer » le remet en service.</p>
+    </div>
+<?php endif; ?>
 
 <!-- ==================== EN-TÊTE DU DOSSIER ==================== -->
 <article class="panel" aria-labelledby="client-name">
@@ -235,7 +261,8 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
             <?php foreach ($journal as $j):
                 [$jd, $jt] = vault_date($j['created_at']);
                 [$dot, $verb] = ['document_view' => ['doc', 'a consulté une pièce'], 'client_create' => ['create', 'a créé le dossier'],
-                    'finance_link' => ['create', 'a émis un document financier']][$j['action']] ?? ['', 'a ouvert la fiche']; ?>
+                    'finance_link' => ['create', 'a émis un document financier'], 'client_archive' => ['', 'a archivé le dossier'],
+                    'client_restore' => ['create', 'a restauré le dossier']][$j['action']] ?? ['', 'a ouvert la fiche']; ?>
                 <li>
                     <span class="vault-journal__dot<?= $dot ? ' vault-journal__dot--' . $dot : '' ?>" aria-hidden="true"></span>
                     <div>

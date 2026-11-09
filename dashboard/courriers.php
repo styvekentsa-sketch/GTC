@@ -115,7 +115,7 @@ if ($action === 'new' || $action === 'edit') {
     $val = fn (string $k) => e((string) ($form[$k] ?? ''));
     $max = fn (string $k) => ' maxlength="' . COURRIER_LIMITS[$k] . '"';
 
-    dash_header($existing ? 'Modifier ' . $existing['reference'] : 'Nouveau courrier', 'courriers', ['assets/css/courrier-assistant.css']);
+    dash_header($existing ? 'Modifier ' . $existing['reference'] : 'Nouveau courrier', 'courriers', ai_suspended() ? [] : ['assets/css/courrier-assistant.css']);
     ?>
     <div class="toolbar">
         <a href="courriers.php" class="btn btn--ghost"><?= icon('arrow-left') ?> Tous les courriers</a>
@@ -238,14 +238,13 @@ if ($action === 'new' || $action === 'edit') {
         <fieldset class="form-section">
             <legend>Contenu</legend>
             <!-- ==================== ASSISTANT DE RÉDACTION (assets/js/courrier-assistant.js, dashboard/courrier-assistant.php) ==================== -->
+            <?php if (!ai_suspended()): /* suspendu par défaut : includes/ai_assistant.php, ai_suspended() */ ?>
             <section class="ai-assist" data-ai-assist data-api="courrier-assistant.php"<?= ai_enabled() ? '' : ' data-disabled' ?> aria-labelledby="ai-assist-title">
                 <header class="ai-assist__head">
                     <span class="ai-assist__badge" aria-hidden="true"><?= icon('zap') ?></span>
                     <div>
                         <h3 class="ai-assist__title" id="ai-assist-title">Assistant de rédaction &amp; correcteur</h3>
-                        <p class="ai-assist__sub"><?= ai_enabled()
-                            ? 'Propositions à relire : rien n\'est modifié sans votre accord.'
-                            : 'Non activé sur ce serveur : l\'administrateur doit renseigner la clé API de l\'assistant.' ?></p>
+                        <p class="ai-assist__sub"><?= e(ai_status_message(is_admin())) ?></p>
                     </div>
                 </header>
                 <div class="ai-assist__actions" role="toolbar" aria-label="Actions de l'assistant">
@@ -258,6 +257,7 @@ if ($action === 'new' || $action === 'edit') {
                 <div class="ai-assist__status" data-ai-status role="status" aria-live="polite" hidden></div>
                 <div class="ai-review" data-ai-review hidden></div>
             </section>
+            <?php endif; ?>
             <div class="field">
                 <label for="salutation">Formule d'appel</label>
                 <input id="salutation" name="salutation" value="<?= $val('salutation') ?>"<?= $max('salutation') . $inv('salutation') ?>>
@@ -302,7 +302,7 @@ if ($action === 'new' || $action === 'edit') {
         </div>
     </form>
     <script src="<?= e(asset_url('assets/js/courrier-editor.js', site_root())) ?>" defer></script>
-    <script src="<?= e(asset_url('assets/js/courrier-assistant.js', site_root())) ?>" defer></script>
+    <?php if (!ai_suspended()): ?><script src="<?= e(asset_url('assets/js/courrier-assistant.js', site_root())) ?>" defer></script><?php endif; ?>
     <?php
     dash_footer();
     exit;

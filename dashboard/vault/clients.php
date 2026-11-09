@@ -5,7 +5,9 @@
  *   clients.php?q=mballa&type=particulier&page=2
  *   - q    : recherche dans le nom, le téléphone et le N° d'identifiant (plusieurs mots : tous doivent être trouvés) ;
  *   - type : '' (tous), 'particulier' ou 'entreprise' ;
- *   - page : 20 dossiers par page, du plus récent au plus ancien.
+ *   - page : 20 dossiers par page, du plus récent au plus ancien ;
+ *   - etat : '' (dossiers actifs) ou 'archives' (dossiers archivés, restaurables).
+ * Actions par dossier (menu « ⋮ ») : archiver / restaurer, supprimer (administrateurs) → vault/client-action.php.
  *
  * Recherche fluide : le script de la page interroge cette même adresse avec « partial=1 » et reçoit en JSON le HTML
  * des résultats, rendu ici par PHP (un seul gabarit). Sans JavaScript, le formulaire s'envoie normalement (GET).
@@ -27,6 +29,10 @@ if ($partial) {
 // ---------- Paramètres ----------
 $q     = trim((string) preg_replace('/\s+/u', ' ', mb_substr((string) ($_GET['q'] ?? ''), 0, 100)));
 $type  = isset(CLIENTS_TYPES[$_GET['type'] ?? '']) ? (string) $_GET['type'] : '';
+$etat  = ($_GET['etat'] ?? '') === 'archives' ? 'archives' : '';
+if ($etat === 'archives') {
+    $type = '';   // vue « Archivés » : tous les types
+}
 $page  = max(1, (int) ($_GET['page'] ?? 1));
 $words = $q === '' ? [] : array_slice(array_unique(search_words($q)), 0, 5);
 
@@ -58,8 +64,8 @@ function search_words(string $q): array
 /** Adresse de la liste avec les filtres courants ($change : paramètres à remplacer). */
 function clients_url(array $change = []): string
 {
-    global $q, $type, $page;
-    $params = array_filter(array_merge(['q' => $q, 'type' => $type, 'page' => $page > 1 ? $page : null], $change),
+    global $q, $type, $page, $etat;
+    $params = array_filter(array_merge(['q' => $q, 'type' => $type, 'etat' => $etat, 'page' => $page > 1 ? $page : null], $change),
         fn ($v) => $v !== null && $v !== '' && $v !== 1);
     return 'vault/clients.php' . ($params ? '?' . http_build_query($params) : '');
 }
@@ -68,10 +74,13 @@ function clients_url(array $change = []): string
  * Conditions de recherche : chaque mot doit apparaître dans le nom, le N° d'identifiant ou le téléphone
  * (pour le téléphone, les chiffres seuls sont aussi cherchés : « 670 00 » trouve « +237670000000 »).
  */
-function clients_where(array $words, string $type): array
+function clients_where(array $words, string $type, ?string $etat = ''): array
 {
     $sql = [];
     $params = [];
+    if ($etat !== null) {   // null : actifs et archivés confondus
+        $sql[] = $etat === 'archives' ? 'c.archived_at IS NOT NULL' : 'c.archived_at IS NULL';
+    }
     if ($type !== '') {
         $sql[] = 'c.type_client = ?';
         $params[] = $type;
@@ -121,20 +130,25 @@ try {
     $pdo = vault_db();
 
     // Nombre de dossiers par type pour la recherche en cours (pastilles de filtre)
-    [$whereAll, $paramsAll] = clients_where($words, '');
+    [$whereAll, $paramsAll] = clients_where($words, '', '');   // pastilles : dossiers actifs
     $st = $pdo->prepare("SELECT c.type_client, COUNT(*) AS n FROM clients c {$whereAll} GROUP BY c.type_client");
     $st->execute($paramsAll);
     foreach ($st as $r) {
         $counts[$r['type_client']] = (int) $r['n'];
         $counts[''] += (int) $r['n'];
     }
-    $total = $counts[$type];
+    // Dossiers archivés correspondant à la recherche (onglet « Archivés »)
+    [$whereArch, $paramsArch] = clients_where($words, '', 'archives');
+    $st = $pdo->prepare("SELECT COUNT(*) FROM clients c {$whereArch}");
+    $st->execute($paramsArch);
+    $archivedCount = (int) $st->fetchColumn();
+    $total = $etat === 'archives' ? $archivedCount : $counts[$type];
     $pages = max(1, (int) ceil($total / CLIENTS_PER_PAGE));
     $page  = min($page, $pages);
 
-    [$where, $params] = clients_where($words, $type);
+    [$where, $params] = clients_where($words, $type, $etat);
     $offset = ($page - 1) * CLIENTS_PER_PAGE;
-    $st = $pdo->prepare("SELECT c.uuid, c.type_client, c.nom_complet, c.telephone, c.numero_identifiant, c.created_at, c.avatar_path,
+    $st = $pdo->prepare("SELECT c.uuid, c.type_client, c.nom_complet, c.telephone, c.numero_identifiant, c.created_at, c.avatar_path, c.archived_at,
                                 (SELECT COUNT(*) FROM client_documents d WHERE d.client_id = c.id) AS nb_docs
                          FROM clients c {$where}
                          ORDER BY c.created_at DESC, c.id DESC
@@ -146,7 +160,8 @@ try {
     $error = 'La liste des clients est momentanément indisponible. Réessayez dans un instant.';
     $pages = 1;
 }
-$isEmptyBase = !$error && $counts[''] === 0 && !$words;
+$archivedCount ??= 0;
+$isEmptyBase = !$error && $counts[''] === 0 && !$words && $etat === '' && $archivedCount === 0;
 
 // ---------- Gabarits ----------
 function type_badge(string $type): string
@@ -172,24 +187,53 @@ function docs_label(int $n): string
     return $n === 0 ? '<span class="vault-warn">Aucune pièce</span>' : $n . ' pièce' . ($n > 1 ? 's' : '');
 }
 
+/**
+ * Menu « ⋮ » d'un dossier : archiver ou restaurer (rôles GTC-Vault), supprimer définitivement (administrateurs).
+ * Formulaires POST vers vault/client-action.php (jeton CSRF, confirmation avant l'envoi).
+ */
+function client_actions_menu(array $r, string $back): string
+{
+    $base = ['uuid' => $r['uuid'], 'back' => $back];
+    $name = $r['nom_complet'];
+    $items = [$r['archived_at']
+        ? ['post', 'Restaurer le dossier', 'refresh', ['op' => 'restore'] + $base, 'action' => 'vault/client-action.php']
+        : ['post', 'Archiver le dossier', 'archive', ['op' => 'archive'] + $base,
+           "Archiver le dossier de {$name} ?\n\nIl sera retiré du répertoire et de la recherche de la facturation, mais conservé intact : vous pourrez le restaurer à tout moment depuis l'onglet « Archivés ».",
+           'action' => 'vault/client-action.php']];
+    if (is_admin()) {
+        $n = (int) ($r['nb_docs'] ?? 0);
+        $items[] = ['sep'];
+        $items[] = ['post', 'Supprimer définitivement', 'trash', ['op' => 'delete'] + $base,
+            "Supprimer DÉFINITIVEMENT le dossier de {$name}" . ($n ? " et ses {$n} pièce" . ($n > 1 ? 's' : '') . " d'identité" : '') . " ?\n\n"
+            . "Cette action est irréversible. Pour retirer simplement le dossier du répertoire, préférez « Archiver ».",
+            'danger' => true, 'action' => 'vault/client-action.php'];
+    }
+    return action_menu($items, 'Actions du dossier de ' . $name);
+}
+
 /** Pastilles de filtre, résultats, pagination : renvoyés tels quels à la recherche fluide. */
 function render_results(): string
 {
-    global $rows, $total, $page, $pages, $q, $type, $words, $counts, $error, $isEmptyBase;
+    global $rows, $total, $page, $pages, $q, $type, $words, $counts, $error, $isEmptyBase, $etat, $archivedCount;
     ob_start(); ?>
     <div class="vault-list-head">
         <nav class="chips vault-chips" aria-label="Filtrer par type de client">
             <?php foreach (['' => 'Tous'] + CLIENTS_TYPES as $key => $label):
-                $active = $key === $type; ?>
-                <a href="<?= h(clients_url(['type' => $key, 'page' => null])) ?>" data-nav data-type="<?= h($key) ?>"
+                $active = $key === $type && $etat === ''; ?>
+                <a href="<?= h(clients_url(['type' => $key, 'etat' => null, 'page' => null])) ?>" data-nav data-type="<?= h($key) ?>"
                    class="chip<?= $active ? ' is-active' : '' ?>"<?= $active ? ' aria-current="true"' : '' ?>>
                     <?= h($label) ?> <span class="chip__count"><?= $counts[$key] ?></span>
                 </a>
             <?php endforeach; ?>
+            <!-- Dossiers archivés : conservés, restaurables, hors du répertoire et de la facturation -->
+            <a href="<?= h(clients_url(['etat' => $etat === 'archives' ? null : 'archives', 'type' => null, 'page' => null])) ?>" data-nav data-etat
+               class="chip vault-chip--archive<?= $etat === 'archives' ? ' is-active' : '' ?>"<?= $etat === 'archives' ? ' aria-current="true"' : '' ?>>
+                <?= icon('archive') ?> Archivés <span class="chip__count"><?= $archivedCount ?></span>
+            </a>
         </nav>
         <p class="vault-summary" data-summary>
             <?php if ($total > 0): ?>
-                <?= $total === 1 ? '1 dossier' : number_format($total, 0, ',', "\u{202F}") . ' dossiers' ?><?= $q !== '' ? ' pour « ' . h($q) . ' »' : '' ?>
+                <?= $total === 1 ? '1 dossier' : number_format($total, 0, ',', "\u{202F}") . ' dossiers' ?><?= $etat === 'archives' ? ($total === 1 ? ' archivé' : ' archivés') : '' ?><?= $q !== '' ? ' pour « ' . h($q) . ' »' : '' ?>
                 <?php if ($total > CLIENTS_PER_PAGE): ?>
                     · <?= ($page - 1) * CLIENTS_PER_PAGE + 1 ?>–<?= min($total, $page * CLIENTS_PER_PAGE) ?>
                 <?php endif; ?>
@@ -211,7 +255,7 @@ function render_results(): string
     <?php elseif (!$rows): ?>
         <div class="empty vault-empty" role="status">
             <span class="vault-empty__icon"><?= icon('search') ?></span>
-            <h2>Aucun client ne correspond<?= $q !== '' ? ' à « ' . h($q) . ' »' : '' ?></h2>
+            <h2><?= $etat === 'archives' && $q === '' ? 'Aucun dossier archivé' : 'Aucun client ne correspond' . ($q !== '' ? ' à « ' . h($q) . ' »' : '') ?></h2>
             <p>Vérifiez l'orthographe, cherchez une partie du nom, du téléphone ou du N° d'identifiant<?= $type ? ', ou élargissez à tous les types' : '' ?>.</p>
             <div class="toolbar__actions">
                 <a href="vault/clients.php" data-nav data-reset class="btn btn--ghost">Effacer la recherche</a>
@@ -236,14 +280,14 @@ function render_results(): string
                     <?php foreach ($rows as $r):
                         $url = 'vault/client.php?uuid=' . rawurlencode($r['uuid']);
                         [$day, $time] = vault_date($r['created_at']); ?>
-                        <tr data-href="<?= h($url) ?>">
+                        <tr data-href="<?= h($url) ?>"<?= $r['archived_at'] ? ' class="is-archived"' : '' ?>>
                             <td data-label="Type"><?= type_badge($r['type_client']) ?></td>
                             <td data-label="Client">
                                 <span class="vault-client">
                                     <?= avatar_html($r, kyc_initials($r['nom_complet']), 'sm') ?>
                                     <span class="cell-stack">
                                         <a href="<?= h($url) ?>" class="link-strong"><?= mark($r['nom_complet'], $words) ?></a>
-                                        <small class="cell-sub"><?= docs_label((int) $r['nb_docs']) ?></small>
+                                        <small class="cell-sub"><?= docs_label((int) $r['nb_docs']) ?><?= $r['archived_at'] ? ' · <span class="vault-archived">Archivé le ' . h(vault_date($r['archived_at'])[0]) . '</span>' : '' ?></small>
                                     </span>
                                 </span>
                             </td>
@@ -251,7 +295,10 @@ function render_results(): string
                             <td data-label="N° identifiant"><span class="vault-mono"><?= $r['numero_identifiant'] !== null ? mark($r['numero_identifiant'], $words) : '—' ?></span></td>
                             <td data-label="Enregistré le" class="nowrap"><span><?= h($day) ?> <small class="vault-muted"><?= h($time) ?></small></span></td>
                             <td class="actions">
-                                <a href="<?= h($url) ?>" class="icon-btn" title="Ouvrir le dossier" aria-label="Ouvrir le dossier de <?= h($r['nom_complet']) ?>"><?= icon('eye') ?></a>
+                                <span class="vault-row-actions">
+                                    <a href="<?= h($url) ?>" class="icon-btn" title="Ouvrir le dossier" aria-label="Ouvrir le dossier de <?= h($r['nom_complet']) ?>"><?= icon('eye') ?></a>
+                                    <?= client_actions_menu($r, clients_url()) ?>
+                                </span>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -295,7 +342,7 @@ if ($partial) {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
     header('X-Content-Type-Options: nosniff');
-    echo json_encode(['html' => render_results(), 'url' => clients_url(), 'total' => $total, 'type' => $type, 'q' => $q],
+    echo json_encode(['html' => render_results(), 'url' => clients_url(), 'total' => $total, 'type' => $type, 'etat' => $etat, 'q' => $q],
         JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
@@ -308,7 +355,7 @@ if (!$error) {
                                        SUM(CASE WHEN type_client = 'particulier' THEN 1 ELSE 0 END) AS particulier,
                                        SUM(CASE WHEN type_client = 'entreprise' THEN 1 ELSE 0 END) AS entreprise,
                                        SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM client_documents d WHERE d.client_id = c.id) THEN 1 ELSE 0 END) AS incomplete
-                                FROM clients c")->fetch();
+                                FROM clients c WHERE c.archived_at IS NULL")->fetch();
         $overview = array_map('intval', $o ?: $overview);
     } catch (Throwable $e) {
         error_log('[GTC-Vault clients] chiffres : ' . $e->getMessage());
@@ -342,6 +389,7 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
 <div class="toolbar vault-toolbar">
     <form method="get" action="vault/clients.php" role="search" id="client-search" class="filters">
         <input type="hidden" name="type" value="<?= h($type) ?>">
+        <input type="hidden" name="etat" value="<?= h($etat) ?>">
         <div class="search vault-search">
             <?= icon('search') ?>
             <label for="q" class="visually-hidden">Rechercher un client</label>
@@ -369,6 +417,7 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
   var form = document.getElementById('client-search');
   var input = document.getElementById('q');
   var typeInput = form.elements.type;
+  var etatInput = form.elements.etat;
   var results = document.getElementById('results');
   var search = form.querySelector('.vault-search');
   var clearBtn = form.querySelector('[data-clear]'), kbd = form.querySelector('[data-kbd]');
@@ -397,6 +446,7 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
       .then(function (data) {
         results.innerHTML = data.html;
         typeInput.value = data.type;
+        etatInput.value = data.etat || '';
         lastQuery = data.q;
         document.title = (data.q ? data.q + ' · ' : '') + 'GTC-Vault · Répertoire KYC | Dashboard GTC';
         if (mode === 'push') history.pushState({}, '', data.url);
@@ -415,6 +465,7 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
     var q = input.value.trim();
     if (q) p.set('q', q);
     if (typeInput.value) p.set('type', typeInput.value);
+    if (etatInput.value) p.set('etat', etatInput.value);
     return 'vault/clients.php' + (p.toString() ? '?' + p : '');
   }
 
@@ -451,7 +502,7 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
     }
     // Ligne du tableau cliquable (hors liens, boutons et sélection de texte)
     var tr = e.target.closest('tr[data-href]');
-    if (tr && !e.target.closest('a, button') && !String(window.getSelection())) {
+    if (tr && !e.target.closest('a, button, summary, details, form') && !String(window.getSelection())) {
       var href = new URL(tr.getAttribute('data-href'), document.baseURI).href;
       if (e.ctrlKey || e.metaKey) window.open(href, '_blank');
       else location.href = href;

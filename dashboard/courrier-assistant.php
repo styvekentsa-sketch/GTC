@@ -53,12 +53,14 @@ $hits[] = $now;
 $_SESSION['ai_hits'] = $hits;
 session_write_close();   // l'appel peut durer : les autres pages de l'agent ne sont pas bloquées
 
+// Action : nom interne (correct, formal, english, closing) ou français (corriger, formel, traduire, politesse)
 $action = (string) ($_POST['action'] ?? '');
+$action = AI_ACTION_ALIASES[$action] ?? $action;
 if (!isset(AI_ACTIONS[$action])) {
     $reply(400, ['error' => 'Action inconnue.']);
 }
 if (!ai_enabled()) {
-    $reply(503, ['error' => 'L\'assistant n\'est pas encore activé sur ce serveur : l\'administrateur doit renseigner la clé API (GTC_ANTHROPIC_API_KEY dans includes/db.local.php).']);
+    $reply(503, ['error' => ai_status_message($user['role'] === 'admin'), 'status' => ai_status()]);
 }
 
 $field = function (string $key, int $max): string {
@@ -70,7 +72,8 @@ $letter = [
     'recipient'  => $field('recipient', 300),
     'subject'    => $field('subject', COURRIER_LIMITS['subject'] ?? 255),
     'salutation' => $field('salutation', COURRIER_LIMITS['salutation'] ?? 150),
-    'body'       => courrier_sanitize_html($field('body', COURRIER_LIMITS['body'] ?? 60000)),
+    // Corps : HTML de l'éditeur enrichi, ou texte brut (chaque ligne devient un paragraphe)
+    'body'       => courrier_sanitize_html(ai_body_html($field('body', COURRIER_LIMITS['body'] ?? 60000))),
     'closing'    => $field('closing', COURRIER_LIMITS['closing'] ?? 500),
 ];
 if (courrier_body_text($letter['body']) === '' && $action !== 'closing') {
