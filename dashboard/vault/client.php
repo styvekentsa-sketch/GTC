@@ -41,9 +41,10 @@ if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
 
 // ---------- Client et pièces (une requête, jointure) ----------
 $st = vault_db()->prepare('SELECT c.id, c.uuid, c.type_client, c.nom_complet, c.telephone, c.email, c.adresse, c.numero_identifiant,
-                                  c.created_at, c.updated_at, c.avatar_path,
+                                  c.created_at, c.updated_at, c.avatar_path, c.created_by, u.name AS created_by_name,
                                   d.id AS doc_id, d.type_document, d.nom_original, d.taille_fichier, d.mime_type, d.created_at AS doc_created_at
                            FROM clients c
+                           LEFT JOIN users u ON u.id = c.created_by
                            LEFT JOIN client_documents d ON d.client_id = c.id
                            WHERE c.uuid = ?
                            ORDER BY d.created_at ASC, d.id ASC');
@@ -130,6 +131,11 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
     <a href="vault/clients.php" id="back-link" class="btn btn--ghost no-print"><?= icon('arrow-left') ?> Répertoire KYC</a>
     <div class="toolbar__actions no-print">
         <a href="vault/clients-nouveau.php" class="btn btn--ghost"><?= icon('plus') ?> Nouveau dossier</a>
+        <!-- Dossier complet imprimé (print.php : papier à en-tête, identité, pièces filigranées), impression journalisée -->
+        <a href="vault/print.php?uuid=<?= h($client['uuid']) ?>" class="btn btn--primary" data-print-dossier target="_blank" rel="noopener">
+            <span data-icon><?= icon('printer') ?></span><span class="vault-spin" data-spinner hidden aria-hidden="true"></span>
+            <span data-label>Imprimer le dossier complet</span>
+        </a>
     </div>
 </div>
 
@@ -187,6 +193,7 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
             <div><dt>Type de client</dt><dd><?= $isCompany ? 'Entreprise (personne morale)' : 'Particulier (personne physique)' ?></dd></div>
             <div><dt>Pièces versées</dt><dd><?= count($docs) ?></dd></div>
             <div><dt>Enregistré le</dt><dd><?= h($createdDay) ?> à <?= h($createdTime) ?></dd></div>
+            <div><dt>Créé par</dt><dd data-created-by><?= h($client['created_by_name'] ?: 'Compte supprimé (n° ' . (int) $client['created_by'] . ')') ?></dd></div>
             <div><dt>Dernière mise à jour</dt><dd><?= h(implode(' à ', vault_date($client['updated_at']))) ?></dd></div>
         </dl>
     </div>
@@ -225,7 +232,7 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
     </section>
 
     <!-- ==================== JOURNAL DES CONSULTATIONS ==================== -->
-    <section class="panel" aria-labelledby="audit-title">
+    <section class="panel no-print" aria-labelledby="audit-title">
         <header class="panel__head">
             <h2 class="panel__title" id="audit-title"><?= icon('history') ?> Dernières consultations</h2>
         </header>
@@ -470,6 +477,48 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
       var ref = new URL(document.referrer);
       if (ref.origin === location.origin && /\/clients\.php$/.test(ref.pathname) && history.length > 1) { e.preventDefault(); history.back(); }
     } catch (err) { /* pas de page précédente : lien normal */ }
+  });
+
+  // ---------- Impression du dossier complet ----------
+  // Le document (vault/print.php) est préparé dans un cadre invisible : pièces filigranées chargées, puis fenêtre
+  // d'impression du navigateur. L'impression est journalisée par le serveur à l'ouverture du document.
+  // Sans cadre utilisable (navigateur restrictif) : le document s'ouvre dans un nouvel onglet, avec son bouton Imprimer.
+  var printBtn = document.querySelector('[data-print-dossier]'), printFrame = null, printTimer = null;
+  function printBusy(on) {
+    printBtn.classList.toggle('is-busy', on);
+    printBtn.setAttribute('aria-disabled', on ? 'true' : 'false');
+    printBtn.querySelector('[data-icon]').hidden = on;
+    printBtn.querySelector('[data-spinner]').hidden = !on;
+    printBtn.querySelector('[data-label]').textContent = on ? 'Préparation de l\'impression…' : 'Imprimer le dossier complet';
+  }
+  printBtn.addEventListener('click', function (e) {
+    if (e.ctrlKey || e.metaKey || e.shiftKey) return;           // ouverture volontaire dans un onglet
+    e.preventDefault();
+    if (printBtn.classList.contains('is-busy')) return;
+    printBusy(true);
+    if (printFrame) printFrame.remove();
+    printFrame = document.createElement('iframe');
+    printFrame.title = 'Dossier à imprimer';
+    printFrame.setAttribute('aria-hidden', 'true');
+    printFrame.className = 'vault-print-frame';
+    printFrame.src = printBtn.getAttribute('href') + '&auto=1';
+    document.body.appendChild(printFrame);
+    clearTimeout(printTimer);
+    printTimer = setTimeout(function () {                        // rien après 45 s : document ouvert dans un onglet
+      if (!printBtn.classList.contains('is-busy')) return;
+      printBusy(false); window.open(printBtn.href, '_blank', 'noopener');
+    }, 45000);
+  });
+  window.addEventListener('message', function (e) {
+    if (e.origin !== location.origin || !e.data || e.data.source !== 'gtc-vault-print') return;
+    if (e.data.type === 'printing' || e.data.type === 'done') { clearTimeout(printTimer); printBusy(false); }
+  });
+
+  // Ctrl+P sur la fiche : la page s'imprime sans menus ni boutons (feuille @media print) ; l'impression est journalisée
+  window.addEventListener('beforeprint', function () {
+    var fd = new FormData();
+    fd.append('csrf_token', <?= json_encode($csrf) ?>); fd.append('uuid', <?= json_encode($client['uuid']) ?>); fd.append('log', 'shortcut');
+    if (navigator.sendBeacon) navigator.sendBeacon('vault/print.php', fd);
   });
 
   // Copier le N° d'identifiant

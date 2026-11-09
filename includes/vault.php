@@ -7,9 +7,11 @@
  *   $user = vault_guard('json');    // requête Fetch : 401 / 403 en JSON
  *   $user = vault_guard('plain');   // image ou fichier : 401 / 403 en texte
  *
- * Connexion, session, jeton CSRF, base de données et fuseau horaire (Africa/Douala) : ceux du Dashboard.
- * Tables : clients, client_documents, audit_logs (db_install_kyc, includes/db.php).
- * Pièces : data/kyc/AAAA/MM/<aléatoire>.ext — dossier interdit d'accès depuis le web (.htaccess).
+ * Connexion, session, jeton CSRF (csrf_token / csrf_verify), base de données (une seule instance PDO, db()) et
+ * fuseau horaire (Africa/Douala) : ceux du Dashboard. Aucune connexion ni base propre au module.
+ * Rôles : VAULT_ROLES (admin, conformite, agent) ; tout autre rôle reçoit une page 403, journalisée.
+ * Journal : log_audit() → table audit_logs. Tables : clients, client_documents, audit_logs (db_install_kyc, includes/db.php).
+ * Pièces : <dossier KYC>/AAAA/MM/<aléatoire>.ext, HORS de la racine web (kyc_storage_dir() ci-dessous).
  */
 declare(strict_types=1);
 
@@ -20,10 +22,49 @@ require_once __DIR__ . '/dashboard.php';   // VAULT_ROLES, current_user(), activ
 const VAULT_TZ        = 'Africa/Douala';
 const KYC_MAX_BYTES   = 5 * 1024 * 1024;                       // 5 Mo par fichier
 const KYC_MIME_TYPES  = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'application/pdf' => 'pdf'];
-// Dossier des pièces : data/kyc/ par défaut (interdit d'accès par .htaccess et data/.htaccess).
-// Recommandé en production : un dossier HORS de public_html, déclaré dans includes/db.local.php, ex.
-//   define('GTC_KYC_DIR', '/home/u123456789/kyc');   (le dossier doit exister et être accessible en écriture à PHP)
-define('KYC_STORAGE_DIR', defined('GTC_KYC_DIR') && GTC_KYC_DIR !== '' ? rtrim((string) GTC_KYC_DIR, '/\\') : __DIR__ . '/../data/kyc');
+/**
+ * Dossier des pièces KYC, HORS de la racine web (même règle que les sauvegardes, includes/backup.php) :
+ *   1. GTC_KYC_DIR, déclaré dans includes/db.local.php (ex. define('GTC_KYC_DIR', '/home/u123456789/gtc-kyc')) ;
+ *   2. sinon le dossier « gtc-kyc » À CÔTÉ du site (au-dessus de public_html), créé automatiquement ;
+ *   3. à défaut (hébergeur qui interdit d'écrire au-dessus du site) : data/kyc, interdit d'accès par .htaccess.
+ * Des pièces déjà rangées dans data/kyc restent servies depuis data/kyc tant qu'elles n'ont pas été déplacées
+ * (php tools/kyc-move.php) : aucun dossier client ne perd ses pièces au changement d'emplacement.
+ */
+function kyc_storage_dir(): string
+{
+    if (defined('GTC_KYC_DIR') && GTC_KYC_DIR !== '') {
+        return rtrim((string) GTC_KYC_DIR, '/\\');
+    }
+    $site    = dirname(__DIR__);
+    $legacy  = $site . '/data/kyc';
+    $outside = rtrim(dirname($site), '/\\') . DIRECTORY_SEPARATOR . 'gtc-kyc';
+    if (is_dir($outside) && is_writable($outside)) {
+        return $outside;
+    }
+    if (!kyc_dir_has_files($legacy) && (is_dir($outside) || @mkdir($outside, 0700, true)) && is_writable($outside)) {
+        // Protection si le dossier se trouve malgré tout sous une racine web
+        is_file($outside . '/.htaccess') || @file_put_contents($outside . '/.htaccess', "Require all denied\n");
+        return $outside;
+    }
+    return $legacy;
+}
+
+/** Le dossier contient-il au moins un fichier (pièce, photo de profil, capture) ? */
+function kyc_dir_has_files(string $dir): bool
+{
+    if (!is_dir($dir)) {
+        return false;
+    }
+    $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS));
+    foreach ($files as $file) {
+        if ($file->isFile() && $file->getFilename() !== '.htaccess') {
+            return true;
+        }
+    }
+    return false;
+}
+
+define('KYC_STORAGE_DIR', kyc_storage_dir());
 const KYC_VIEW_ROLES  = VAULT_ROLES;                            // admin, conformité, agent (includes/dashboard.php)
 const KYC_DIAL_CODES  = [                                       // indicatif => [code pays, nom]
     '+237' => ['CM', 'Cameroun'],     '+241' => ['GA', 'Gabon'],              '+242' => ['CG', 'Congo'],
@@ -84,16 +125,32 @@ function vault_guard(string|false $api = false): array
         redirect('../login.php?next=' . rawurlencode($next));
     }
     if (!in_array($user['role'] ?? '', VAULT_ROLES, true)) {
-        vault_audit('access_denied', null, null, 'Accès refusé à ' . ($_SERVER['SCRIPT_NAME'] ?? '?') . ' (rôle « ' . ($user['role'] ?: 'aucun') . ' »)');
+        log_audit('access_denied', null, null, 'Accès refusé à ' . ($_SERVER['SCRIPT_NAME'] ?? '?') . ' (rôle « ' . ($user['role'] ?: 'aucun') . ' »)');
         if ($api !== false) {
             vault_fail($api, 403, 'forbidden', 'Accès refusé.');
         }
-        // Même comportement que require_roles() du Dashboard : message puis retour à la page d'accueil du rôle
-        http_response_code(403);
-        flash('error', "Votre compte n'est pas autorisé à consulter les dossiers KYC (GTC-Vault). Cette tentative a été enregistrée.");
-        redirect('../' . role_home($user['role'] ?? ''));
+        vault_forbidden_page($user);
     }
     return $user;
+}
+
+/** Page « Accès refusé » (HTTP 403) dans la mise en page du Dashboard, sans aucun contenu du coffre-fort. */
+function vault_forbidden_page(array $user): never
+{
+    http_response_code(403);
+    header('Cache-Control: no-store');
+    dash_header('Accès refusé', '', [VAULT_CSS], true);
+    ?>
+    <div class="empty vault-empty" role="alert">
+        <span class="vault-empty__icon"><?= vault_icon('vault') ?></span>
+        <h2>Accès refusé (403)</h2>
+        <p>Votre compte n'est pas autorisé à consulter les dossiers KYC (GTC-Vault). L'accès est réservé à
+            l'administration, à la conformité et aux agents. Cette tentative a été enregistrée.</p>
+        <div class="toolbar__actions"><a href="<?= h(role_home($user['role'] ?? '')) ?>" class="btn btn--primary">Retour à mon espace</a></div>
+    </div>
+    <?php
+    dash_footer();
+    exit;
 }
 
 /** Réponse d'erreur sans contenu du dossier (JSON ou texte). */
@@ -138,6 +195,16 @@ function vault_audit(string $action, ?array $client, ?int $documentId, string $d
     } catch (Throwable $e) {
         error_log('[GTC-Vault audit] ' . $action . ' — ' . $details . ' — ' . $e->getMessage());
     }
+}
+
+/**
+ * Journalisation centralisée de GTC-Vault (table audit_logs) : point d'entrée unique du module.
+ *   log_audit('document_view', ['uuid' => $uuid, 'nom_complet' => $nom], $documentId, 'Consultation CNI recto');
+ * Même instance PDO que le Dashboard ; ajout seul ; ne bloque jamais la page (voir vault_audit()).
+ */
+function log_audit(string $action, ?array $client = null, ?int $documentId = null, string $details = '', ?array $as = null): void
+{
+    vault_audit($action, $client, $documentId, $details, $as);
 }
 
 /** UUID v4 (identifiant public du client). */

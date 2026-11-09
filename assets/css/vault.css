@@ -494,3 +494,19 @@ fieldset.field { min-width: 0; border: 0; }
 /* Boutons radio du sélecteur CNI / passeport : ancrés dans leur étiquette (comme .choice du Dashboard) */
 .vault-seg label { position: relative; }
 .vault-seg input { top: 0; left: 0; width: 1px; height: 1px; }
+
+/* ==========================================================================
+   13. Impression du dossier
+   ========================================================================== */
+/* Cadre invisible où le dossier imprimable (vault/print.php) est préparé avant la fenêtre d'impression */
+.vault-print-frame { position: fixed; right: 0; bottom: 0; width: 1px; height: 1px; border: 0; opacity: 0; pointer-events: none; }
+.btn.is-busy { opacity: 0.8; cursor: progress; }
+.btn .vault-spin { width: 1rem; height: 1rem; }
+
+/* Fiche imprimée par Ctrl+P : identité et liste des pièces, sans menus, boutons ni journal */
+@media print {
+  .vault-print-frame { display: none !important; }
+  .vault-head__state.alert { display: flex !important; }
+  .dash-grid--aside { grid-template-columns: 1fr; }
+  .vault-avatar { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

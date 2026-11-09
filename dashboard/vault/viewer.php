@@ -23,7 +23,8 @@ require_once __DIR__ . '/../../includes/vault.php';
 $user = vault_guard('plain');   // connexion du Dashboard + rôle VAULT_ROLES
 
 $docId = (int) ($_GET['d'] ?? 0);
-$mode  = ($_GET['m'] ?? '') === 'pdf' ? 'pdf' : 'image';
+// image : aperçu filigrané · print : même image pour le dossier imprimé (print.php), journalisée comme impression
+$mode  = in_array($_GET['m'] ?? '', ['pdf', 'print'], true) ? (string) $_GET['m'] : 'image';
 $valid = vault_viewer_check($docId, $mode, (int) ($_GET['e'] ?? 0), (string) ($_GET['s'] ?? ''));
 session_write_close();   // la session n'est plus modifiée : les autres requêtes de l'agent ne sont pas bloquées
 
@@ -79,7 +80,10 @@ if ($mode === 'pdf') {
     if (($_SERVER['HTTP_X_GTC_VIEWER'] ?? '') !== '1' || ($_SERVER['HTTP_SEC_FETCH_DEST'] ?? 'empty') !== 'empty') {
         viewer_fail(403, 'Ce document se consulte uniquement depuis la fiche du client.');
     }
-    vault_audit('document_view', $doc, (int) $doc['id'], $user['name'] . ' a consulté « ' . $label . ' » (PDF) du client ' . $doc['nom_complet']);
+    // PDF lu pour le dossier imprimé (print.php envoie X-GTC-Print) : journalisé comme impression
+    $printing = ($_SERVER['HTTP_X_GTC_PRINT'] ?? '') === '1';
+    vault_audit($printing ? 'document_print' : 'document_view', $doc, (int) $doc['id'],
+        $user['name'] . ($printing ? ' a imprimé « ' : ' a consulté « ') . $label . ' » (PDF) du client ' . $doc['nom_complet']);
     header('Content-Type: application/pdf');
     header('Content-Disposition: inline; filename="document.pdf"');
     header('Content-Length: ' . filesize($path));
@@ -113,9 +117,11 @@ $out = imagecreatetruecolor($W, $H);
 imagefill($out, 0, 0, imagecolorallocate($out, 255, 255, 255));
 imagecopyresampled($out, $img, 0, 0, 0, 0, $W, $H, $w, $h);
 
-viewer_watermark($out, vault_watermark_text(), 'Réf. ' . substr($doc['uuid'], 0, 8) . ' · pièce #' . $doc['id'] . ' · consultation enregistrée');
+$printing = $mode === 'print';
+viewer_watermark($out, vault_watermark_text(), 'Réf. ' . substr($doc['uuid'], 0, 8) . ' · pièce #' . $doc['id'] . ($printing ? ' · impression enregistrée' : ' · consultation enregistrée'));
 
-vault_audit('document_view', $doc, (int) $doc['id'], $user['name'] . ' a consulté « ' . $label . ' » du client ' . $doc['nom_complet']);
+vault_audit($printing ? 'document_print' : 'document_view', $doc, (int) $doc['id'],
+    $user['name'] . ($printing ? ' a imprimé « ' : ' a consulté « ') . $label . ' » du client ' . $doc['nom_complet']);
 
 header('Content-Type: image/jpeg');
 header('Content-Disposition: inline; filename="apercu-filigrane.jpg"');
