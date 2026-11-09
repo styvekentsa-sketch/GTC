@@ -189,6 +189,7 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
                 <?php if ($inv['client_phone']): ?><p class="receipt__phone">Tél. / WhatsApp : <?= e($inv['client_phone']) ?></p><?php endif; ?>
                 <?php if (!empty($inv['client_id_number'])): ?><p class="receipt__phone">N° pièce : <?= e($inv['client_id_number']) ?></p><?php endif; ?>
                 <?php if (!empty($inv['client_address'])): ?><p class="receipt__phone receipt__clamp"><?= e($inv['client_address']) ?></p><?php endif; ?>
+                <?php if (!empty($inv['client_email'])): ?><p class="receipt__phone"><?= e($inv['client_email']) ?></p><?php endif; ?>
             </section>
 
             <!-- Tableau récapitulatif -->

@@ -51,6 +51,7 @@ function invoice_input(): array
         'client_name'     => post('client_name'),
         'client_phone'    => post('client_phone'),
         'client_address'  => post('client_address'),
+        'client_email'    => mb_strtolower(post('client_email')),
         'client_id_number' => strtoupper(post('client_id_number')),
         'operation_type'  => post('operation_type'),
         'amount_given'    => parse_number(post('amount_given')),
@@ -95,6 +96,11 @@ function invoice_input(): array
     }
     if (mb_strlen($d['client_address']) > 255) {
         $e['client_address'] = 'Adresse trop longue (255 caractères au plus).';
+    } elseif (preg_match(KYC_EMAIL_PATTERN, $d['client_address'])) {
+        $e['client_address'] = 'L\'adresse ne doit pas contenir d\'e-mail : indiquez-le dans le champ « E-mail ».';
+    }
+    if ($d['client_email'] !== '' && (!filter_var($d['client_email'], FILTER_VALIDATE_EMAIL) || mb_strlen($d['client_email']) > 190)) {
+        $e['client_email'] = 'Adresse e-mail invalide.';
     }
     if ($d['client_id_number'] !== '' && !preg_match('/^[A-Z0-9\/.\s-]{4,100}$/u', $d['client_id_number'])) {
         $e['client_id_number'] = 'N° de pièce invalide (lettres, chiffres, / . -).';
@@ -150,6 +156,7 @@ function invoice_input(): array
     }
     $d['client_phone'] = $d['client_phone'] === '' ? null : $d['client_phone'];
     $d['client_address'] = $d['client_address'] === '' ? null : $d['client_address'];
+    $d['client_email'] = $d['client_email'] === '' ? null : $d['client_email'];
     $d['client_id_number'] = $d['client_id_number'] === '' ? null : $d['client_id_number'];
     $d['transaction_reason'] = $d['transaction_reason'] === '' ? null : $d['transaction_reason'];
     $d['sender_name'] = null;   // champ retiré : le motif peut contenir le nom de l'expéditeur (colonne gardée pour l'historique)
@@ -179,14 +186,14 @@ if (is_post()) {
                         'INSERT INTO invoices (invoice_number, client_name, client_phone, operation_type, source_currency,
                          target_currency, amount_given, exchange_rate, rate_direction, amount_received, fees, payment_method,
                          transaction_reason, sender_name, printer_id, status, issue_date, agent_id, agent_name, created_at, shipment_id,
-                         client_address, client_id_number, vault_client_id, kyc_status)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                         client_address, client_id_number, vault_client_id, kyc_status, client_email)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                         [$number, $form['client_name'], $form['client_phone'], $form['operation_type'], $form['source_currency'],
                          $form['target_currency'], $form['amount_given'], $form['exchange_rate'], $form['rate_direction'],
                          $form['amount_received'], $form['fees'], $form['payment_method'], $form['transaction_reason'], $form['sender_name'],
                          $form['printer_id'] ?: null, 'paid', date('Y-m-d'),
                          (int) $_SESSION['user_id'], (string) $_SESSION['user_name'], db_now(), $form['shipment_id'],
-                         $form['client_address'], $form['client_id_number'], $form['vault']['id'] ?? null, $form['vault']['status'] ?? null]
+                         $form['client_address'], $form['client_id_number'], $form['vault']['id'] ?? null, $form['vault']['status'] ?? null, $form['client_email']]
                     );
                     $newId = (int) db()->lastInsertId();
                     activity_log('create', 'invoice', $newId, $number, array_filter([
@@ -340,6 +347,7 @@ if ($action === 'view') {
                 <div><dt>Téléphone / WhatsApp</dt><dd><?= e($inv['client_phone'] ?? '—') ?></dd></div>
                 <?php if (!empty($inv['client_id_number'])): ?><div><dt>N° CNI / passeport / RCCM</dt><dd><?= e($inv['client_id_number']) ?></dd></div><?php endif; ?>
                 <?php if (!empty($inv['client_address'])): ?><div><dt>Adresse</dt><dd><?= e($inv['client_address']) ?></dd></div><?php endif; ?>
+                <?php if (!empty($inv['client_email'])): ?><div><dt>E-mail</dt><dd><a href="mailto:<?= e($inv['client_email']) ?>"><?= e($inv['client_email']) ?></a></dd></div><?php endif; ?>
                 <div><dt>Dossier GTC-Vault</dt><dd data-kyc-detail><?= kyc_link_summary(!empty($inv['vault_client_id']) ? (kyc_clients_by_ids([(int) $inv['vault_client_id']])[(int) $inv['vault_client_id']] ?? null) : null, $inv['kyc_status'] ?? null) ?></dd></div>
                 <div><dt>Mode de paiement</dt><dd><?= e(PAYMENT_METHODS[$inv['payment_method']] ?? $inv['payment_method']) ?></dd></div>
                 <div><dt>Motif</dt><dd><?= e(invoice_reason_text($inv)) ?></dd></div>
@@ -499,7 +507,7 @@ if ($action === 'list') {
 $prefilled = false;
 if ($form === null) {
     $form = [
-        'client_name' => '', 'client_phone' => '', 'client_address' => '', 'client_id_number' => '', 'vault' => null, 'operation_type' => 'Exchange',
+        'client_name' => '', 'client_phone' => '', 'client_email' => '', 'client_address' => '', 'client_id_number' => '', 'vault' => null, 'operation_type' => 'Exchange',
         // Devise source par défaut : FCFA (la plupart des opérations du guichet) ; une autre devise se choisit dans la liste
         'amount_given' => '', 'source_currency' => 'XAF', 'target_currency' => settings_currency(),
         'exchange_rate' => '', 'rate_direction' => 'multiply', 'fees' => '0', 'payment_method' => 'Espèces', 'transaction_reason' => '',
@@ -581,7 +589,7 @@ dash_header('Reçus de caisse', 'invoices', ['assets/css/kyc-link.css']);
         <div class="form-grid">
             <!-- Passerelle GTC-Vault : recherche du dossier KYC, remplissage des champs, badge de conformité -->
             <?= kyc_link_field($form['vault'] ?? null,
-                ['name' => 'client_name', 'phone' => 'client_phone', 'address' => 'client_address', 'idNumber' => 'client_id_number'],
+                ['name' => 'client_name', 'phone' => 'client_phone', 'email' => 'client_email', 'address' => 'client_address', 'idNumber' => 'client_id_number'],
                 $errors['vault_client'] ?? null) ?>
             <div class="field">
                 <label for="client_name">Nom &amp; Prénom *</label>
@@ -602,6 +610,11 @@ dash_header('Reçus de caisse', 'invoices', ['assets/css/kyc-link.css']);
                 <label for="client_address">Adresse</label>
                 <input id="client_address" name="client_address" maxlength="255" autocomplete="off" placeholder="Quartier, ville" value="<?= e((string) ($form['client_address'] ?? '')) ?>"<?= $inv('client_address') ?>>
                 <?= $err('client_address') ?>
+            </div>
+            <div class="field">
+                <label for="client_email">E-mail</label>
+                <input id="client_email" name="client_email" type="email" maxlength="190" autocomplete="off" inputmode="email" placeholder="nom@exemple.com" value="<?= e((string) ($form['client_email'] ?? '')) ?>"<?= $inv('client_email') ?>>
+                <?= $err('client_email') ?>
             </div>
             <div class="field">
                 <label for="operation_type">Type d'opération *</label>

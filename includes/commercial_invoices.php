@@ -236,6 +236,8 @@ function cinv_input(): array
     }
     if (mb_strlen($d['client_address']) > 255) {
         $e['client_address'] = 'Adresse trop longue (255 caractères au plus).';
+    } elseif (preg_match(KYC_EMAIL_PATTERN, $d['client_address'])) {
+        $e['client_address'] = 'L\'adresse ne doit pas contenir d\'e-mail : indiquez-le dans le champ « E-mail ».';
     }
     if ($d['client_niu'] !== '' && !preg_match('/^[A-Z0-9]{6,30}$/', $d['client_niu'])) {
         $e['client_niu'] = 'NIU invalide (lettres et chiffres).';
