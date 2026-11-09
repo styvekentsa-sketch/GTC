@@ -91,6 +91,19 @@ dash_header('Accueil', 'index');
         </div>
     </header>
 
+    <!-- Recherche globale (assets/js/global-search.js) : clients GTC-Vault, reçus, factures, colis, modules -->
+    <div class="gs-hub" data-gs-inline role="search">
+        <div class="gs-field gs-field--hub" data-gs-field>
+            <span class="gs-field__icon" aria-hidden="true"><?= icon('search') ?></span>
+            <label class="visually-hidden" for="gs-hub-input">Recherche globale</label>
+            <input type="search" id="gs-hub-input" data-gs-input autocomplete="off" spellcheck="false" maxlength="80"
+                   placeholder="Rechercher un client, un reçu, une facture, un colis…"
+                   role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="gs-hub-results">
+            <kbd class="gs-field__kbd" data-gs-kbd aria-hidden="true">Ctrl K</kbd>
+        </div>
+        <div class="gs-results gs-results--dropdown" id="gs-hub-results" role="listbox" aria-label="Résultats de la recherche" data-gs-results hidden></div>
+    </div>
+
     <nav class="hub__grid" aria-label="Modules du Dashboard">
         <?php $i = 0; foreach ($modules as $key => $m): ?>
             <?php /* couleurs de la charte en alternance régulière, quels que soient les modules visibles du rôle ;

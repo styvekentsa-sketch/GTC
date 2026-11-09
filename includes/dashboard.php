@@ -478,6 +478,7 @@ function dash_header(string $title, string $active = '', array $styles = [], boo
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="stylesheet" href="<?= e(asset_url('assets/css/custom-select.css', site_root())) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('assets/css/dashboard.css', site_root())) ?>">
+    <link rel="stylesheet" href="<?= e(asset_url('assets/css/global-search.css', site_root())) ?>">
     <?php foreach ($styles as $css): ?>
     <link rel="stylesheet" href="<?= e(asset_url($css, site_root())) ?>">
     <?php endforeach; ?>
@@ -558,6 +559,10 @@ function dash_header(string $title, string $active = '', array $styles = [], boo
             <?php endif; ?>
         <?php endif; ?>
         <h1 class="topbar__title"><?= e($title) ?></h1>
+        <!-- Recherche globale : palette ouverte par ce bouton ou par Ctrl + K (assets/js/global-search.js) -->
+        <button type="button" class="topbar__search" data-gs-open aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K" title="Recherche globale (Ctrl + K)">
+            <?= icon('search') ?><span class="topbar__search-label">Rechercher…</span><kbd data-gs-kbd>Ctrl K</kbd>
+        </button>
         <div class="topbar__user">
             <span class="topbar__avatar" aria-hidden="true"><?= e(initials($user['name'] ?? '?')) ?></span>
             <span class="topbar__meta">
@@ -584,15 +589,58 @@ function dash_footer(): void
     <footer class="dash-footer">© <?= date('Y') ?> <?= e(GTC_NAME) ?> — Espace de gestion interne</footer>
 </div>
 
+<?= gs_palette_html() ?>
+
 <script src="<?= e(asset_url('assets/js/custom-select.js', site_root())) ?>" defer></script>
 <script src="<?= e(asset_url('assets/js/dashboard.js', site_root())) ?>" defer></script>
 <script src="<?= e(asset_url('assets/js/pwa-install.js', site_root())) ?>" defer></script>
+<script src="<?= e(asset_url('assets/js/global-search.js', site_root())) ?>" defer></script>
 <?php if (can_access_messages()): ?>
 <script src="<?= e(asset_url('assets/js/messages-live.js', site_root())) ?>" defer></script>
 <?php endif; ?>
 </body>
 </html>
     <?php
+}
+
+/**
+ * Fenêtre de la recherche globale (palette « Ctrl + K »), commune à toutes les pages du Dashboard.
+ * Résultats : dashboard/search-api.php ; comportement : assets/js/global-search.js.
+ */
+function gs_palette_html(): string
+{
+    if (!current_user()) {
+        return '';
+    }
+    ob_start(); ?>
+<div class="gs-palette" data-gs-palette hidden>
+    <div class="gs-dialog" role="dialog" aria-modal="true" aria-labelledby="gs-palette-title">
+        <h2 class="visually-hidden" id="gs-palette-title">Recherche globale</h2>
+        <div class="gs-field gs-field--palette" data-gs-field>
+            <span class="gs-field__icon" aria-hidden="true"><?= icon('search') ?></span>
+            <input type="search" id="gs-palette-input" data-gs-input autocomplete="off" spellcheck="false" maxlength="80"
+                   placeholder="Client, N° de reçu ou de facture, téléphone, N° CNI, colis…"
+                   role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="gs-palette-results" aria-label="Recherche globale">
+            <button type="button" class="gs-field__esc" data-gs-close aria-label="Fermer la recherche"><kbd data-gs-close>Échap</kbd><span class="gs-field__close" data-gs-close>Fermer</span></button>
+        </div>
+        <div class="gs-results" id="gs-palette-results" role="listbox" aria-label="Résultats de la recherche" data-gs-results>
+            <?= gs_idle_html() ?>
+        </div>
+        <footer class="gs-dialog__foot" aria-hidden="true">
+            <span><kbd>↑</kbd><kbd>↓</kbd> parcourir</span><span><kbd>Entrée</kbd> ouvrir</span><span><kbd>Échap</kbd> fermer</span>
+        </footer>
+    </div>
+</div>
+    <?php
+    return (string) ob_get_clean();
+}
+
+/** Aide affichée avant la saisie : ce que le compte connecté peut chercher. */
+function gs_idle_html(): string
+{
+    require_once __DIR__ . '/global_search.php';
+    return '<div class="gs-msg gs-msg--idle"><strong>Recherche globale</strong><span>Tapez au moins 2 caractères. Recherche dans : '
+        . e(implode(', ', gs_scopes(current_user() ?? []))) . '.</span></div>';
 }
 
 /** Gabarit des pages publiques du Dashboard (connexion, installation). */
