@@ -6,6 +6,12 @@
     <meta name="robots" content="noindex, nofollow">
     <meta name="theme-color" content="#1F2630">
     <title>Hors connexion | Dashboard GTC</title>
+    <!--
+        Page affichée par le service worker (dashboard/sw.js) quand le serveur ne répond pas, même après deux
+        nouvelles tentatives. Elle vérifie elle-même le retour du serveur et rouvre la page demandée dès qu'il répond :
+        à l'instant où la connexion revient (événement « online »), quand la fenêtre redevient visible, puis toutes
+        les 5 secondes (10, 20, 30 s au-delà d'une minute). Aucune donnée du Dashboard n'est conservée ici.
+    -->
     <style>
         :root { color-scheme: light; }
         * { box-sizing: border-box; }
@@ -21,16 +27,22 @@
         }
         .card {
             width: 100%;
-            max-width: 420px;
+            max-width: 440px;
             padding: 32px 28px;
             border-radius: 16px;
             background: #fff;
             box-shadow: 0 12px 40px rgba(15, 23, 42, 0.1);
             text-align: center;
         }
-        img { width: 220px; height: auto; margin-bottom: 20px; }
+        .logo { display: block; width: 200px; height: auto; margin: 0 auto 20px; }
+        .icon { display: grid; place-items: center; width: 52px; height: 52px; margin: 0 auto 14px; border-radius: 50%; background: #FEF3E2; color: #B45309; }
+        .icon svg { width: 26px; height: 26px; }
         h1 { margin: 0 0 8px; font-size: 20px; }
-        p { margin: 0 0 24px; color: #5B6575; }
+        p { margin: 0 0 20px; color: #5B6575; }
+        .status { display: flex; align-items: center; justify-content: center; gap: 8px; margin: -6px 0 20px; font-size: 13px; color: #5B6575; }
+        .spin { width: 14px; height: 14px; border: 2px solid #004B87; border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
         button {
             display: inline-flex;
             align-items: center;
@@ -44,14 +56,81 @@
             cursor: pointer;
         }
         button:hover { background: #003866; }
+        button:disabled { opacity: 0.7; cursor: wait; }
     </style>
 </head>
 <body>
     <main class="card">
-        <img src="../assets/img/logo-gtc.png" alt="Global Trading Corporation" width="220" height="55">
-        <h1>Pas de connexion internet</h1>
-        <p>Le Dashboard a besoin d'une connexion pour afficher les données à jour. Vérifiez votre réseau puis réessayez.</p>
-        <button type="button" onclick="location.reload()">Réessayer</button>
+        <img class="logo" id="logo" src="../assets/img/logo-gtc-436.png" alt="Global Trading Corporation" width="200" height="50">
+        <span class="icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l22 22"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><path d="M12 20h.01"/></svg>
+        </span>
+        <h1 id="title">Connexion momentanément interrompue</h1>
+        <p id="text">Le Dashboard ne parvient pas à joindre le serveur. Aucune donnée n'est perdue : la page se rouvre automatiquement dès que la connexion revient.</p>
+        <div class="status" role="status" aria-live="polite"><span class="spin" aria-hidden="true"></span><span id="status">Nouvelle tentative en cours…</span></div>
+        <button type="button" id="retry">Réessayer maintenant</button>
     </main>
+    <script>
+    (function () {
+      'use strict';
+      var title = document.getElementById('title'), text = document.getElementById('text');
+      var status = document.getElementById('status'), btn = document.getElementById('retry');
+      var started = Date.now(), timer = null, tick = null, checking = false;
+
+      // Logo : chemin calculé depuis le service worker (cette page peut s'afficher à la place d'une page de vault/)
+      try {
+        var sw = navigator.serviceWorker && navigator.serviceWorker.controller;
+        if (sw) document.getElementById('logo').src = new URL('../assets/img/logo-gtc-436.png', sw.scriptURL).href;
+      } catch (e) { /* chemin par défaut */ }
+
+      // Message : pas d'internet sur l'appareil, ou serveur qui ne répond pas
+      function describe() {
+        if (navigator.onLine === false) {
+          title.textContent = 'Pas de connexion internet';
+          text.textContent = 'Cet appareil n\'est connecté à aucun réseau. Vérifiez le Wi-Fi ou le câble : le Dashboard se rouvrira tout seul dès que la connexion revient.';
+        } else {
+          title.textContent = 'Connexion momentanément interrompue';
+          text.textContent = 'Le Dashboard ne parvient pas à joindre le serveur. Aucune donnée n\'est perdue : la page se rouvre automatiquement dès que la connexion revient.';
+        }
+      }
+
+      function delay() {
+        var s = (Date.now() - started) / 1000;
+        return s < 60 ? 5 : s < 180 ? 10 : s < 600 ? 20 : 30;
+      }
+
+      function schedule() {
+        clearTimeout(timer); clearInterval(tick);
+        var left = delay();
+        status.textContent = 'Nouvelle tentative dans ' + left + ' s…';
+        tick = setInterval(function () {
+          left -= 1;
+          if (left > 0) status.textContent = 'Nouvelle tentative dans ' + left + ' s…';
+        }, 1000);
+        timer = setTimeout(check, left * 1000);
+      }
+
+      // Le serveur répond-il ? (requête directe, hors cache ; n'importe quelle réponse HTTP suffit)
+      function check() {
+        if (checking) return;
+        checking = true;
+        clearTimeout(timer); clearInterval(tick);
+        describe();
+        status.textContent = 'Vérification de la connexion…';
+        btn.disabled = true;
+        var url = location.href.split('#')[0];
+        fetch(url + (url.indexOf('?') === -1 ? '?' : '&') + '_ping=' + Date.now(), { method: 'HEAD', cache: 'no-store', credentials: 'same-origin', redirect: 'manual' })
+          .then(function () { status.textContent = 'Connexion rétablie, ouverture…'; location.reload(); })
+          .catch(function () { checking = false; btn.disabled = false; schedule(); });
+      }
+
+      btn.addEventListener('click', check);
+      window.addEventListener('online', check);
+      window.addEventListener('offline', describe);
+      document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+      describe();
+      schedule();
+    })();
+    </script>
 </body>
 </html>
