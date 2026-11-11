@@ -12,7 +12,7 @@
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/reviews.php';
 
-const TESTIMONIALS_MAX  = 6;     // cartes affichées (2 rangées de 3)
+const TESTIMONIALS_MAX  = 10;    // cartes distinctes dans le bandeau défilant
 const TESTIMONIALS_CHARS = 260;  // au-delà, texte abrégé + lien « Lire la suite »
 
 $testimonialsStatic = [
@@ -44,10 +44,11 @@ foreach ($testimonialsStatic as $t) {
     }
     $testimonials[] = $t + ['rating' => 0, 'new' => false];
 }
-// Grille équilibrée : multiple de 3 (une rangée incomplète est retirée s'il y a au moins 3 cartes)
-if (count($testimonials) > 3) {
-    $testimonials = array_slice($testimonials, 0, intdiv(count($testimonials), 3) * 3);
-}
+// Carrousel (assets/js/main.js, § 13) : glisse de droite à gauche, une carte toutes les TESTIMONIALS_DELAY ms ;
+// carte centrale mise en avant, barre de progression, boutons / points / Pause, balayage au doigt.
+// Le script duplique les cartes pour une boucle sans fin. Sans JavaScript : bande défilable au doigt ou à la souris.
+const TESTIMONIALS_DELAY = 5500;
+$testimonialsCount = count($testimonials);
 ?>
 <section class="section <?= e($testimonialsClass ?? 'section--white') ?>" id="temoignages">
     <div class="container">
@@ -63,10 +64,14 @@ if (count($testimonials) > 3) {
             <?php endif; ?>
         </header>
 
-        <div class="grid grid--3">
-            <?php foreach ($testimonials as $t):
+        <div class="tst-slider" data-tst-slider role="region" aria-roledescription="carrousel" aria-label="Avis de nos clients"
+             style="--tst-delay: <?= TESTIMONIALS_DELAY ?>ms">
+          <div class="tst-slider__viewport" data-tst-viewport>
+            <ul class="tst-slider__track" role="list" data-tst-track aria-live="off">
+            <?php foreach ($testimonials as $i => $t):
                 $long = mb_strlen($t['text']) > TESTIMONIALS_CHARS;
                 $text = $long ? rtrim(mb_substr($t['text'], 0, TESTIMONIALS_CHARS - 1), " ,;.") . '…' : $t['text']; ?>
+              <li class="tst-slide" data-tst-idx="<?= $i ?>" aria-roledescription="diapositive" aria-label="<?= $i + 1 ?> sur <?= $testimonialsCount ?> : <?= e($t['name']) ?>">
                 <figure class="card testimonial">
                     <?php if ($t['rating'] > 0): ?>
                         <div class="testimonial__rating"><?= review_stars((float) $t['rating'], 'stars stars--sm') ?></div>
@@ -84,8 +89,24 @@ if (count($testimonials) > 3) {
                             <span class="testimonial__role"><?= e($t['role']) ?></span>
                         </span>
                     </figcaption>
+                    <span class="testimonial__progress" aria-hidden="true"></span>
                 </figure>
+              </li>
             <?php endforeach; ?>
+            </ul>
+          </div>
+
+          <!-- Commandes : affichées par assets/js/main.js (sans JavaScript, la bande reste défilable) -->
+          <div class="tst-slider__controls" data-tst-controls hidden>
+            <button type="button" class="svc-carousel__btn" data-tst-prev aria-label="Avis précédent"><?= icon('arrow-left') ?></button>
+            <div class="svc-carousel__dots" role="group" aria-label="Choisir un avis">
+              <?php foreach ($testimonials as $i => $t): ?>
+                <button type="button" class="svc-carousel__dot" data-tst-dot="<?= $i ?>" aria-label="Avis de <?= e($t['name']) ?>"<?= $i === 0 ? ' aria-current="true"' : '' ?>></button>
+              <?php endforeach; ?>
+            </div>
+            <button type="button" class="svc-carousel__btn" data-tst-next aria-label="Avis suivant"><?= icon('arrow') ?></button>
+            <button type="button" class="svc-carousel__play" data-tst-toggle aria-pressed="false">Pause</button>
+          </div>
         </div>
 
         <!-- Avis déposés et validés : avis.php -->

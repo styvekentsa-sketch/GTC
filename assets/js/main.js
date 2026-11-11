@@ -12,6 +12,7 @@
  * 10. Avis clients (étoiles, envoi, « Afficher plus »)
  * 11. Visite guidée « Donner mon avis » (bandeau réductible)
  * 12. Tableaux des pages légales en fiches (téléphone)
+ * 13. Témoignages de l'accueil (carrousel « vitrine »)
  */
 
 /* ==========================================================================
@@ -1047,5 +1048,232 @@
       });
     });
     table.classList.add('is-stacked');
+  });
+})();
+
+/* ==========================================================================
+   13. Témoignages de l'accueil (includes/testimonials.php) : carrousel « vitrine »
+   - les cartes glissent de droite à gauche, une à la fois ; la carte centrale est mise en avant (style.css) ;
+   - boucle sans fin : cartes dupliquées (copies masquées aux lecteurs d'écran), puis « rotation » du DOM après
+     chaque glissement (la carte active reste le même élément : ses animations ne se rejouent pas) ;
+   - automatique : la barre de progression de la carte active se remplit (--tst-delay) ; à la fin, avis suivant.
+     Pause au survol (souris), au focus clavier, pendant un glisser, hors écran, onglet masqué ou bouton « Pause » ;
+   - manuel : boutons, points, flèches du clavier, clic sur une carte voisine, glisser à la souris / au doigt.
+   Si le visiteur a demandé moins d'animations : déplacements instantanés, jamais de défilement automatique.
+   ========================================================================== */
+(function () {
+  'use strict';
+
+  var SPEED = 900;          // ms : doit correspondre à --tst-speed (style.css)
+  var DRAG_THRESHOLD = 6;   // px : en deçà, un clic reste un clic
+  var SWIPE_MIN = 50;       // px : glissement minimal pour changer d'avis
+  var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  document.querySelectorAll('[data-tst-slider]').forEach(function (root) {
+    var viewport = root.querySelector('[data-tst-viewport]');
+    var track = root.querySelector('[data-tst-track]');
+    var controls = root.querySelector('[data-tst-controls]');
+    var toggle = root.querySelector('[data-tst-toggle]');
+    var dots = Array.prototype.slice.call(root.querySelectorAll('[data-tst-dot]'));
+    var originals = Array.prototype.slice.call(track.children);
+    var n = originals.length;
+    if (n < 2 || !viewport) return;
+
+    // Copies : de quoi remplir les côtés sur grand écran et sauter jusqu'à n/2 cartes d'un coup (points)
+    while (track.children.length < Math.max(7, n + 6)) {
+      originals.forEach(function (li) {
+        var copy = li.cloneNode(true);
+        copy.setAttribute('aria-hidden', 'true');
+        copy.removeAttribute('aria-label');
+        copy.querySelectorAll('a, button').forEach(function (el) { el.setAttribute('tabindex', '-1'); });
+        track.appendChild(copy);
+      });
+    }
+    var total = track.children.length;
+    var center = Math.floor(total / 2);   // position (dans le DOM) de la carte active
+    for (var r = 0; r < center; r++) track.insertBefore(track.lastElementChild, track.firstElementChild);
+
+    var step = 0, base = 0, shift = 0, busy = false;
+
+    function measure() {
+      var cs = window.getComputedStyle(track);
+      var gap = parseFloat(cs.columnGap || cs.gap) || 0;
+      var w = track.firstElementChild.offsetWidth;   // largeur sans l'effet d'échelle (transform)
+      step = w + gap;
+      base = (viewport.clientWidth - w) / 2 - center * step;
+    }
+    function apply() {
+      track.style.transform = 'translate3d(' + (base + shift).toFixed(2) + 'px, 0, 0)';
+    }
+    // Changement invisible (rotation, redimensionnement) : sans transition
+    function jump(fn) {
+      root.classList.add('is-jumping');
+      if (fn) fn();
+      apply();
+      void track.offsetWidth;
+      root.classList.remove('is-jumping');
+    }
+    function mark(pos) {
+      var ch = track.children;
+      for (var i = 0; i < ch.length; i++) {
+        ch[i].classList.toggle('is-active', i === pos);
+        ch[i].classList.toggle('is-near', Math.abs(i - pos) === 1);
+      }
+      var idx = parseInt(ch[pos].getAttribute('data-tst-idx'), 10);
+      dots.forEach(function (d, i) {
+        if (i === idx) d.setAttribute('aria-current', 'true'); else d.removeAttribute('aria-current');
+      });
+    }
+    function animateTo(target, after) {
+      busy = true;
+      shift = target;
+      apply();
+      var done = false, timer;
+      function end() {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        track.removeEventListener('transitionend', onEnd);
+        if (after) after();
+        busy = false;
+      }
+      function onEnd(e) { if (e.target === track && e.propertyName === 'transform') end(); }
+      track.addEventListener('transitionend', onEnd);
+      timer = setTimeout(end, reducedMotion ? 0 : SPEED + 150);
+    }
+
+    // k > 0 : avis suivant(s) (glisse vers la gauche) ; k < 0 : précédent(s). from : décalage en cours (glisser)
+    function go(k, from) {
+      if (busy || !k) return;
+      if (k > 0) {
+        mark(center + k);
+        animateTo(-k * step, function () {
+          jump(function () {
+            for (var i = 0; i < k; i++) track.appendChild(track.firstElementChild);
+            shift = 0;
+          });
+        });
+      } else {
+        jump(function () {
+          for (var i = 0; i < -k; i++) track.insertBefore(track.lastElementChild, track.firstElementChild);
+          shift = k * step + (from || 0);
+        });
+        mark(center);
+        animateTo(0);
+      }
+    }
+    function goToIndex(idx) {
+      var ch = track.children;
+      for (var d = 1; d < total; d++) {
+        if (ch[center + d] && +ch[center + d].getAttribute('data-tst-idx') === idx) return go(d);
+        if (ch[center - d] && +ch[center - d].getAttribute('data-tst-idx') === idx) return go(-d);
+      }
+    }
+
+    // ---- Pause : chaque raison est suivie séparément ----
+    var reasons = {};
+    function setPause(reason, on) {
+      if (on) reasons[reason] = true; else delete reasons[reason];
+      root.classList.toggle('is-paused', Object.keys(reasons).length > 0);
+    }
+    var stoppedByUser = reducedMotion;
+    function setAuto() {
+      root.classList.toggle('is-auto', !stoppedByUser);
+      toggle.textContent = stoppedByUser ? 'Lecture' : 'Pause';
+      toggle.setAttribute('aria-pressed', String(stoppedByUser));
+    }
+    if (reducedMotion) toggle.hidden = true;
+
+    // Fin de la barre de progression de la carte active : avis suivant
+    track.addEventListener('animationend', function (e) {
+      if (e.animationName === 'tst-progress' && !stoppedByUser && !root.classList.contains('is-paused')) go(1);
+    });
+
+    root.addEventListener('pointerenter', function (e) { if (e.pointerType === 'mouse') setPause('hover', true); });
+    root.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse') setPause('hover', false); });
+    root.addEventListener('focusin', function () { setPause('focus', true); });
+    root.addEventListener('focusout', function (e) { if (!root.contains(e.relatedTarget)) setPause('focus', false); });
+    document.addEventListener('visibilitychange', function () { setPause('hidden', document.hidden); });
+
+    if ('IntersectionObserver' in window) {
+      setPause('offscreen', true);
+      new IntersectionObserver(function (entries) {
+        var visible = entries[0].isIntersecting;
+        if (visible) root.classList.add('is-inview');
+        setPause('offscreen', !visible);
+      }, { threshold: 0.25 }).observe(root);
+    } else {
+      root.classList.add('is-inview');
+    }
+
+    // ---- Commandes ----
+    root.querySelector('[data-tst-prev]').addEventListener('click', function () { go(-1); });
+    root.querySelector('[data-tst-next]').addEventListener('click', function () { go(1); });
+    dots.forEach(function (d, i) { d.addEventListener('click', function () { goToIndex(i); }); });
+    toggle.addEventListener('click', function () { stoppedByUser = !stoppedByUser; setAuto(); });
+    root.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); go(1); }
+    });
+
+    // ---- Glisser (souris, doigt, stylet) ----
+    var pointerId = null, startX = 0, dx = 0, dragging = false, justDragged = false;
+    viewport.addEventListener('pointerdown', function (e) {
+      if (busy || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      pointerId = e.pointerId;
+      startX = e.clientX;
+      dx = 0;
+      dragging = false;
+    });
+    viewport.addEventListener('pointermove', function (e) {
+      if (e.pointerId !== pointerId) return;
+      dx = e.clientX - startX;
+      if (!dragging && Math.abs(dx) > DRAG_THRESHOLD) {
+        dragging = true;
+        root.classList.add('is-dragging');
+        setPause('drag', true);
+        try { viewport.setPointerCapture(pointerId); } catch (err) { /* navigateur ancien */ }
+      }
+      if (dragging) { shift = dx; apply(); }
+    });
+    function release(e) {
+      if (e.pointerId !== pointerId) return;
+      pointerId = null;
+      if (!dragging) return;
+      dragging = false;
+      justDragged = true;
+      setTimeout(function () { justDragged = false; }, 60);
+      root.classList.remove('is-dragging');
+      setPause('drag', false);
+      if (dx <= -SWIPE_MIN) go(1);
+      else if (dx >= SWIPE_MIN) go(-1, dx);
+      else animateTo(0);
+    }
+    viewport.addEventListener('pointerup', release);
+    viewport.addEventListener('pointercancel', release);
+
+    // Clic sur une carte voisine : elle passe au centre (les liens de la carte active restent cliquables)
+    track.addEventListener('click', function (e) {
+      if (justDragged) { e.preventDefault(); e.stopPropagation(); return; }
+      var li = e.target.closest('.tst-slide');
+      if (!li) return;
+      var pos = Array.prototype.indexOf.call(track.children, li);
+      if (pos !== center) { e.preventDefault(); go(pos - center); }
+    }, true);
+
+    // ---- Mise en route ----
+    viewport.scrollLeft = 0;
+    root.classList.add('is-ready');
+    controls.hidden = false;
+    setAuto();
+    measure();
+    mark(center);
+    jump();
+
+    var resizeTimer;
+    window.addEventListener('resize', function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () { if (!busy) { measure(); jump(); } }, 120);
+    });
   });
 })();

@@ -5191,3 +5191,150 @@ a[href^="tel:"] { white-space: nowrap; }
 .testimonial__rating { margin-bottom: var(--space-4); line-height: 1; }
 .testimonial__text p { overflow-wrap: anywhere; }
 .testimonial__more { display: inline-block; margin-top: var(--space-2); font-size: var(--fs-sm); font-weight: 600; }
+
+/* --------------------------------------------------------------------------
+   Témoignages : carrousel « vitrine » (includes/testimonials.php, main.js § 13)
+   Glisse de droite à gauche, une carte à la fois (courbe ease-in-out) ; la carte centrale est mise en avant,
+   ses étoiles et son texte apparaissent en cascade, une barre indique le temps avant l'avis suivant.
+   Sans JavaScript : simple bande défilable (scroll-snap).
+   -------------------------------------------------------------------------- */
+.tst-slider {
+  --tst-ease: cubic-bezier(0.65, 0, 0.35, 1);
+  --tst-speed: 0.9s;
+  position: relative;
+}
+
+.tst-slider__viewport {
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  padding-block: var(--space-4) var(--space-6);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+          mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+}
+.tst-slider__viewport::-webkit-scrollbar { display: none; }
+
+.tst-slider__track {
+  display: flex;
+  gap: var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tst-slide {
+  display: flex;
+  flex: 0 0 auto;
+  width: min(380px, 80vw);
+  scroll-snap-align: center;
+}
+.tst-slide > .testimonial {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  transition: box-shadow var(--tst-speed) var(--tst-ease), border-color var(--tst-speed) var(--tst-ease), transform 0.35s ease;
+}
+
+/* Barre de progression (bas de la carte active) */
+.testimonial__progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background-color: var(--color-slate-100);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.testimonial__progress::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, var(--color-accent), var(--brand-blue, #0051A5));
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+/* ---- Mode carrousel (JavaScript actif) ---- */
+.tst-slider.is-ready .tst-slider__viewport {
+  overflow: hidden;
+  scroll-snap-type: none;
+  touch-action: pan-y;
+  cursor: grab;
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.8s ease, transform 0.8s var(--tst-ease);
+}
+.tst-slider.is-ready.is-inview .tst-slider__viewport { opacity: 1; transform: none; }
+.tst-slider.is-dragging .tst-slider__viewport { cursor: grabbing; user-select: none; }
+.tst-slider.is-dragging a { pointer-events: none; }
+
+.tst-slider.is-ready .tst-slider__track {
+  will-change: transform;
+  transition: transform var(--tst-speed) var(--tst-ease);
+}
+
+/* Cartes latérales en retrait, voisines à mi-chemin, carte centrale au premier plan */
+.tst-slider.is-ready .tst-slide {
+  opacity: 0.38;
+  transform: scale(0.88);
+  transition: opacity var(--tst-speed) var(--tst-ease), transform var(--tst-speed) var(--tst-ease);
+}
+.tst-slider.is-ready .tst-slide.is-near { opacity: 0.68; transform: scale(0.93); cursor: pointer; }
+.tst-slider.is-ready .tst-slide.is-active { opacity: 1; transform: none; }
+.tst-slider.is-ready .tst-slide.is-active > .testimonial {
+  border-color: transparent;
+  box-shadow: 0 24px 48px -22px rgba(31, 38, 48, 0.38), 0 2px 6px rgba(31, 38, 48, 0.06);
+}
+.tst-slider.is-ready .tst-slide.is-active > .testimonial:hover { transform: translateY(-4px); }
+
+/* Pendant un saut invisible (boucle) ou un glisser au doigt : aucune transition */
+.tst-slider.is-jumping .tst-slider__track,
+.tst-slider.is-jumping .tst-slide,
+.tst-slider.is-dragging .tst-slider__track { transition: none; }
+
+/* Contenu de la carte active : étoiles une à une, guillemets, texte et auteur en fondu montant */
+.tst-slider.is-inview .tst-slide.is-active .testimonial__rating .star { animation: tst-star 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.tst-slider.is-inview .tst-slide.is-active .testimonial__rating .star:nth-child(2) { animation-delay: 0.08s; }
+.tst-slider.is-inview .tst-slide.is-active .testimonial__rating .star:nth-child(3) { animation-delay: 0.16s; }
+.tst-slider.is-inview .tst-slide.is-active .testimonial__rating .star:nth-child(4) { animation-delay: 0.24s; }
+.tst-slider.is-inview .tst-slide.is-active .testimonial__rating .star:nth-child(5) { animation-delay: 0.32s; }
+.tst-slider.is-inview .tst-slide.is-active .testimonial__quote { animation: tst-star 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.tst-slider.is-inview .tst-slide.is-active .testimonial__text { animation: tst-rise 0.7s var(--tst-ease) 0.2s both; }
+.tst-slider.is-inview .tst-slide.is-active .testimonial__author { animation: tst-rise 0.7s var(--tst-ease) 0.32s both; }
+
+/* Barre : se remplit pendant --tst-delay ; à la fin, main.js passe à l'avis suivant */
+.tst-slider.is-ready.is-auto .tst-slide.is-active .testimonial__progress { opacity: 1; }
+.tst-slider.is-ready.is-auto .tst-slide.is-active .testimonial__progress::after { animation: tst-progress var(--tst-delay, 5500ms) linear forwards; }
+.tst-slider.is-paused .tst-slide.is-active .testimonial__progress::after { animation-play-state: paused; }
+
+@keyframes tst-star { from { opacity: 0; transform: scale(0.3) rotate(-25deg); } to { opacity: 1; transform: none; } }
+@keyframes tst-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes tst-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+.tst-slider__controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.tst-slider__controls[hidden] { display: none; }
+
+@media (max-width: 575.98px) {
+  .tst-slider__viewport {
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+            mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+  }
+  .tst-slider.is-ready .tst-slide { transform: scale(0.92); }
+}
+
+/* Animations réduites : déplacement instantané, pas d'effets ni de défilement automatique */
+@media (prefers-reduced-motion: reduce) {
+  .tst-slider.is-ready .tst-slider__viewport,
+  .tst-slider.is-ready .tst-slider__track,
+  .tst-slider.is-ready .tst-slide,
+  .tst-slide > .testimonial { transition: none; }
+  .tst-slider.is-ready .tst-slider__viewport { opacity: 1; transform: none; }
+  .tst-slider.is-ready .tst-slide.is-active * { animation: none !important; }
+}
