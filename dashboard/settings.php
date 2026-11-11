@@ -300,6 +300,41 @@ if (is_post()) {
         }
     }
 
+    // ----- Alertes de connexion (admin) : e-mail envoyé à chaque connexion au Dashboard -----
+    if ($op === 'login_alert' || $op === 'login_alert_test') {
+        $canSystem || deny();
+        $tab = 'systeme';
+        $to = mb_strtolower(trim(post('login_alert_email')));
+        if ($to !== '' && (!filter_var($to, FILTER_VALIDATE_EMAIL) || mb_strlen($to) > 150)) {
+            $errors['login_alert_email'] = 'Adresse e-mail invalide.';
+        }
+        if ($op === 'login_alert_test' && $to === '') {
+            $errors['login_alert_email'] = 'Indiquez l\'adresse qui doit recevoir l\'e-mail de test.';
+        }
+        if (!$errors) {
+            settings_save(['login_alert_email' => $to]);
+            if ($op === 'login_alert_test') {
+                require_once __DIR__ . '/../includes/login_alert.php';
+                $now = new DateTimeImmutable('now', new DateTimeZone('Africa/Douala'));
+                $me = db_one('SELECT name, email, role FROM users WHERE id = ?', [(int) $user['id']]) ?: $user;
+                $ok = login_alert_send([
+                    'to' => $to, 'name' => (string) $me['name'], 'email' => (string) ($me['email'] ?? ''), 'role' => role_label($me['role'] ?? null),
+                    'kind' => 'password', 'method' => 'E-mail de TEST envoyé depuis Paramètres → Système',
+                    'date' => $now->format('d/m/Y'), 'time' => $now->format('H:i'),
+                    'ip' => client_ip(), 'device' => login_alert_device((string) ($_SERVER['HTTP_USER_AGENT'] ?? '')),
+                ] + login_alert_site());
+                activity_log('update', 'settings', null, 'Alertes de connexion', ['test' => $to]);
+                flash($ok ? 'success' : 'error', $ok
+                    ? 'E-mail de test envoyé à ' . $to . '. Vérifiez la boîte de réception (et les spams).'
+                    : 'Le serveur n\'a pas pu envoyer l\'e-mail de test à ' . $to . ' : vérifiez la configuration e-mail de l\'hébergement.');
+            } else {
+                activity_log('update', 'settings', null, 'Alertes de connexion', ['destinataire' => $to !== '' ? $to : 'désactivées']);
+                flash('success', $to !== '' ? 'Alertes de connexion envoyées à ' . $to . '.' : 'Alertes de connexion désactivées.');
+            }
+            redirect('settings.php#systeme');
+        }
+    }
+
     // ----- Système (admin) -----
     if ($op === 'system') {
         $canSystem || deny();
@@ -770,6 +805,25 @@ dash_header('Paramètres', 'settings');
                     </select>
                 </div>
                 <div class="form-actions"><button type="submit" class="btn btn--primary"><?= icon('check') ?> Enregistrer</button></div>
+            </form>
+
+            <!-- Alertes de connexion : e-mail à chaque connexion au Dashboard (includes/login_alert.php) -->
+            <form method="post" action="settings.php#systeme" class="panel form" novalidate data-login-alert>
+                <?= csrf_field() ?>
+                <h2 class="panel__title"><?= icon('mail') ?> Alertes de connexion</h2>
+                <p class="cell-sub">Un e-mail est envoyé à chaque connexion au Dashboard (mot de passe, reconnexion automatique, prise de contrôle d'un compte) :
+                    compte, date et heure, adresse IP, appareil et navigateur.</p>
+                <div class="field">
+                    <label for="login-alert-email">Adresse qui reçoit les alertes</label>
+                    <input id="login-alert-email" name="login_alert_email" type="email" maxlength="150" inputmode="email" autocomplete="off"
+                           placeholder="Laisser vide pour désactiver" value="<?= $val('login_alert_email', $s['login_alert_email']) ?>"<?= $inv('login_alert_email') ?>>
+                    <small class="field__hint"><?= trim($s['login_alert_email']) !== '' ? 'Alertes actives.' : 'Alertes désactivées.' ?> Laisser vide pour ne plus en recevoir.</small>
+                    <?= $err('login_alert_email') ?>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" name="op" value="login_alert_test" class="btn btn--ghost"><?= icon('send') ?> Envoyer un e-mail de test</button>
+                    <button type="submit" name="op" value="login_alert" class="btn btn--primary"><?= icon('check') ?> Enregistrer</button>
+                </div>
             </form>
 
             <section class="panel">

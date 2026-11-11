@@ -330,6 +330,8 @@ function auth_attempt(string $email, string $password, bool $remember = false): 
     auth_unlock($email);   // compteur de cette adresse remis à zéro (les autres adresses ne sont pas concernées)
     auth_open_session($user);
     activity_log('login', 'session', (int) $user['id'], $user['name'], $remember ? ['option' => 'Se souvenir de moi'] : [], $user);
+    require_once __DIR__ . '/login_alert.php';
+    login_alert_notify($user, 'password');   // e-mail d'alerte (Paramètres → Système), envoyé après la réponse
     if ($remember) {
         auth_remember_issue((int) $user['id']);
     }
@@ -418,6 +420,8 @@ function auth_remember_login(): bool
         return false;
     }
     auth_open_session($user);
+    require_once __DIR__ . '/login_alert.php';
+    login_alert_notify($user, 'remember');   // reconnexion automatique : alerte aussi
     return true;
 }
 
@@ -528,6 +532,8 @@ function impersonation_start(array $admin, array $target): void
     $_SESSION['user_role']            = $target['role'];
     $_SESSION['regenerated_at']       = time();
     unset($_SESSION['csrf_token']);   // nouveau jeton pour la nouvelle identité
+    require_once __DIR__ . '/login_alert.php';
+    login_alert_notify($target, 'impersonation', $admin);   // prise de contrôle : alerte aussi
 }
 
 /**
