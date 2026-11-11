@@ -18,7 +18,27 @@ declare(strict_types=1);
 // Configuration, base, session et accès : includes/vault.php (connexion du Dashboard)
 require_once __DIR__ . '/../../includes/vault.php';
 
-$user   = vault_guard();
+/*
+ * Mode « caisse » (?caisse=receipt|invoice) : ce même formulaire, ouvert dans une fenêtre des pages Reçus de caisse
+ * et Factures (assets/js/kyc-link.js). Accessible aussi aux caissiers (KYC_CASHDESK_ROLES), sans accès aux autres
+ * pages de GTC-Vault ; pièces facultatives ; dossier créé PROVISOIRE (review_status = 'pending') pour la conformité ;
+ * doublon (même N° de pièce ou même téléphone) proposé à la place ; le dossier créé est renvoyé à la page qui a ouvert
+ * la fenêtre (postMessage, même origine), qui le lie au document en cours de rédaction.
+ */
+$cashdesk = in_array($_GET['caisse'] ?? $_POST['caisse'] ?? '', ['receipt', 'invoice'], true) ? (string) ($_GET['caisse'] ?? $_POST['caisse']) : '';
+$cashLabel = $cashdesk === 'invoice' ? 'facture en cours de rédaction' : 'reçu de caisse en cours de rédaction';
+if ($cashdesk) {
+    define('DASH_EMBED', true);   // includes/dashboard.php : ni menu ni barre supérieure dans la fenêtre
+    require_once __DIR__ . '/../../includes/kyc_link.php';
+}
+
+$user   = vault_guard(false, $cashdesk ? KYC_CASHDESK_ROLES : VAULT_ROLES);
+if ($cashdesk) {
+    // Affichage dans la fenêtre des reçus / factures : autorisé pour les pages du site lui-même uniquement
+    // (les autres pages du Dashboard restent interdites d'iframe : X-Frame-Options DENY, includes/auth.php)
+    header('X-Frame-Options: SAMEORIGIN', true);
+    header("Content-Security-Policy: frame-ancestors 'self'");
+}
 $userId = (int) $user['id'];
 $csrf   = vault_csrf();
 
@@ -42,12 +62,48 @@ function kyc_required(string $type, string $piece): array
 
 // Contrôle des fichiers envoyés : kyc_check_file() (includes/vault.php), commun à la saisie rapide depuis la caisse
 
+/**
+ * Mode caisse : page de fin affichée dans la fenêtre ; elle transmet le dossier à la page du reçu / de la facture
+ * (même origine uniquement), qui ferme la fenêtre et lie le dossier au document en cours.
+ */
+function kyc_cashdesk_done(array $client, string $how): never
+{
+    $payload = json_encode(['type' => 'gtc-vault-client', 'how' => $how, 'client' => $client], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+    header('Content-Type: text/html; charset=utf-8');
+    header('Cache-Control: no-store');
+    echo '<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Dossier enregistré</title></head><body>'
+        . '<p style="font:15px system-ui,sans-serif;padding:24px">Dossier de ' . h($client['name']) . ' enregistré : retour au document…</p>'
+        . '<script>(function(){var d=' . $payload . ';if(window.parent&&window.parent!==window){window.parent.postMessage(d,location.origin);}})();</script>'
+        . '</body></html>';
+    exit;
+}
+
+// Mode caisse : « Utiliser ce dossier » (doublon trouvé) → dossier existant transmis au document en cours
+if ($cashdesk && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['use_existing'] ?? '') !== '') {
+    if (hash_equals($csrf, (string) ($_POST['csrf_token'] ?? '')) && ($existing = kyc_client_by_uuid(strtolower((string) $_POST['use_existing']))) && empty(db_value('SELECT archived_at FROM clients WHERE uuid = ?', [$existing['uuid']]))) {
+        unset($existing['id']);
+        kyc_cashdesk_done($existing, 'existing');
+    }
+}
+
 // ---------- Traitement ----------
 $errors = [];
 $old    = ['type_client' => 'particulier', 'piece_identite' => 'cni', 'indicatif' => '+237'];
 $flash  = $_SESSION['kyc_flash'] ?? null;
 unset($_SESSION['kyc_flash']);
-
+$duplicate = null;   // mode caisse : dossier existant proposé à la place d'un doublon
+if ($cashdesk && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && ($q = trim((string) ($_GET['q'] ?? ''))) !== '') {
+    // Ce que l'agent a tapé dans la recherche : téléphone (chiffres), N° de pièce (lettres + chiffres) ou nom
+    $q = mb_substr($q, 0, 100);
+    $digits = preg_replace('/\D/', '', $q);
+    if (preg_match('/^[\d\s+().-]+$/', $q) && strlen($digits) >= 6) {
+        $old['telephone'] = str_starts_with($digits, '237') && strlen($digits) === 12 ? substr($digits, 3) : $digits;
+    } elseif (preg_match('/\d/', $q) && preg_match('~^[A-Za-z0-9 ./\-]+$~', $q)) {
+        $old['numero_identifiant'] = strtoupper($q);
+    } else {
+        $old['nom_complet'] = $q;
+    }
+}
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     // Envoi plus lourd que post_max_size : PHP vide $_POST et $_FILES
     if (empty($_POST) && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
@@ -100,8 +156,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         }
 
         // Fichiers : obligatoires selon le cas, facultatifs sinon ; les pièces hors sujet sont ignorées
-        $required = kyc_required($in['type_client'], $in['piece_identite']);
-        $allowed  = $in['type_client'] === 'entreprise' ? ['doc_identite', 'doc_rccm', 'doc_statuts'] : $required;
+        $visible  = kyc_required($in['type_client'], $in['piece_identite']);
+        $required = $cashdesk ? [] : $visible;   // mode caisse : pièces facultatives, complétées par la conformité
+        $allowed  = $in['type_client'] === 'entreprise' ? ['doc_identite', 'doc_rccm', 'doc_statuts'] : $visible;
         $files    = [];
         foreach ($allowed as $slot) {
             $f = $_FILES[$slot] ?? null;
@@ -116,6 +173,19 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $errors[$slot] = $check;
             } else {
                 $files[$slot] = $f + ['ext' => $check[0], 'mime' => $check[1]];
+            }
+        }
+
+        if (!$errors && $cashdesk) {
+            $tel = $in['indicatif'] . $in['telephone'];
+            $dup = db_one("SELECT id, uuid, type_client, nom_complet, telephone, email, adresse, numero_identifiant, review_status, archived_at
+                           FROM clients WHERE UPPER(numero_identifiant) = ? OR REPLACE(REPLACE(telephone, ' ', ''), '-', '') = ?
+                           ORDER BY CASE WHEN UPPER(numero_identifiant) = ? THEN 0 ELSE 1 END LIMIT 1",
+                [$in['numero_identifiant'], $tel, $in['numero_identifiant']]);
+            if ($dup) {
+                $same = strtoupper((string) $dup['numero_identifiant']) === $in['numero_identifiant'] ? 'ce N° de pièce' : 'ce numéro de téléphone';
+                $errors['_form'] = 'Un dossier GTC-Vault existe déjà avec ' . $same . ' : ' . $dup['nom_complet'] . ($dup['archived_at'] ? ' (archivé).' : '. Utilisez-le plutôt que d\'en créer un second.');
+                $duplicate = $dup['archived_at'] ? null : kyc_client_public($dup, kyc_doc_types([(int) $dup['id']])[(int) $dup['id']] ?? []);
             }
         }
 
@@ -137,10 +207,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $now  = date('Y-m-d H:i:s');
                 $uuid = uuid_v4();
                 $pdo->beginTransaction();
-                $pdo->prepare('INSERT INTO clients (uuid, type_client, nom_complet, telephone, email, adresse, numero_identifiant, created_at, updated_at, created_by)
-                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                $pdo->prepare('INSERT INTO clients (uuid, type_client, nom_complet, telephone, email, adresse, numero_identifiant, created_at, updated_at, created_by, review_status, review_source)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
                     ->execute([$uuid, $in['type_client'], $in['nom_complet'], $in['indicatif'] . $in['telephone'],
-                               $in['email'] ?: null, $in['adresse'] ?: null, $in['numero_identifiant'], $now, $now, $userId]);
+                               $in['email'] ?: null, $in['adresse'] ?: null, $in['numero_identifiant'], $now, $now, $userId,
+                               $cashdesk ? 'pending' : 'verified', $cashdesk ? 'caisse:' . $cashdesk : null]);   // caisse : provisoire, à valider
                 $clientId = (int) $pdo->lastInsertId();
 
                 $insDoc = $pdo->prepare('INSERT INTO client_documents (client_id, type_document, nom_original, chemin_fichier, taille_fichier, mime_type, created_at, uploaded_by)
@@ -160,11 +231,22 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
                 // Traçabilité : journal d'activité du Dashboard (qui a créé quel dossier) et journal de sécurité KYC
                 $docTypes = array_map(fn ($s) => $typeDoc[$s], array_keys($files));
+                $nbDocs = count($files);
+                $piecesText = $nbDocs ? $nbDocs . ' pièce' . ($nbDocs > 1 ? 's' : '') . ' (' . implode(', ', array_map(fn ($t) => KYC_DOC_LABELS[$t] ?? $t, $docTypes)) . ')' : 'aucune pièce';
                 activity_log('create', 'kyc_client', $clientId, $in['nom_complet'],
-                    ['type' => $in['type_client'], 'pieces' => implode(', ', $docTypes)], $user);
-                vault_audit('client_create', ['uuid' => $uuid, 'nom_complet' => $in['nom_complet']], null,
-                    $user['name'] . ' a créé le dossier KYC de ' . $in['nom_complet'] . ' (' . count($files) . ' pièce' . (count($files) > 1 ? 's' : '') . ')');
+                    ['type' => $in['type_client'], 'pieces' => implode(', ', $docTypes)]
+                    + ($cashdesk ? ['origine' => 'poste de caisse (' . $cashLabel . ')', 'statut' => 'provisoire, à vérifier'] : []), $user);
+                vault_audit('client_create', ['uuid' => $uuid, 'nom_complet' => $in['nom_complet']], null, $cashdesk
+                    ? $user['name'] . ' a créé le dossier KYC PROVISOIRE de ' . $in['nom_complet'] . ' depuis le poste de caisse (' . $cashLabel . ') — '
+                      . $piecesText . ' ; à vérifier et valider par la conformité'
+                    : $user['name'] . ' a créé le dossier KYC de ' . $in['nom_complet'] . ' (' . $nbDocs . ' pièce' . ($nbDocs > 1 ? 's' : '') . ')');
 
+                if ($cashdesk) {
+                    // Fenêtre de la caisse : le dossier créé est transmis à la page du reçu / de la facture, qui le lie
+                    $created = kyc_client_by_uuid($uuid);
+                    unset($created['id']);
+                    kyc_cashdesk_done($created, 'created');
+                }
                 $_SESSION['kyc_flash'] = ['name' => $in['nom_complet'], 'uuid' => $uuid, 'docs' => count($files),
                     // Pièce d'identité en image : la photo de profil peut être recadrée tout de suite
                     'photo' => isset($files['doc_identite']) && $files['doc_identite']['mime'] !== 'application/pdf'];
@@ -234,11 +316,19 @@ $invalid = fn (string $name) => isset($errors[$name]) ? ' aria-invalid="true"' :
 vault_header('GTC-Vault · Nouveau dossier KYC');
 ?>
 
+<?php if ($cashdesk): ?>
+    <!-- Mode caisse : dossier provisoire, lié au document en cours dès l'enregistrement -->
+    <div class="alert alert--info kyc-cashdesk-note" role="note">
+        <?= icon('clock') ?>
+        <p><strong>Nouveau client depuis la caisse</strong> — le dossier est créé en statut <strong>provisoire</strong> et lié au <?= h($cashLabel) ?>.
+            Les pièces sont facultatives à ce stade : la conformité les vérifiera et les complétera. Champs marqués <span class="text-danger">*</span> obligatoires.</p>
+    </div>
+<?php else: ?>
 <div class="toolbar">
     <a href="vault/clients.php" class="btn btn--ghost"><?= icon('arrow-left') ?> Répertoire KYC</a>
     <p class="page-intro">Identité du client et pièces justificatives. Les champs marqués <span class="text-danger">*</span> sont obligatoires.</p>
 </div>
-
+<?php endif; ?>
 <?php if ($flash && isset($_GET['ok'])): ?>
     <div class="alert alert--success" role="status">
         <?= icon('check') ?>
@@ -259,6 +349,14 @@ vault_header('GTC-Vault · Nouveau dossier KYC');
         <?= icon('alert') ?>
         <div>
             <p><strong><?= h($errors['_form'] ?? 'Le dossier n\'a pas été enregistré : corrigez les points signalés.') ?></strong></p>
+            <?php if ($duplicate): ?>
+                <form method="post" class="kyc-use-existing">
+                    <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+                    <input type="hidden" name="caisse" value="<?= h($cashdesk) ?>">
+                    <input type="hidden" name="use_existing" value="<?= h($duplicate['uuid']) ?>">
+                    <button type="submit" class="btn btn--primary btn--sm" data-use-existing><?= icon('check') ?> Utiliser le dossier de <?= h($duplicate['name']) ?></button>
+                </form>
+            <?php endif; ?>
             <?php if ($hasFileErrors || !isset($errors['_form'])): ?>
                 <p>Pour votre sécurité, les fichiers ne sont pas conservés après une erreur : sélectionnez-les à nouveau.</p>
             <?php endif; ?>
@@ -266,8 +364,9 @@ vault_header('GTC-Vault · Nouveau dossier KYC');
     </div>
 <?php endif; ?>
 
-<form method="post" enctype="multipart/form-data" novalidate id="kyc-form" class="dash-grid dash-grid--aside" data-max-bytes="<?= KYC_MAX_BYTES ?>">
+<form method="post" enctype="multipart/form-data" novalidate id="kyc-form" class="dash-grid dash-grid--aside" data-max-bytes="<?= KYC_MAX_BYTES ?>"<?= $cashdesk ? ' data-cashdesk="' . h($cashdesk) . '"' : '' ?>>
     <input type="hidden" name="csrf_token" value="<?= h($csrf) ?>">
+    <?php if ($cashdesk): ?><input type="hidden" name="caisse" value="<?= h($cashdesk) ?>"><?php endif; ?>
     <input type="hidden" name="MAX_FILE_SIZE" value="<?= KYC_MAX_BYTES ?>">
 
     <div class="vault-stack">
@@ -392,7 +491,7 @@ vault_header('GTC-Vault · Nouveau dossier KYC');
             <button type="submit" id="kyc-submit" class="btn btn--primary btn--block kyc-submit">
                 <span data-icon><?= icon('shield') ?></span>
                 <span class="vault-spin" data-spinner hidden aria-hidden="true"></span>
-                <span data-label>Enregistrer le dossier KYC</span>
+                <span data-label><?= $cashdesk ? 'Enregistrer et lier au document' : 'Enregistrer le dossier KYC' ?></span>
             </button>
             <p class="vault-note"><?= icon('lock') ?> Les pièces sont conservées dans un espace privé, accessible uniquement aux agents habilités.</p>
         </section>
@@ -461,9 +560,10 @@ vault_header('GTC-Vault · Nouveau dossier KYC');
 
   /** Pièces visibles et obligatoires (mêmes règles que le serveur, kyc_required()). */
   function rules() {
-    if (isCompany()) return { visible: ['doc_identite', 'doc_rccm', 'doc_statuts'], required: ['doc_rccm', 'doc_identite'] };
+    var cash = form.hasAttribute('data-cashdesk');   // mode caisse : pièces facultatives (dossier provisoire)
+    if (isCompany()) return { visible: ['doc_identite', 'doc_rccm', 'doc_statuts'], required: cash ? [] : ['doc_rccm', 'doc_identite'] };
     var cni = val('piece_identite') === 'cni';
-    return { visible: cni ? ['doc_identite', 'doc_verso'] : ['doc_identite'], required: cni ? ['doc_identite', 'doc_verso'] : ['doc_identite'] };
+    return { visible: cni ? ['doc_identite', 'doc_verso'] : ['doc_identite'], required: cash ? [] : (cni ? ['doc_identite', 'doc_verso'] : ['doc_identite']) };
   }
 
   // ---------- Champs texte ----------
@@ -604,7 +704,7 @@ vault_header('GTC-Vault · Nouveau dossier KYC');
     submitBtn.disabled = on;
     submitBtn.querySelector('[data-icon]').hidden = on;
     submitBtn.querySelector('[data-spinner]').hidden = !on;
-    submitBtn.querySelector('[data-label]').textContent = on ? 'Enregistrement en cours…' : 'Enregistrer le dossier KYC';
+    submitBtn.querySelector('[data-label]').textContent = on ? 'Enregistrement en cours…' : (form.hasAttribute('data-cashdesk') ? 'Enregistrer et lier au document' : 'Enregistrer le dossier KYC');
   }
   form.addEventListener('submit', function (e) {
     var first = null, r = rules();

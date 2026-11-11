@@ -183,13 +183,21 @@ $formatUrl = fn (string $f) => $pageUrl(['format' => $f, 'autoprint' => 0]);
                 </dl>
             </section>
 
-            <section class="receipt__block">
+            <!-- Client : nom sur toute la largeur, puis chaque information avec son libellé, toujours à la même place
+                 (téléphone | pièce d'identité, adresse | e-mail) ; les champs vides ne sont pas imprimés -->
+            <section class="receipt__block receipt__party">
                 <p class="receipt__label">Client</p>
-                <p class="receipt__client receipt__clamp receipt__clamp--2"><?= e($inv['client_name']) ?></p>
-                <?php if ($inv['client_phone']): ?><p class="receipt__phone">Tél. / WhatsApp : <?= e($inv['client_phone']) ?></p><?php endif; ?>
-                <?php if (!empty($inv['client_id_number'])): ?><p class="receipt__phone">N° pièce : <?= e($inv['client_id_number']) ?></p><?php endif; ?>
-                <?php if (!empty($inv['client_address'])): ?><p class="receipt__phone receipt__clamp"><?= e($inv['client_address']) ?></p><?php endif; ?>
-                <?php if (!empty($inv['client_email'])): ?><p class="receipt__phone"><?= e($inv['client_email']) ?></p><?php endif; ?>
+                <dl class="receipt__fields">
+                    <div class="receipt__field receipt__field--name"><dt>Nom &amp; prénom</dt><dd class="receipt__client receipt__clamp"><?= e($inv['client_name']) ?></dd></div>
+                    <?php foreach (array_filter([
+                        'Tél. / WhatsApp' => (string) ($inv['client_phone'] ?? ''),
+                        'N° pièce d\'identité' => (string) ($inv['client_id_number'] ?? ''),
+                        'Adresse' => (string) ($inv['client_address'] ?? ''),
+                        'E-mail' => (string) ($inv['client_email'] ?? ''),
+                    ], fn ($v) => trim($v) !== '') as $label => $value): ?>
+                        <div class="receipt__field"><dt><?= e($label) ?></dt><dd class="receipt__clamp" title="<?= e($value) ?>"><?= e($value) ?></dd></div>
+                    <?php endforeach; ?>
+                </dl>
             </section>
 
             <!-- Tableau récapitulatif -->

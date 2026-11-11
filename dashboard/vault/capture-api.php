@@ -23,7 +23,9 @@ ini_set('display_errors', '0');   // réponse JSON ou image : aucun message PHP 
 require_once __DIR__ . '/../../includes/vault.php';
 
 $action = (string) ($_GET['action'] ?? '');
-$user   = vault_guard($action === 'file' ? 'plain' : 'json');
+// Rôles du coffre-fort + caisse (formulaire GTC-Vault ouvert depuis un reçu ou une facture) : chaque agent ne voit que
+// ses propres captures (created_by), jamais les pièces d'un dossier
+$user   = vault_guard($action === 'file' ? 'plain' : 'json', KYC_CASHDESK_ROLES);
 
 /** Réponse JSON. */
 function capture_json(array $data, int $status = 200): never

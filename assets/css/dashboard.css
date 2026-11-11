@@ -2526,3 +2526,9 @@ tr.is-live-updated > td { animation: invite-flash 2.4s ease; }
   .form-actions { flex-wrap: wrap; }
   .form-actions .btn { flex: 1 1 100%; max-width: 100%; justify-content: center; text-align: center; white-space: normal; }
 }
+
+/* Page intégrée dans une fenêtre d'une autre page (DASH_EMBED, ex. formulaire GTC-Vault ouvert depuis la caisse) */
+.dash--embed { background: var(--surface-hi); }
+.dash--embed .dash-main { margin-left: 0; min-height: 0; }
+.dash--embed .dash-content { padding: 1rem 1.25rem 1.5rem; max-width: none; }
+@media (max-width: 640px) { .dash--embed .dash-content { padding: 0.75rem; } }

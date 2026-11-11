@@ -65,6 +65,9 @@ function kyc_dir_has_files(string $dir): bool
 }
 
 define('KYC_STORAGE_DIR', kyc_storage_dir());
+
+/** Saisie d'un nouveau client depuis la caisse (reçus, factures) : rôles du coffre-fort + rôles des opérations. */
+const KYC_CASHDESK_ROLES = ['admin', 'conformite', 'agent', 'caissier'];
 const KYC_VIEW_ROLES  = VAULT_ROLES;                            // admin, conformité, agent (includes/dashboard.php)
 const KYC_DIAL_CODES  = [                                       // indicatif => [code pays, nom]
     '+237' => ['CM', 'Cameroun'],     '+241' => ['GA', 'Gabon'],              '+242' => ['CG', 'Congo'],
@@ -109,8 +112,10 @@ function vault_csrf(): string
  * Sans session : page de connexion du Dashboard, puis retour sur la page demandée.
  * Rôle non autorisé : refus journalisé dans audit_logs.
  * $api : false (page HTML), 'json' (Fetch) ou 'plain' (image, fichier).
+ * $roles : rôles admis (par défaut VAULT_ROLES) ; la saisie d'un client depuis la caisse admet aussi les rôles
+ *         des opérations (clients-nouveau.php en mode « caisse », capture-api.php), sans accès aux pièces.
  */
-function vault_guard(string|false $api = false): array
+function vault_guard(string|false $api = false, ?array $roles = null): array
 {
     auth_session_start();
     auth_send_headers();
@@ -124,7 +129,7 @@ function vault_guard(string|false $api = false): array
         $next = 'vault/' . $page . (preg_match('/^[0-9a-f-]{36}$/', $uuid) ? '?uuid=' . $uuid : '');
         redirect('../login.php?next=' . rawurlencode($next));
     }
-    if (!in_array($user['role'] ?? '', VAULT_ROLES, true)) {
+    if (!in_array($user['role'] ?? '', $roles ?? VAULT_ROLES, true)) {
         log_audit('access_denied', null, null, 'Accès refusé à ' . ($_SERVER['SCRIPT_NAME'] ?? '?') . ' (rôle « ' . ($user['role'] ?: 'aucun') . ' »)');
         if ($api !== false) {
             vault_fail($api, 403, 'forbidden', 'Accès refusé.');

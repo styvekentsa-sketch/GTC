@@ -52,8 +52,8 @@ function print_invoice_data(array $inv, array $user): array
         // Passerelle GTC-Vault : N° de pièce et adresse repris du dossier KYC (lignes absentes si non renseignés)
         'extra'   => array_values(array_filter([
             !empty($inv['client_id_number']) ? 'N° pièce : ' . $inv['client_id_number'] : '',
-            (string) ($inv['client_address'] ?? ''),
-            (string) ($inv['client_email'] ?? ''),
+            !empty($inv['client_address']) ? 'Adresse : ' . $inv['client_address'] : '',
+            !empty($inv['client_email']) ? 'E-mail : ' . $inv['client_email'] : '',
         ])),
         'rows'    => $rows,
         'total'   => money($inv['amount_received'], $inv['target_currency']),

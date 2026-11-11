@@ -550,3 +550,29 @@ body {
   .receipt__table tr,
   .receipt__signatures { break-inside: avoid; }
 }
+
+/* ==========================================================================
+   Bloc « Client » : informations rangées, chacune avec son libellé et toujours à la même place
+   Nom sur toute la largeur ; puis Tél. / WhatsApp | N° pièce d'identité, Adresse | E-mail (champs vides omis)
+   ========================================================================== */
+.receipt__party .receipt__label { margin-bottom: 4px; }
+.receipt__fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 22px; margin: 0; }
+.receipt__field {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px; min-width: 0;
+  padding: 3px 0; border-bottom: 1px solid var(--line);
+}
+.receipt__field dt { flex-shrink: 0; color: var(--muted); font-weight: 500; }
+.receipt__field dd { min-width: 0; margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.receipt__field--name { grid-column: 1 / -1; }
+.receipt__field--name dd { font-size: 15px; font-weight: 700; }
+.receipt__fields .receipt__clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; line-clamp: 1; overflow: hidden; }
+
+/* A4 (deux exemplaires sur la feuille) : bloc compact, le reste de la mise en page est inchangé */
+.receipt-sheet--a4 .receipt__block.receipt__party { display: block; margin-bottom: 4px; }
+.receipt-sheet--a4 .receipt__field { padding: 2px 0; font-size: 12px; }
+.receipt-sheet--a4 .receipt__field--name dd { font-size: 14px; }
+
+/* Ticket et petits formats : une seule colonne */
+.print-page--ticket .receipt__fields { grid-template-columns: minmax(0, 1fr); }
+.print-page--ticket .receipt__field { font-size: 11px; }
+.print-page--ticket .receipt__field--name dd { font-size: 13px; }

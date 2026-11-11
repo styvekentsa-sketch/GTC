@@ -86,48 +86,31 @@
 html.kq-lock { overflow: hidden; }
 .kq-backdrop {
   position: fixed; inset: 0; z-index: 210; display: flex; align-items: flex-start; justify-content: center;
-  padding: 6vh 1rem 1rem; overflow-y: auto; background: rgba(15, 23, 42, 0.45);
+  padding: 3vh 1rem 1rem; background: rgba(15, 23, 42, 0.45);
 }
 .kq-backdrop[hidden] { display: none; }
 .kq-dialog {
-  width: 100%; max-width: 640px; border: 1px solid var(--line); border-radius: var(--radius);
-  background: var(--surface); box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28);
+  display: flex; flex-direction: column; width: 100%; max-width: 1180px; height: 94vh;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28); overflow: hidden;
 }
-.kq-head { display: flex; align-items: flex-start; gap: 0.75rem; padding: 1.125rem 1.25rem; border-bottom: 1px solid var(--line); }
+.kq-head { display: flex; align-items: flex-start; gap: 0.75rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--line); }
 .kq-head__icon { display: inline-grid; place-items: center; flex-shrink: 0; width: 40px; height: 40px; border-radius: 10px; background: var(--blue-soft); color: var(--blue); }
 .kq-head h2 { margin: 0; font-size: 1.0625rem; }
 .kq-head p { margin: 0.25rem 0 0; font-size: 0.8125rem; color: var(--text-muted); }
-.kq-close { margin-left: auto; display: inline-grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 8px; background: none; color: var(--text-muted); cursor: pointer; }
+.kq-close { margin-left: auto; display: inline-grid; place-items: center; flex-shrink: 0; width: 34px; height: 34px; border: 0; border-radius: 8px; background: none; color: var(--text-muted); cursor: pointer; }
 .kq-close:hover { background: var(--surface-hi); color: var(--text); }
-.kq-body { padding: 1rem 1.25rem; }
-.kq-type { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; margin: 0 0 0.875rem; padding: 0; border: 0; }
-.kq-type legend { margin-bottom: 0.375rem; font-size: 0.8125rem; font-weight: 600; color: var(--anthracite); }
-.kq-type label { display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.875rem; cursor: pointer; }
-.kq-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem 1rem; }
-.kq-full { grid-column: 1 / -1; }
-.kq-upper { text-transform: uppercase; }
-.kq-files { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem 1rem; margin-top: 0.875rem; }
-.kq-file__input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-.kq-drop {
-  display: flex; align-items: center; gap: 0.5rem; min-height: 52px; padding: 0.625rem 0.75rem;
-  border: 1.5px dashed #C3CCD8; border-radius: var(--radius-sm); background: var(--surface-hi);
-  font-size: 0.8125rem; color: var(--text-muted); cursor: pointer; overflow-wrap: anywhere;
-}
-.kq-drop svg { flex-shrink: 0; color: var(--blue); }
-.kq-drop:hover, .kq-file__input:focus-visible + .kq-drop, .kq-file:focus-within .kq-drop { border-color: var(--blue); }
-.kq-drop.has-file { border-style: solid; border-color: var(--green); background: var(--green-soft); color: var(--green-ink); font-weight: 600; }
-.kq-note { display: flex; gap: 0.375rem; margin: 0.875rem 0 0; font-size: 0.75rem; color: var(--text-muted); }
-.kq-note svg { flex-shrink: 0; margin-top: 2px; }
-.kq-alert { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.875rem; padding: 0.625rem 0.75rem; border-radius: var(--radius-sm); font-size: 0.8125rem; }
-.kq-alert[hidden] { display: none; }
-.kq-alert span { flex: 1 1 220px; }
-.kq-alert--warn { background: var(--gold-soft); color: #7F6210; }
-.kq-alert--error { background: var(--red-soft); color: #9A3412; }
-.kq-foot { display: flex; justify-content: flex-end; gap: 0.5rem; padding: 0.875rem 1.25rem; border-top: 1px solid var(--line); background: var(--surface-hi); border-radius: 0 0 var(--radius) var(--radius); }
+/* Formulaire complet de GTC-Vault (dashboard/vault/clients-nouveau.php?caisse=…) */
+.kq-frame { position: relative; flex: 1; min-height: 0; background: var(--surface-hi); }
+.kq-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
+.kq-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-size: 0.875rem; color: var(--text-muted); }
+.kq-loading[hidden] { display: none; }
+.kq-spin { width: 16px; height: 16px; border: 2px solid var(--blue); border-right-color: transparent; border-radius: 50%; animation: kq-spin 0.8s linear infinite; }
+@keyframes kq-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .kq-spin { animation: none; } }
 @media (max-width: 640px) {
   .kq-backdrop { padding: 0; }
-  .kq-dialog { min-height: 100%; border: 0; border-radius: 0; }
-  .kq-grid, .kq-files { grid-template-columns: minmax(0, 1fr); }
-  .kq-foot { position: sticky; bottom: 0; flex-direction: column-reverse; }
-  .kq-foot .btn { width: 100%; justify-content: center; }
+  .kq-dialog { height: 100%; border: 0; border-radius: 0; }
+  .kq-head { padding: 0.75rem 1rem; }
+  .kq-head p { display: none; }
 }

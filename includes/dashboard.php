@@ -449,6 +449,9 @@ function dash_header(string $title, string $active = '', array $styles = [], boo
 
     // Hub d'accueil (dashboard/index.php) : pas de barre latérale, toute la largeur pour la grille des modules
     $hub = $active === 'index';
+    // Page affichée DANS une fenêtre d'une autre page (define('DASH_EMBED', true), ex. formulaire GTC-Vault ouvert
+    // depuis la caisse) : ni menu, ni barre supérieure, ni pied de page
+    $embed = defined('DASH_EMBED') && DASH_EMBED;
     $hasHub = in_array($user['role'] ?? '', OPERATION_ROLES, true);
     $menu = ($hasHub ? ['index' => ['href' => 'index.php', 'icon' => 'grid', 'label' => 'Accueil (Hub)']] : []) + dash_modules();
     ?>
@@ -483,10 +486,10 @@ function dash_header(string $title, string $active = '', array $styles = [], boo
     <link rel="stylesheet" href="<?= e(asset_url($css, site_root())) ?>">
     <?php endforeach; ?>
 </head>
-<body class="dash<?= $hub ? ' dash--hub' : '' ?>" data-session="<?= e(session_identity()) ?>" data-session-name="<?= e($user['name'] ?? '') ?>"<?= $liveAttrs ?>>
+<body class="dash<?= $hub ? ' dash--hub' : '' ?><?= $embed ? ' dash--embed' : '' ?>" data-session="<?= e(session_identity()) ?>" data-session-name="<?= e($user['name'] ?? '') ?>"<?= $liveAttrs ?>>
 <?= dash_root_warning() ?>
 
-<?php if (!$hub): ?>
+<?php if (!$hub && !$embed): ?>
 <aside class="sidebar" id="sidebar" aria-label="Menu du dashboard">
     <div class="sidebar__brand">
         <span class="sidebar__logo"><img src="<?= e(asset_url('assets/img/logo-gtc-light-436.png', site_root())) ?>" alt="<?= e(GTC_NAME) ?>" width="166" height="41"></span>
@@ -529,7 +532,7 @@ function dash_header(string $title, string $active = '', array $styles = [], boo
 <?php endif; ?>
 
 <div class="dash-main">
-    <?php if (impersonation_active()): ?>
+    <?php if (impersonation_active() && !$embed): ?>
         <!-- Prise de contrôle de compte en cours (dashboard/switch-user.php) -->
         <div class="impersonation-bar" role="alert">
             <p class="impersonation-bar__text">
@@ -544,6 +547,7 @@ function dash_header(string $title, string $active = '', array $styles = [], boo
             </form>
         </div>
     <?php endif; ?>
+    <?php if (!$embed): ?>
     <header class="topbar">
         <?php if ($hub): ?>
             <a href="index.php" class="topbar__brand" aria-label="<?= e(GTC_NAME) ?> — Accueil du Dashboard">
@@ -571,6 +575,7 @@ function dash_header(string $title, string $active = '', array $styles = [], boo
             </span>
         </div>
     </header>
+    <?php endif; ?>
 
     <main class="dash-content" id="contenu">
         <?php foreach (flash_pull() as $f): ?>
@@ -586,10 +591,12 @@ function dash_footer(): void
 {
     ?>
     </main>
+    <?php if (!(defined('DASH_EMBED') && DASH_EMBED)): ?>
     <footer class="dash-footer">© <?= date('Y') ?> <?= e(GTC_NAME) ?> — Espace de gestion interne</footer>
+    <?php endif; ?>
 </div>
 
-<?= gs_palette_html() ?>
+<?= defined('DASH_EMBED') && DASH_EMBED ? '' : gs_palette_html() ?>
 
 <script src="<?= e(asset_url('assets/js/custom-select.js', site_root())) ?>" defer></script>
 <script src="<?= e(asset_url('assets/js/dashboard.js', site_root())) ?>" defer></script>
