@@ -2615,3 +2615,17 @@ tr.is-live-updated > td { animation: invite-flash 2.4s ease; }
 a.stat--link { color: inherit; text-decoration: none; transition: border-color var(--t), box-shadow var(--t), transform var(--t); }
 a.stat--link:hover { border-color: rgba(0, 81, 165, 0.35); box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08); transform: translateY(-1px); }
 a.stat--link:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* Paramètres → Système : sections titrées, panneaux de même hauteur deux par deux */
+.settings-group { margin: 2.25rem 0 1rem; padding-bottom: 0.875rem; border-bottom: 1px solid var(--line); }
+.settings__panel > .settings-group:first-child { margin-top: 0.25rem; }
+.settings-group__title { display: flex; flex-wrap: wrap; align-items: center; gap: 0.625rem; margin: 0; font-size: 1.0625rem; font-weight: 700; color: var(--anthracite); }
+.settings-group__title > svg { width: 20px; height: 20px; color: var(--blue); flex: none; }
+.settings-group__title .badge { font-size: 0.75rem; }
+.settings-group__sub { margin: 0.3rem 0 0; font-size: 0.875rem; color: var(--text-muted); }
+.settings-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; align-items: stretch; }
+.settings-row > .panel { margin: 0; min-width: 0; }
+.settings-row + .settings-group, .printers-admin + .printers-scan { margin-top: 1.5rem; }
+.settings__sysinfo > div:last-child { display: block; }
+.settings__sysinfo > div:last-child dd { margin-top: 0.4rem; text-align: left; }
+@media (max-width: 1100px) { .settings-row { grid-template-columns: minmax(0, 1fr); } }

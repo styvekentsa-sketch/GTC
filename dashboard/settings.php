@@ -822,7 +822,11 @@ dash_header('Paramètres', 'settings');
     <?php if ($canSystem): ?>
     <!-- ==================== 4. SYSTÈME & SAUVEGARDES ==================== -->
     <section class="settings__panel" id="panel-systeme" role="tabpanel" aria-labelledby="tab-systeme">
-        <div class="dash-grid">
+        <header class="settings-group">
+            <h2 class="settings-group__title"><?= icon('settings') ?> Préférences et sauvegardes</h2>
+            <p class="settings-group__sub">Format d'impression, devise par défaut et sauvegarde de la base de données.</p>
+        </header>
+        <div class="settings-row">
             <form method="post" class="panel form" novalidate>
                 <?= csrf_field() ?>
                 <input type="hidden" name="op" value="system">
@@ -850,13 +854,46 @@ dash_header('Paramètres', 'settings');
                 <div class="form-actions"><button type="submit" class="btn btn--primary"><?= icon('check') ?> Enregistrer</button></div>
             </form>
 
-            <?php if ($isOwner): ?>
+            <section class="panel">
+                <h2 class="panel__title">Sauvegarde de la base de données</h2>
+                <p class="page-intro">Télécharge un fichier <code>.sql</code> contenant la structure et toutes les données : reçus de caisse, factures, comptes, équipe, messages, paramètres.</p>
+                <p class="help-text"><?= icon('alert') ?> Fichier confidentiel (il contient les empreintes des mots de passe) : conservez-le hors du serveur, en lieu sûr.</p>
+                <form method="post" class="form-actions">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="op" value="backup">
+                    <button type="submit" class="btn btn--primary"><?= icon('receipt') ?> Télécharger une sauvegarde BDD (.sql)</button>
+                    <a href="backups.php" class="btn btn--ghost"><?= icon('archive') ?> Historique, restauration…</a>
+                </form>
+                <dl class="detail-list settings__sysinfo">
+                    <div><dt>Moteur</dt><dd><?= DB_DRIVER === 'mysql' ? 'MySQL' : 'SQLite' ?></dd></div>
+                    <div><dt>Reçus de caisse enregistrés</dt><dd><?= (int) db_value('SELECT COUNT(*) FROM invoices') ?></dd></div>
+                    <div><dt>Comptes</dt><dd><?= (int) db_value('SELECT COUNT(*) FROM users') ?></dd></div>
+                    <div><dt>PHP</dt><dd><?= e(PHP_VERSION) ?></dd></div>
+                    <?php $autoBackups = backup_list(); $lastAuto = $autoBackups[0] ?? null; ?>
+                    <div><dt>Sauvegardes automatiques</dt><dd>
+                        <?php if (!$lastAuto): ?>
+                            <span class="badge badge--warning">Aucune</span> <small class="cell-sub">Programmer <code>php tools/auto-backup.php</code> chaque nuit (tâche cron).</small>
+                        <?php else: ?>
+                            <?= $lastAuto['time'] < time() - 2 * 86400 ? '<span class="badge badge--danger">En retard</span> ' : '<span class="badge badge--success">Actives</span> ' ?>
+                            dernière le <?= e(date('d/m/Y à H:i', $lastAuto['time'])) ?> · <?= count($autoBackups) ?> conservée<?= count($autoBackups) > 1 ? 's' : '' ?> (<?= (int) GTC_BACKUP_KEEP_DAYS ?> jours)
+                        <?php endif; ?>
+                    </dd></div>
+                </dl>
+            </section>
+        </div>
+
+        <?php if ($isOwner): ?>
+        <header class="settings-group">
+            <h2 class="settings-group__title"><?= icon('mail') ?> Alertes et envoi des e-mails <span class="badge badge--info"><?= icon('lock') ?> Visible par vous seul</span></h2>
+            <p class="settings-group__sub">Connexions et opérations du Dashboard envoyées par e-mail, et boîte mail utilisée pour les expédier.</p>
+        </header>
+        <div class="settings-row">
             <!-- Alertes de connexion : e-mail à chaque connexion au Dashboard (includes/login_alert.php) — propriétaire uniquement -->
             <form method="post" action="settings.php#systeme" class="panel form" novalidate data-login-alert>
                 <?= csrf_field() ?>
-                <h2 class="panel__title"><?= icon('mail') ?> Alertes par e-mail <span class="badge badge--info"><?= icon('lock') ?> Visible par vous seul</span></h2>
+                <h2 class="panel__title"><?= icon('mail') ?> Alertes par e-mail</h2>
                 <p class="cell-sub">Un e-mail est envoyé à chaque connexion au Dashboard (mot de passe, reconnexion automatique, prise de contrôle d'un compte) :
-                    compte, date et heure, adresse IP, appareil et navigateur. Ces réglages ne sont visibles que sur votre compte.</p>
+                    compte, date et heure, adresse IP, appareil et navigateur.</p>
                 <div class="field">
                     <label for="login-alert-email">Adresse qui reçoit les alertes</label>
                     <input id="login-alert-email" name="login_alert_email" type="email" maxlength="150" inputmode="email" autocomplete="off"
@@ -885,8 +922,8 @@ dash_header('Paramètres', 'settings');
                 <?= csrf_field() ?>
                 <input type="hidden" name="op" value="smtp">
                 <h2 class="panel__title"><?= icon('send') ?> Envoi des e-mails</h2>
-                <p class="cell-sub">Pour que les alertes arrivent en boîte de réception, elles doivent partir d'une vraie boîte mail du domaine.
-                    Créez-la dans hPanel → E-mails (ex. <strong>no-reply@globaltradingcorporation.net</strong>), puis saisissez ici son adresse et son mot de passe.
+                <p class="cell-sub">Les alertes partent d'une vraie boîte mail : un compte <strong>Gmail</strong> (avec un mot de passe d'application Google)
+                    ou une boîte du domaine créée dans hPanel → E-mails (ex. <strong>no-reply@globaltradingcorporation.net</strong>).
                     <?= $smtpOn ? '' : 'Actuellement : fonction mail() du serveur (souvent écartée par Gmail).' ?></p>
                 <?php if ($smtpConst): ?>
                     <p class="help-text"><?= icon('lock') ?> Boîte définie dans includes/db.local.php (<?= e((string) constant('GTC_SMTP_USER')) ?>) : ces réglages sont prioritaires.</p>
@@ -922,36 +959,13 @@ dash_header('Paramètres', 'settings');
                 </div>
                 <div class="form-actions"><button type="submit" class="btn btn--primary"><?= icon('check') ?> Enregistrer</button></div>
             </form>
-            <?php endif; ?>
-
-            <section class="panel">
-                <h2 class="panel__title">Sauvegarde de la base de données</h2>
-                <p class="page-intro">Télécharge un fichier <code>.sql</code> contenant la structure et toutes les données : reçus de caisse, factures, comptes, équipe, messages, paramètres.</p>
-                <p class="help-text"><?= icon('alert') ?> Fichier confidentiel (il contient les empreintes des mots de passe) : conservez-le hors du serveur, en lieu sûr.</p>
-                <form method="post" class="form-actions">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="op" value="backup">
-                    <button type="submit" class="btn btn--primary"><?= icon('receipt') ?> Télécharger une sauvegarde BDD (.sql)</button>
-                    <a href="backups.php" class="btn btn--ghost"><?= icon('archive') ?> Historique, restauration…</a>
-                </form>
-                <dl class="detail-list settings__sysinfo">
-                    <div><dt>Moteur</dt><dd><?= DB_DRIVER === 'mysql' ? 'MySQL' : 'SQLite' ?></dd></div>
-                    <div><dt>Reçus de caisse enregistrés</dt><dd><?= (int) db_value('SELECT COUNT(*) FROM invoices') ?></dd></div>
-                    <div><dt>Comptes</dt><dd><?= (int) db_value('SELECT COUNT(*) FROM users') ?></dd></div>
-                    <div><dt>PHP</dt><dd><?= e(PHP_VERSION) ?></dd></div>
-                    <?php $autoBackups = backup_list(); $lastAuto = $autoBackups[0] ?? null; ?>
-                    <div><dt>Sauvegardes automatiques</dt><dd>
-                        <?php if (!$lastAuto): ?>
-                            <span class="badge badge--warning">Aucune</span> <small class="cell-sub">Programmer <code>php tools/auto-backup.php</code> chaque nuit (tâche cron).</small>
-                        <?php else: ?>
-                            <?= $lastAuto['time'] < time() - 2 * 86400 ? '<span class="badge badge--danger">En retard</span> ' : '<span class="badge badge--success">Actives</span> ' ?>
-                            dernière le <?= e(date('d/m/Y à H:i', $lastAuto['time'])) ?> · <?= count($autoBackups) ?> conservée<?= count($autoBackups) > 1 ? 's' : '' ?> (<?= (int) GTC_BACKUP_KEEP_DAYS ?> jours)
-                        <?php endif; ?>
-                    </dd></div>
-                </dl>
-            </section>
         </div>
+        <?php endif; ?>
 
+        <header class="settings-group">
+            <h2 class="settings-group__title"><?= icon('printer') ?> Imprimantes de l'agence</h2>
+            <p class="settings-group__sub">Imprimantes proposées à la création d'un reçu, et détection sur le réseau local.</p>
+        </header>
         <!-- Imprimantes réseau -->
         <div class="dash-grid dash-grid--aside printers-admin">
             <section class="panel">
