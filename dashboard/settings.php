@@ -300,6 +300,40 @@ if (is_post()) {
         }
     }
 
+    // ----- Envoi des e-mails (admin) : boîte mail SMTP de l'hébergement (includes/mailer.php) -----
+    if ($op === 'smtp') {
+        $canSystem || deny();
+        $tab  = 'systeme';
+        $host = trim(post('smtp_host'));
+        $port = (int) post('smtp_port');
+        $usr  = mb_strtolower(trim(post('smtp_user')));
+        $pass = (string) ($_POST['smtp_pass'] ?? '');
+        if ($usr !== '' && !filter_var($usr, FILTER_VALIDATE_EMAIL)) {
+            $errors['smtp_user'] = 'Indiquez l\'adresse complète de la boîte mail (ex. no-reply@globaltradingcorporation.net).';
+        }
+        if ($usr !== '' && ($host === '' || !preg_match('/^[a-z0-9.\-]+$/i', $host))) {
+            $errors['smtp_host'] = 'Serveur SMTP invalide.';
+        }
+        if ($usr !== '' && !in_array($port, [465, 587], true)) {
+            $errors['smtp_port'] = 'Port 465 (SSL) ou 587 (STARTTLS).';
+        }
+        if ($usr !== '' && $pass === '' && setting('smtp_pass') === '') {
+            $errors['smtp_pass'] = 'Mot de passe de la boîte mail requis.';
+        }
+        if (!$errors) {
+            $values = ['smtp_host' => $host ?: 'smtp.hostinger.com', 'smtp_port' => (string) ($port ?: 465), 'smtp_user' => $usr];
+            if ($usr === '') {
+                $values['smtp_pass'] = '';               // SMTP désactivé : mot de passe effacé
+            } elseif ($pass !== '') {
+                $values['smtp_pass'] = $pass;            // champ laissé vide : mot de passe actuel conservé
+            }
+            settings_save($values);
+            activity_log('update', 'settings', null, 'Envoi des e-mails', ['smtp' => $usr !== '' ? $usr . ' @ ' . $values['smtp_host'] . ':' . $values['smtp_port'] : 'désactivé (mail())']);
+            flash('success', $usr !== '' ? 'Envoi par la boîte ' . $usr . ' enregistré. Envoyez un e-mail de test pour vérifier.' : 'SMTP désactivé : envoi par la fonction mail() du serveur.');
+            redirect('settings.php#systeme');
+        }
+    }
+
     // ----- Alertes de connexion (admin) : e-mail envoyé à chaque connexion au Dashboard -----
     if ($op === 'login_alert' || $op === 'login_alert_test') {
         $canSystem || deny();
@@ -326,7 +360,7 @@ if (is_post()) {
                 activity_log('update', 'settings', null, 'Alertes de connexion', ['test' => $to]);
                 flash($ok ? 'success' : 'error', $ok
                     ? 'E-mail de test envoyé à ' . $to . '. Vérifiez la boîte de réception (et les spams).'
-                    : 'Le serveur n\'a pas pu envoyer l\'e-mail de test à ' . $to . ' : vérifiez la configuration e-mail de l\'hébergement.');
+                    : 'Échec de l\'envoi à ' . $to . ' : ' . rtrim((mailer_last()['error'] ?? '') ?: 'erreur inconnue', '. ') . '.');
             } else {
                 activity_log('update', 'settings', null, 'Alertes de connexion', ['destinataire' => $to !== '' ? $to : 'désactivées']);
                 flash('success', $to !== '' ? 'Alertes de connexion envoyées à ' . $to . '.' : 'Alertes de connexion désactivées.');
@@ -824,6 +858,55 @@ dash_header('Paramètres', 'settings');
                     <button type="submit" name="op" value="login_alert_test" class="btn btn--ghost"><?= icon('send') ?> Envoyer un e-mail de test</button>
                     <button type="submit" name="op" value="login_alert" class="btn btn--primary"><?= icon('check') ?> Enregistrer</button>
                 </div>
+                <?php $last = json_decode($s['mail_last_status'] ?? '', true); if (is_array($last)): ?>
+                    <p class="help-text" data-mail-last><?= icon($last['ok'] ? 'check' : 'alert') ?>
+                        Dernier envoi : <?= e($last['at'] ?? '') ?> à <?= e($last['to'] ?? '') ?> —
+                        <?= $last['ok'] ? 'accepté par ' . ($last['via'] === 'smtp' ? 'le serveur SMTP' : 'la fonction mail() du serveur') : 'échec : ' . e($last['error'] ?? '') ?></p>
+                <?php endif; ?>
+            </form>
+
+            <!-- Envoi des e-mails : boîte mail SMTP de l'hébergement (includes/mailer.php) -->
+            <?php $smtpConst = defined('GTC_SMTP_USER') && (string) constant('GTC_SMTP_USER') !== ''; $smtpOn = $smtpConst || trim($s['smtp_user']) !== ''; ?>
+            <form method="post" action="settings.php#systeme" class="panel form" novalidate data-smtp autocomplete="off">
+                <?= csrf_field() ?>
+                <input type="hidden" name="op" value="smtp">
+                <h2 class="panel__title"><?= icon('send') ?> Envoi des e-mails</h2>
+                <p class="cell-sub">Pour que les alertes arrivent en boîte de réception, elles doivent partir d'une vraie boîte mail du domaine.
+                    Créez-la dans hPanel → E-mails (ex. <strong>no-reply@globaltradingcorporation.net</strong>), puis saisissez ici son adresse et son mot de passe.
+                    <?= $smtpOn ? '' : 'Actuellement : fonction mail() du serveur (souvent écartée par Gmail).' ?></p>
+                <?php if ($smtpConst): ?>
+                    <p class="help-text"><?= icon('lock') ?> Boîte définie dans includes/db.local.php (<?= e((string) constant('GTC_SMTP_USER')) ?>) : ces réglages sont prioritaires.</p>
+                <?php endif; ?>
+                <div class="form-grid">
+                    <div class="field">
+                        <label for="smtp-user">Adresse de la boîte mail</label>
+                        <input id="smtp-user" name="smtp_user" type="email" maxlength="150" inputmode="email" autocomplete="off"
+                               placeholder="no-reply@globaltradingcorporation.net" value="<?= $val('smtp_user', $s['smtp_user']) ?>"<?= $inv('smtp_user') ?>>
+                        <small class="field__hint">Laisser vide pour revenir à la fonction mail() du serveur.</small>
+                        <?= $err('smtp_user') ?>
+                    </div>
+                    <div class="field">
+                        <label for="smtp-pass">Mot de passe de la boîte</label>
+                        <input id="smtp-pass" name="smtp_pass" type="password" maxlength="200" autocomplete="new-password"
+                               placeholder="<?= $s['smtp_pass'] !== '' ? 'Enregistré — laisser vide pour le conserver' : 'Mot de passe défini dans hPanel' ?>"<?= $inv('smtp_pass') ?>>
+                        <?= $err('smtp_pass') ?>
+                    </div>
+                    <div class="field">
+                        <label for="smtp-host">Serveur SMTP</label>
+                        <input id="smtp-host" name="smtp_host" type="text" maxlength="120" value="<?= $val('smtp_host', $s['smtp_host']) ?>"<?= $inv('smtp_host') ?>>
+                        <?= $err('smtp_host') ?>
+                    </div>
+                    <div class="field">
+                        <label for="smtp-port">Port</label>
+                        <select id="smtp-port" name="smtp_port"<?= $inv('smtp_port') ?>>
+                            <?php foreach (['465' => '465 — SSL (recommandé)', '587' => '587 — STARTTLS'] as $p => $l): ?>
+                                <option value="<?= $p ?>" <?= (string) ($_POST['smtp_port'] ?? $s['smtp_port']) === (string) $p ? 'selected' : '' ?>><?= $l ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <?= $err('smtp_port') ?>
+                    </div>
+                </div>
+                <div class="form-actions"><button type="submit" class="btn btn--primary"><?= icon('check') ?> Enregistrer</button></div>
             </form>
 
             <section class="panel">

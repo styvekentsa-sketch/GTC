@@ -7,10 +7,12 @@
  * Événements : connexion par mot de passe, reconnexion automatique (« Se souvenir de moi »), prise de contrôle d'un
  * compte par un administrateur.
  * Contenu : compte (nom, e-mail, rôle), méthode, date et heure (Douala), adresse IP, appareil et navigateur.
- * Envoi : fonction mail() de PHP (comme le formulaire de contact), APRÈS la réponse au navigateur — la connexion n'est
+ * Envoi : includes/mailer.php (SMTP authentifié d'une boîte de l'hébergement, sinon mail()), APRÈS la réponse au navigateur — la connexion n'est
  * jamais ralentie, et un échec d'envoi ne bloque jamais l'accès (il est seulement écrit dans le journal PHP).
  */
 declare(strict_types=1);
+
+require_once __DIR__ . '/mailer.php';
 
 /** Adresse qui reçoit les alertes ('' = désactivées). */
 function login_alert_recipient(): string
@@ -79,9 +81,14 @@ function login_alert_notify(array $user, string $method, ?array $by = null): voi
         'device' => login_alert_device($ua),
     ] + login_alert_site();
     register_shutdown_function(static function () use ($data): void {
-        // Réponse déjà envoyée au navigateur (PHP-FPM, Hostinger) : l'envoi ne retarde pas la page
+        // Réponse d'abord envoyée au navigateur (PHP-FPM ou LiteSpeed/Hostinger) : l'envoi ne retarde pas la page,
+        // et se poursuit même si le navigateur a déjà fermé la connexion
+        ignore_user_abort(true);
+        @set_time_limit(60);
         if (function_exists('fastcgi_finish_request')) {
             @fastcgi_finish_request();
+        } elseif (function_exists('litespeed_finish_request')) {
+            @litespeed_finish_request();
         }
         login_alert_send($data);
     });
@@ -199,7 +206,7 @@ function login_alert_send(array $d): bool
 
     $boundary = 'gtc-' . bin2hex(random_bytes(12));
     $headers = [
-        'From'         => mb_encode_mimeheader('Dashboard GTC', 'UTF-8') . ' <no-reply@' . $d['host'] . '>',
+        'From'         => mb_encode_mimeheader('Dashboard GTC', 'UTF-8') . ' <' . mailer_from_address($d['host']) . '>',
         'MIME-Version' => '1.0',
         'Content-Type' => 'multipart/alternative; boundary="' . $boundary . '"',
         'X-Mailer'     => 'PHP/' . PHP_VERSION,
@@ -218,9 +225,6 @@ function login_alert_send(array $d): bool
         file_put_contents($file . '.html', $html);   // aperçu du rendu
         return true;
     }
-    $ok = @mail($d['to'], mb_encode_mimeheader($subject, 'UTF-8'), $body, $headers);
-    if (!$ok) {
-        error_log('[Alerte de connexion] envoi impossible à ' . $d['to'] . ' (' . $d['name'] . ', ' . $d['ip'] . ')');
-    }
-    return $ok;
+    // SMTP authentifié si configuré (Paramètres → Système → Envoi des e-mails), sinon mail() — includes/mailer.php
+    return mailer_send($d['to'], $subject, $body, $headers)['ok'];
 }
