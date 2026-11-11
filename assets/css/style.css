@@ -5184,3 +5184,10 @@ a[href^="tel:"] { white-space: nowrap; }
   }
   .legal-table.is-stacked tbody td:first-child::before { content: none; }   /* 1re colonne : titre de la fiche */
 }
+
+/* Témoignages de l'accueil : avis clients publiés (note, score global, texte abrégé) */
+.testimonials__score { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-2); margin-top: var(--space-3); color: var(--color-text-muted); }
+.testimonials__score strong { color: var(--color-navy-700); font-size: 1.05rem; }
+.testimonial__rating { margin-bottom: var(--space-4); line-height: 1; }
+.testimonial__text p { overflow-wrap: anywhere; }
+.testimonial__more { display: inline-block; margin-top: var(--space-2); font-size: var(--fs-sm); font-weight: 600; }
