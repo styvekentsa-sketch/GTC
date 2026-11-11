@@ -3577,54 +3577,9 @@ a.social__link--twitter:hover,   a.social__link--twitter:focus-visible   { backg
 }
 
 /* ==========================================================================
-   Carrousel des services (includes/services-carousel.php, assets/js/main.js § 5)
-   index.php et services.php : défilement manuel (glisser, balayer, boutons, points) + automatique
+   Carrousel des services (includes/services-carousel.php) : moteur .tst-slider (main.js § 13), voir plus bas.
+   Ci-dessous : commandes partagées par les deux carrousels (précédent, points, suivant, pause) et la carte.
    ========================================================================== */
-.svc-carousel {
-  position: relative;
-}
-
-/* Bande défilable : les cartes s'alignent sur le contenu de la page (marge = celle du .container) */
-.svc-carousel__track {
-  --svc-pad: max(var(--space-5), calc((100% - var(--container)) / 2 + var(--space-5)));
-  display: flex;
-  gap: var(--space-6);
-  margin: 0;
-  padding: var(--space-2) var(--svc-pad) var(--space-4);
-  list-style: none;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scroll-snap-type: x mandatory;
-  scroll-padding-inline: var(--svc-pad);
-  scroll-behavior: smooth;
-  scrollbar-width: none;
-  cursor: grab;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 2.5%, #000 97.5%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 2.5%, #000 97.5%, transparent);
-}
-
-.svc-carousel__track::-webkit-scrollbar { display: none; }
-
-/* Glisser à la souris : défilement direct, alignement rétabli au relâchement */
-.svc-carousel__track.is-dragging {
-  cursor: grabbing;
-  scroll-snap-type: none;
-  scroll-behavior: auto;
-  user-select: none;
-}
-.svc-carousel__track.is-dragging a { pointer-events: none; }
-
-/* Commandes : précédent, points, suivant, pause */
-.svc-carousel__controls {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin-top: var(--space-2);
-}
-.svc-carousel__controls[hidden] { display: none; }
-
 .svc-carousel__btn {
   display: grid;
   place-items: center;
@@ -3680,10 +3635,8 @@ a.social__link--twitter:hover,   a.social__link--twitter:focus-visible   { backg
 
 /* ---- Carte de service ---- */
 .svc-card {
-  flex: 0 0 400px;
   display: flex;
   flex-direction: column;
-  scroll-snap-align: start;
   overflow: hidden;
   background-color: var(--color-white);
   border: 1px solid var(--color-slate-200);
@@ -3697,7 +3650,7 @@ a.social__link--twitter:hover,   a.social__link--twitter:focus-visible   { backg
 }
 
 .svc-card__media {
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 2 / 1;
   overflow: hidden;
   background-color: var(--color-slate-100);
 }
@@ -3712,43 +3665,54 @@ a.social__link--twitter:hover,   a.social__link--twitter:focus-visible   { backg
   display: flex;
   flex: 1;
   flex-direction: column;
-  padding: var(--space-6) 2.5rem 2.5rem;
+  padding: 0 var(--space-5) var(--space-5);
 }
 
+/* Icône à cheval sur l’image (gain de hauteur) */
 .svc-card__icon {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 54px;
-  height: 54px;
-  margin-bottom: var(--space-5);
+  width: 50px;
+  height: 50px;
+  margin: -25px 0 var(--space-3);
+  border: 3px solid var(--color-white);
   border-radius: var(--radius);
   background-color: var(--color-accent-light);
   color: var(--color-accent-dark);
-  font-size: 1.35rem;
+  font-size: 1.2rem;
+  box-shadow: 0 6px 16px -8px rgba(31, 38, 48, 0.35);
 }
 
 .svc-card__title {
-  font-size: var(--fs-2xl);
+  font-size: var(--fs-xl);
 }
 
 .svc-card__tagline {
-  margin-top: var(--space-2);
-  font-size: var(--fs-lg);
+  margin-top: var(--space-1, 0.25rem);
+  font-size: var(--fs-base);
   font-weight: 600;
   color: var(--color-accent-dark);
 }
 
+/* Description abrégée à 3 lignes (texte complet : page Services) */
 .svc-card__text {
-  margin-top: var(--space-3);
-  line-height: 1.75;
+  display: -webkit-box;
+  margin-top: var(--space-2);
+  font-size: var(--fs-sm);
+  line-height: 1.65;
   color: var(--color-text-muted);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
 }
 
 .svc-list {
   display: grid;
-  gap: var(--space-3);
-  margin: var(--space-6) 0 var(--space-7);
-  padding: var(--space-6) 0 0;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 var(--space-5);
+  padding: var(--space-4) 0 0;
   list-style: none;
   border-top: 1px solid var(--color-slate-200);
 }
@@ -3756,9 +3720,13 @@ a.social__link--twitter:hover,   a.social__link--twitter:focus-visible   { backg
 .svc-list li {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-3);
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
   color: var(--color-navy-800);
 }
+/* Accueil : 3 points clés par carte (liste complète : page Services) */
+.svc-list li:nth-child(n + 4) { display: none; }
 
 .svc-list .icon {
   flex-shrink: 0;
@@ -3769,9 +3737,11 @@ a.social__link--twitter:hover,   a.social__link--twitter:focus-visible   { backg
 .svc-card__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-4);
+  gap: var(--space-2);
   margin-top: auto;
 }
+/* Boutons compacts : « Demander… » et « Simuler » tiennent sur une ligne */
+.svc-card__actions .btn { padding: 0.55rem 0.8rem; gap: 0.4rem; font-size: var(--fs-sm); }
 
 .svc-carousel__more {
   margin-top: var(--space-4);
@@ -3780,18 +3750,13 @@ a.social__link--twitter:hover,   a.social__link--twitter:focus-visible   { backg
 
 /* Téléphones : cartes plus étroites */
 @media (max-width: 575.98px) {
-  .svc-carousel__track { gap: var(--space-4); }
-  .svc-card { flex-basis: min(300px, 82vw); }
-  .svc-card__body { padding: var(--space-6) var(--space-5); }
-  .svc-card__title { font-size: var(--fs-xl); }
-  .svc-card__tagline { font-size: var(--fs-base); }
-  .svc-card__text,
-  .svc-list li { font-size: var(--fs-sm); }
+  .svc-card__body { padding: 0 var(--space-5) var(--space-5); }
+  .svc-card__title { font-size: var(--fs-lg); }
+  .svc-card__tagline { font-size: var(--fs-sm); }
 }
 
-/* Moins d'animations demandé : pas de défilement automatique (main.js) ni d'animation de défilement */
+/* Moins d'animations demandé */
 @media (prefers-reduced-motion: reduce) {
-  .svc-carousel__track { scroll-behavior: auto; }
   .svc-carousel__dot { transition: none; }
 }
 
@@ -5193,7 +5158,8 @@ a[href^="tel:"] { white-space: nowrap; }
 .testimonial__more { display: inline-block; margin-top: var(--space-2); font-size: var(--fs-sm); font-weight: 600; }
 
 /* --------------------------------------------------------------------------
-   Témoignages : carrousel « vitrine » (includes/testimonials.php, main.js § 13)
+   Carrousel « vitrine » (main.js § 13) : témoignages (includes/testimonials.php) et services de l'accueil
+   (includes/services-carousel.php, variante .tst-slider--services)
    Glisse de droite à gauche, une carte à la fois (courbe ease-in-out) ; la carte centrale est mise en avant,
    ses étoiles et son texte apparaissent en cascade, une barre indique le temps avant l'avis suivant.
    Sans JavaScript : simple bande défilable (scroll-snap).
@@ -5228,7 +5194,7 @@ a[href^="tel:"] { white-space: nowrap; }
   width: min(380px, 80vw);
   scroll-snap-align: center;
 }
-.tst-slide > .testimonial {
+.tst-slide > * {
   position: relative;
   width: 100%;
   overflow: hidden;
@@ -5236,7 +5202,8 @@ a[href^="tel:"] { white-space: nowrap; }
 }
 
 /* Barre de progression (bas de la carte active) */
-.testimonial__progress {
+.tst-progress {
+  z-index: 1;
   position: absolute;
   left: 0;
   right: 0;
@@ -5246,7 +5213,7 @@ a[href^="tel:"] { white-space: nowrap; }
   opacity: 0;
   transition: opacity 0.3s ease;
 }
-.testimonial__progress::after {
+.tst-progress::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -5282,11 +5249,11 @@ a[href^="tel:"] { white-space: nowrap; }
 }
 .tst-slider.is-ready .tst-slide.is-near { opacity: 0.68; transform: scale(0.93); cursor: pointer; }
 .tst-slider.is-ready .tst-slide.is-active { opacity: 1; transform: none; }
-.tst-slider.is-ready .tst-slide.is-active > .testimonial {
+.tst-slider.is-ready .tst-slide.is-active > * {
   border-color: transparent;
   box-shadow: 0 24px 48px -22px rgba(31, 38, 48, 0.38), 0 2px 6px rgba(31, 38, 48, 0.06);
 }
-.tst-slider.is-ready .tst-slide.is-active > .testimonial:hover { transform: translateY(-4px); }
+.tst-slider.is-ready .tst-slide.is-active > *:hover { transform: translateY(-4px); }
 
 /* Pendant un saut invisible (boucle) ou un glisser au doigt : aucune transition */
 .tst-slider.is-jumping .tst-slider__track,
@@ -5304,10 +5271,22 @@ a[href^="tel:"] { white-space: nowrap; }
 .tst-slider.is-inview .tst-slide.is-active .testimonial__author { animation: tst-rise 0.7s var(--tst-ease) 0.32s both; }
 
 /* Barre : se remplit pendant --tst-delay ; à la fin, main.js passe à l'avis suivant */
-.tst-slider.is-ready.is-auto .tst-slide.is-active .testimonial__progress { opacity: 1; }
-.tst-slider.is-ready.is-auto .tst-slide.is-active .testimonial__progress::after { animation: tst-progress var(--tst-delay, 5500ms) linear forwards; }
-.tst-slider.is-paused .tst-slide.is-active .testimonial__progress::after { animation-play-state: paused; }
+.tst-slider.is-ready.is-auto .tst-slide.is-active .tst-progress { opacity: 1; }
+.tst-slider.is-ready.is-auto .tst-slide.is-active .tst-progress::after { animation: tst-progress var(--tst-delay, 5500ms) linear forwards; }
+.tst-slider.is-paused .tst-slide.is-active .tst-progress::after { animation-play-state: paused; }
 
+/* Services : icône, titre, accroche, texte, points puis boutons en cascade */
+.tst-slider.is-inview .tst-slide.is-active .svc-card__icon { animation: tst-star 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s both; }
+.tst-slider.is-inview .tst-slide.is-active .svc-card__media img { animation: tst-zoom 6s ease-out both; }
+.tst-slider.is-inview .tst-slide.is-active .svc-card__title { animation: tst-rise 0.7s var(--tst-ease) 0.18s both; }
+.tst-slider.is-inview .tst-slide.is-active .svc-card__tagline { animation: tst-rise 0.7s var(--tst-ease) 0.26s both; }
+.tst-slider.is-inview .tst-slide.is-active .svc-card__text { animation: tst-rise 0.7s var(--tst-ease) 0.34s both; }
+.tst-slider.is-inview .tst-slide.is-active .svc-list li { animation: tst-rise 0.6s var(--tst-ease) 0.42s both; }
+.tst-slider.is-inview .tst-slide.is-active .svc-list li:nth-child(2) { animation-delay: 0.5s; }
+.tst-slider.is-inview .tst-slide.is-active .svc-list li:nth-child(3) { animation-delay: 0.58s; }
+.tst-slider.is-inview .tst-slide.is-active .svc-card__actions { animation: tst-rise 0.7s var(--tst-ease) 0.66s both; }
+
+@keyframes tst-zoom { from { transform: scale(1.08); } to { transform: scale(1); } }
 @keyframes tst-star { from { opacity: 0; transform: scale(0.3) rotate(-25deg); } to { opacity: 1; transform: none; } }
 @keyframes tst-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 @keyframes tst-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
@@ -5321,7 +5300,13 @@ a[href^="tel:"] { white-space: nowrap; }
 }
 .tst-slider__controls[hidden] { display: none; }
 
+/* Variante services : pleine largeur de page, cartes de 360 px */
+.tst-slider--services .tst-slide { width: min(360px, 82vw); }
+.tst-slider--services .tst-slider__viewport { padding-block: var(--space-2) var(--space-5); }
+
 @media (max-width: 575.98px) {
+  /* « Pause » sur sa propre ligne, centrée (hors de portée des boutons flottants) */
+  .tst-slider__controls .svc-carousel__play { flex-basis: 100%; margin: 0; text-align: center; }
   .tst-slider__viewport {
     -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
             mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
@@ -5334,7 +5319,7 @@ a[href^="tel:"] { white-space: nowrap; }
   .tst-slider.is-ready .tst-slider__viewport,
   .tst-slider.is-ready .tst-slider__track,
   .tst-slider.is-ready .tst-slide,
-  .tst-slide > .testimonial { transition: none; }
+  .tst-slide > * { transition: none; }
   .tst-slider.is-ready .tst-slider__viewport { opacity: 1; transform: none; }
   .tst-slider.is-ready .tst-slide.is-active * { animation: none !important; }
 }

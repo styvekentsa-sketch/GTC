@@ -89,7 +89,7 @@ $testimonialsCount = count($testimonials);
                             <span class="testimonial__role"><?= e($t['role']) ?></span>
                         </span>
                     </figcaption>
-                    <span class="testimonial__progress" aria-hidden="true"></span>
+                    <span class="tst-progress" aria-hidden="true"></span>
                 </figure>
               </li>
             <?php endforeach; ?>

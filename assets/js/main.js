@@ -4,7 +4,7 @@
  * 2. Sélecteur de langue (Google Translate)
  * 3. Calculateur de devises & fenêtre modale du simulateur
  * 4. Accès discret à l'Espace personnel (Dashboard)
- * 5. Carrousel des services (défilement automatique + manuel)
+ * 5. Carrousel des services (voir § 13)
  * 6. Catalogue des services (apparition au défilement)
  * 7. Questions fréquentes (recherche, thèmes)
  * 8. Bouton « retour en haut »
@@ -12,7 +12,7 @@
  * 10. Avis clients (étoiles, envoi, « Afficher plus »)
  * 11. Visite guidée « Donner mon avis » (bandeau réductible)
  * 12. Tableaux des pages légales en fiches (téléphone)
- * 13. Témoignages de l'accueil (carrousel « vitrine »)
+ * 13. Carrousel « vitrine » : témoignages et services de l'accueil
  */
 
 /* ==========================================================================
@@ -452,208 +452,8 @@
 })();
 
 /* ==========================================================================
-   5. Carrousel des services (includes/services-carousel.php)
-   Défilement hybride :
-   - manuel : glisser à la souris, balayage au doigt, molette / pavé tactile, boutons, points ; les cartes
-     s'alignent à chaque arrêt (scroll-snap, CSS) ;
-   - automatique : une carte toutes les AUTOPLAY_DELAY ms, retour au début après la dernière.
-   Pause dès que le visiteur survole (mouseenter), touche (touchstart), fait défiler, glisse, utilise un bouton
-   ou le clavier ; reprise RESUME_DELAY ms après qu'il a quitté le carrousel (mouseleave / touchend / fin du
-   défilement / perte du focus). Bouton « Pause » : arrêt jusqu'à « Lecture » (accessibilité, WCAG 2.2.2).
-   Jamais de défilement automatique si le visiteur a demandé moins d'animations, ni hors écran / onglet masqué.
+   5. Carrousel des services de l'accueil : même moteur que les témoignages, voir § 13
    ========================================================================== */
-(function () {
-  'use strict';
-
-  var AUTOPLAY_DELAY = 3000;   // ms entre deux cartes
-  var RESUME_DELAY = 3000;     // ms avant la reprise, après la dernière interaction
-  var DRAG_THRESHOLD = 6;      // px : en deçà, un clic reste un clic (liens, boutons des cartes)
-  var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  document.querySelectorAll('[data-svc-carousel]').forEach(function (root) {
-    var track = root.querySelector('[data-svc-track]');
-    var cards = Array.prototype.slice.call(track.children);
-    var controls = root.querySelector('[data-svc-controls]');
-    var dots = Array.prototype.slice.call(root.querySelectorAll('[data-svc-dot]'));
-    var toggle = root.querySelector('[data-svc-toggle]');
-    var toggleLabel = root.querySelector('[data-svc-toggle-label]');
-    if (!cards.length) return;
-    controls.hidden = false;
-
-    var timer = null;          // setInterval du défilement automatique
-    var resumeTimer = null;    // setTimeout de reprise
-    var hovering = false, touching = false, dragging = false, focused = false;
-    var stoppedByUser = reducedMotion;   // bouton « Pause » (ou moins d'animations demandé)
-    var visible = true;
-    var programmatic = 0;      // horodatage du dernier défilement lancé par le script
-
-    if (reducedMotion) toggle.hidden = true;
-
-    /* ---------- Position ---------- */
-
-    // Marge d'alignement : égale à la marge intérieure de la bande (CSS : padding et scroll-padding = --svc-pad) ;
-    // lue sur padding-left, toujours converti en pixels (scroll-padding peut rester une formule max(…) non résolue)
-    var padStart = function () { return parseFloat(getComputedStyle(track).paddingLeft) || 0; };
-    // Carte alignée au bord gauche (la plus proche de la position actuelle)
-    var currentIndex = function () {
-      var x = track.scrollLeft + padStart(), best = 0, dist = Infinity;
-      cards.forEach(function (c, i) {
-        var d = Math.abs(c.offsetLeft - x);
-        if (d < dist) { dist = d; best = i; }
-      });
-      return best;
-    };
-    var atEnd = function () { return track.scrollLeft + track.clientWidth >= track.scrollWidth - 4; };
-
-    var goTo = function (index, smooth) {
-      var i = Math.max(0, Math.min(cards.length - 1, index));
-      programmatic = Date.now();
-      track.scrollTo({ left: cards[i].offsetLeft - padStart(), behavior: smooth === false || reducedMotion ? 'auto' : 'smooth' });
-    };
-    // Suivant : retour au début après la dernière carte visible ; Précédent : depuis le début, va à la fin
-    var next = function () { if (atEnd()) goTo(0); else goTo(currentIndex() + 1); };
-    var prev = function () { if (track.scrollLeft <= 4) goTo(cards.length - 1); else goTo(currentIndex() - 1); };
-
-    var updateDots = function () {
-      // En fin de bande, la dernière carte peut ne pas atteindre le bord gauche : le dernier point s'allume quand même
-      var i = atEnd() ? cards.length - 1 : currentIndex();
-      dots.forEach(function (d, k) {
-        if (k === i) d.setAttribute('aria-current', 'true'); else d.removeAttribute('aria-current');
-      });
-    };
-
-    /* ---------- Défilement automatique ---------- */
-
-    var canPlay = function () { return !stoppedByUser && !hovering && !touching && !dragging && !focused && visible && !document.hidden; };
-    var stop = function () {
-      clearInterval(timer); timer = null;
-      clearTimeout(resumeTimer); resumeTimer = null;
-    };
-    var start = function () {
-      stop();
-      if (canPlay()) timer = setInterval(function () { if (canPlay()) next(); else stop(); }, AUTOPLAY_DELAY);
-    };
-    // Interaction : pause immédiate, reprise RESUME_DELAY après la fin (si le visiteur n'est plus dans le carrousel)
-    var pause = function () { stop(); };
-    var scheduleResume = function () {
-      clearTimeout(resumeTimer);
-      if (stoppedByUser) return;
-      // Reprise : la carte suivante arrive RESUME_DELAY après la fin de l'interaction, puis le rythme normal reprend
-      resumeTimer = setTimeout(function () { if (canPlay()) { next(); start(); } }, RESUME_DELAY);
-    };
-
-    var setStopped = function (value) {
-      stoppedByUser = value;
-      toggle.setAttribute('aria-pressed', String(value));
-      toggleLabel.textContent = value ? 'Lecture' : 'Pause';
-      if (value) stop(); else start();
-    };
-
-    /* ---------- Souris : survol (mouseenter / mouseleave) ---------- */
-    // Souris réelle uniquement : sur téléphone, un simple appui simule aussi une entrée de la souris, jamais sa
-    // sortie — le carrousel resterait en pause indéfiniment (le toucher est géré par touchstart / touchend)
-
-    root.addEventListener('pointerenter', function (e) { if (e.pointerType !== 'mouse') return; hovering = true; pause(); });
-    root.addEventListener('pointerleave', function (e) { if (e.pointerType !== 'mouse') return; hovering = false; if (!dragging) scheduleResume(); });
-
-    /* ---------- Tactile : balayage natif (overflow-x) ---------- */
-
-    track.addEventListener('touchstart', function () { touching = true; pause(); }, { passive: true });
-    var touchEnd = function () { touching = false; scheduleResume(); };
-    track.addEventListener('touchend', touchEnd, { passive: true });
-    track.addEventListener('touchcancel', touchEnd, { passive: true });
-
-    /* ---------- Souris : cliquer-glisser ---------- */
-
-    var startX = 0, startScroll = 0, moved = false;
-    track.addEventListener('pointerdown', function (e) {
-      if (e.pointerType !== 'mouse' || e.button !== 0) return;   // doigt et stylet : défilement natif
-      dragging = true; moved = false;
-      startX = e.clientX; startScroll = track.scrollLeft;
-      pause();
-    });
-    window.addEventListener('pointermove', function (e) {
-      if (!dragging) return;
-      var dx = e.clientX - startX;
-      if (!moved && Math.abs(dx) < DRAG_THRESHOLD) return;
-      if (!moved) { moved = true; track.classList.add('is-dragging'); }
-      track.scrollLeft = startScroll - dx;
-    });
-    var endDrag = function () {
-      if (!dragging) return;
-      dragging = false;
-      if (moved) {
-        // Alignement rétabli sur la carte la plus proche (le défilement d'alignement n'est pas une interaction)
-        var i = currentIndex();
-        track.classList.remove('is-dragging');
-        goTo(i);
-      }
-      if (!hovering) scheduleResume();
-    };
-    window.addEventListener('pointerup', endDrag);
-    window.addEventListener('pointercancel', endDrag);
-    // Un glisser ne doit pas ouvrir le lien sur lequel il s'est terminé
-    track.addEventListener('click', function (e) {
-      if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; }
-    }, true);
-    track.addEventListener('dragstart', function (e) { e.preventDefault(); });   // pas d'image « fantôme »
-
-    /* ---------- Défilement manuel (molette, pavé tactile, clavier) ---------- */
-
-    var scrollIdle = null;
-    track.addEventListener('scroll', function () {
-      updateDots();
-      // Défilement lancé par le script (automatique, boutons, points) : ce n'est pas une interaction
-      if (Date.now() - programmatic < 900 || dragging) return;
-      pause();
-      clearTimeout(scrollIdle);
-      scrollIdle = setTimeout(function () { if (!hovering && !touching) scheduleResume(); }, 150);   // fin du geste
-    }, { passive: true });
-
-    /* ---------- Boutons, points, clavier ---------- */
-
-    root.querySelector('[data-svc-prev]').addEventListener('click', function () { pause(); prev(); if (!hovering) scheduleResume(); });
-    root.querySelector('[data-svc-next]').addEventListener('click', function () { pause(); next(); if (!hovering) scheduleResume(); });
-    dots.forEach(function (d) {
-      d.addEventListener('click', function () { pause(); goTo(parseInt(d.getAttribute('data-svc-dot'), 10)); if (!hovering) scheduleResume(); });
-    });
-    toggle.addEventListener('click', function () { setStopped(!stoppedByUser); });
-
-    // Focus au clavier dans le carrousel (Tab, lecteur d'écran) : pause tant qu'il y reste. Le focus laissé par un
-    // clic de souris (bouton Suivant, lien d'une carte) ne compte pas : la reprise suit alors la sortie de la souris
-    var keyboardFocus = function (el) { try { return el.matches(':focus-visible'); } catch (err) { return true; } };
-    root.addEventListener('focusin', function (e) {
-      if (!keyboardFocus(e.target)) return;
-      focused = true; pause();
-      var card = e.target.closest && e.target.closest('.svc-card');
-      if (card) {   // carte atteinte avec Tab : amenée à l'écran
-        var r = card.getBoundingClientRect(), t = track.getBoundingClientRect();
-        if (r.left < t.left || r.right > t.right) goTo(cards.indexOf(card));
-      }
-    });
-    root.addEventListener('focusout', function (e) {
-      if (!root.contains(e.relatedTarget)) { focused = false; scheduleResume(); }
-    });
-    track.addEventListener('keydown', function (e) {
-      if (e.key === 'ArrowRight') { e.preventDefault(); pause(); next(); }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); pause(); prev(); }
-    });
-
-    /* ---------- Hors écran / onglet masqué : aucun défilement inutile ---------- */
-
-    if ('IntersectionObserver' in window) {
-      new IntersectionObserver(function (entries) {
-        visible = entries[0].isIntersecting;
-        if (visible) start(); else stop();
-      }, { threshold: 0.25 }).observe(root);
-    }
-    document.addEventListener('visibilitychange', function () { if (document.hidden) stop(); else start(); });
-    window.addEventListener('resize', function () { updateDots(); });
-
-    updateDots();
-    start();
-  });
-})();
 
 /* ==========================================================================
    6. Catalogue des services (page Services, includes/services-catalogue.php)
@@ -1052,13 +852,15 @@
 })();
 
 /* ==========================================================================
-   13. Témoignages de l'accueil (includes/testimonials.php) : carrousel « vitrine »
+   13. Carrousel « vitrine » ([data-tst-slider]) : témoignages (includes/testimonials.php) et services de l'accueil
+       (includes/services-carousel.php)
    - les cartes glissent de droite à gauche, une à la fois ; la carte centrale est mise en avant (style.css) ;
    - boucle sans fin : cartes dupliquées (copies masquées aux lecteurs d'écran), puis « rotation » du DOM après
      chaque glissement (la carte active reste le même élément : ses animations ne se rejouent pas) ;
    - automatique : la barre de progression de la carte active se remplit (--tst-delay) ; à la fin, avis suivant.
      Pause au survol (souris), au focus clavier, pendant un glisser, hors écran, onglet masqué ou bouton « Pause » ;
-   - manuel : boutons, points, flèches du clavier, clic sur une carte voisine, glisser à la souris / au doigt.
+   - manuel : boutons, points, flèches du clavier, clic sur une carte voisine, glisser à la souris / au doigt,
+     molette horizontale ou pavé tactile.
    Si le visiteur a demandé moins d'animations : déplacements instantanés, jamais de défilement automatique.
    ========================================================================== */
 (function () {
@@ -1249,6 +1051,16 @@
       else if (dx >= SWIPE_MIN) go(-1, dx);
       else animateTo(0);
     }
+    // Molette horizontale / pavé tactile : une carte par geste (le défilement vertical de la page n'est pas gêné)
+    var wheelLock = 0;
+    viewport.addEventListener('wheel', function (e) {
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY) || Math.abs(e.deltaX) < 12) return;
+      e.preventDefault();
+      if (Date.now() < wheelLock) return;
+      wheelLock = Date.now() + SPEED + 250;
+      go(e.deltaX > 0 ? 1 : -1);
+    }, { passive: false });
+
     viewport.addEventListener('pointerup', release);
     viewport.addEventListener('pointercancel', release);
 
