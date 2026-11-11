@@ -200,6 +200,26 @@ function vault_audit(string $action, ?array $client, ?int $documentId, string $d
     } catch (Throwable $e) {
         error_log('[GTC-Vault audit] ' . $action . ' — ' . $details . ' — ' . $e->getMessage());
     }
+    // Rapport d'activité par e-mail au propriétaire (includes/activity_mail.php)
+    try {
+        require_once __DIR__ . '/activity_mail.php';
+        $admin = function_exists('impersonation_admin') ? impersonation_admin() : null;
+        activity_mail_queue([
+            'src'     => 'vault',
+            'code'    => $action,
+            'action'  => ACTIVITY_MAIL_VAULT[$action][0] ?? 'GTC-Vault : ' . $action,
+            'tone'    => ACTIVITY_MAIL_VAULT[$action][1] ?? 'info',
+            'entity'  => 'GTC-Vault',
+            'label'   => (string) ($client['nom_complet'] ?? ''),
+            'details' => $details,
+            'user'    => (string) $user['name'],
+            'role'    => !empty($user['role']) && function_exists('role_label') ? role_label($user['role']) : ($as ? 'Téléphone de capture' : ''),
+            'admin'   => $admin ? (string) $admin['name'] : '',
+            'link'    => !empty($client['uuid']) && $action !== 'client_delete' ? 'vault/client.php?uuid=' . rawurlencode((string) $client['uuid']) : '',
+        ]);
+    } catch (Throwable $e) {
+        error_log('[GTC-Vault] Rapport d\'activité par e-mail : ' . $e->getMessage());
+    }
 }
 
 /**

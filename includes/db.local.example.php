@@ -47,3 +47,12 @@
 // Poste Windows uniquement, si l'assistant signale « injoignable » (erreur de certificat SSL) : liste des certificats
 // racine, par ex. celle fournie avec Git. Inutile chez Hostinger.
 // define('GTC_AI_CA_BUNDLE', 'C:/Program Files/Git/usr/ssl/certs/ca-bundle.crt');
+
+// Compte propriétaire (includes/owner.php) : seul ce compte voit et modifie les alertes e-mail et l'envoi SMTP,
+// et aucun autre administrateur ne peut le modifier. Par défaut : styvekentsa@gmail.com
+// define('GTC_OWNER_EMAIL', 'styvekentsa@gmail.com');
+// Boîte d'envoi SMTP (prioritaire sur Paramètres → Système → Envoi des e-mails)
+// define('GTC_SMTP_HOST', 'smtp.hostinger.com');   // Gmail : smtp.gmail.com + mot de passe d'application
+// define('GTC_SMTP_PORT', 465);
+// define('GTC_SMTP_USER', 'no-reply@globaltradingcorporation.net');
+// define('GTC_SMTP_PASS', '');

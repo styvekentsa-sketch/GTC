@@ -474,6 +474,7 @@ const DEFAULT_SETTINGS = [
     'smtp_port'             => '465',
     'smtp_user'             => '',
     'smtp_pass'             => '',
+    'activity_mail'         => '1',  // chaque opération du Dashboard envoyée à login_alert_email (includes/activity_mail.php)
     'mail_last_status'      => '',   // dernier envoi (JSON), affiché dans Paramètres → Système
     // Calculateur de fret du site (calculateur-cbm.php) : tarifs indicatifs en FCFA ; vide = pas d'estimation affichée
     'freight_sea_rate'    => '',   // fret maritime, par m³ (CBM) taxable

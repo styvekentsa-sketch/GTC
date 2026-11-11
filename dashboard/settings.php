@@ -12,6 +12,7 @@ require_once __DIR__ . '/../includes/dashboard.php';
 require_once __DIR__ . '/../includes/settings.php';
 require_once __DIR__ . '/../includes/printers.php';
 require_once __DIR__ . '/../includes/backup.php';
+require_once __DIR__ . '/../includes/owner.php';
 
 $user = require_login();   // exige $_SESSION['logged_in'] === true
 
@@ -19,6 +20,7 @@ $role       = $user['role'];
 $canCompany = $role === 'admin';
 $canRates   = in_array($role, ['admin', 'caissier'], true);
 $canSystem  = $role === 'admin';
+$isOwner    = owner_is_current();   // alertes e-mail et envoi : compte de Styve Kentsa uniquement (includes/owner.php)
 
 const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 
@@ -144,6 +146,8 @@ if (is_post()) {
         }
         if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 100) {
             $errors['email'] = 'Adresse e-mail invalide.';
+        } elseif ($email !== $user['email'] && $isOwner) {
+            $errors['email'] = 'Adresse du compte propriétaire : elle ne se modifie pas ici (constante GTC_OWNER_EMAIL de includes/db.local.php).';
         } elseif ($email !== $user['email']) {
             // Changement d'identifiant : mot de passe actuel exigé
             $hash = (string) db_value('SELECT password FROM users WHERE id = ?', [$user['id']]);
@@ -302,12 +306,16 @@ if (is_post()) {
 
     // ----- Envoi des e-mails (admin) : boîte mail SMTP de l'hébergement (includes/mailer.php) -----
     if ($op === 'smtp') {
-        $canSystem || deny();
+        $isOwner || deny();
         $tab  = 'systeme';
         $host = trim(post('smtp_host'));
         $port = (int) post('smtp_port');
         $usr  = mb_strtolower(trim(post('smtp_user')));
         $pass = (string) ($_POST['smtp_pass'] ?? '');
+        // Boîte Gmail : seul le serveur de Google l'accepte (mot de passe d'application Google)
+        if (preg_match('/@(gmail|googlemail)\.com$/', $usr) && ($host === '' || stripos($host, 'hostinger') !== false)) {
+            $host = 'smtp.gmail.com';
+        }
         if ($usr !== '' && !filter_var($usr, FILTER_VALIDATE_EMAIL)) {
             $errors['smtp_user'] = 'Indiquez l\'adresse complète de la boîte mail (ex. no-reply@globaltradingcorporation.net).';
         }
@@ -323,6 +331,7 @@ if (is_post()) {
         if (!$errors) {
             $values = ['smtp_host' => $host ?: 'smtp.hostinger.com', 'smtp_port' => (string) ($port ?: 465), 'smtp_user' => $usr];
             if ($usr === '') {
+                $values = ['smtp_host' => 'smtp.hostinger.com', 'smtp_port' => '465', 'smtp_user' => ''];
                 $values['smtp_pass'] = '';               // SMTP désactivé : mot de passe effacé
             } elseif ($pass !== '') {
                 $values['smtp_pass'] = $pass;            // champ laissé vide : mot de passe actuel conservé
@@ -336,7 +345,7 @@ if (is_post()) {
 
     // ----- Alertes de connexion (admin) : e-mail envoyé à chaque connexion au Dashboard -----
     if ($op === 'login_alert' || $op === 'login_alert_test') {
-        $canSystem || deny();
+        $isOwner || deny();
         $tab = 'systeme';
         $to = mb_strtolower(trim(post('login_alert_email')));
         if ($to !== '' && (!filter_var($to, FILTER_VALIDATE_EMAIL) || mb_strlen($to) > 150)) {
@@ -346,7 +355,7 @@ if (is_post()) {
             $errors['login_alert_email'] = 'Indiquez l\'adresse qui doit recevoir l\'e-mail de test.';
         }
         if (!$errors) {
-            settings_save(['login_alert_email' => $to]);
+            settings_save(['login_alert_email' => $to, 'activity_mail' => isset($_POST['activity_mail']) ? '1' : '0']);
             if ($op === 'login_alert_test') {
                 require_once __DIR__ . '/../includes/login_alert.php';
                 $now = new DateTimeImmutable('now', new DateTimeZone('Africa/Douala'));
@@ -363,7 +372,7 @@ if (is_post()) {
                     : 'Échec de l\'envoi à ' . $to . ' : ' . rtrim((mailer_last()['error'] ?? '') ?: 'erreur inconnue', '. ') . '.');
             } else {
                 activity_log('update', 'settings', null, 'Alertes de connexion', ['destinataire' => $to !== '' ? $to : 'désactivées']);
-                flash('success', $to !== '' ? 'Alertes de connexion envoyées à ' . $to . '.' : 'Alertes de connexion désactivées.');
+                flash('success', $to !== '' ? 'Alertes envoyées à ' . $to . (isset($_POST['activity_mail']) ? ' : connexions et opérations du Dashboard.' : ' : connexions uniquement.') : 'Alertes de connexion désactivées.');
             }
             redirect('settings.php#systeme');
         }
@@ -841,12 +850,13 @@ dash_header('Paramètres', 'settings');
                 <div class="form-actions"><button type="submit" class="btn btn--primary"><?= icon('check') ?> Enregistrer</button></div>
             </form>
 
-            <!-- Alertes de connexion : e-mail à chaque connexion au Dashboard (includes/login_alert.php) -->
+            <?php if ($isOwner): ?>
+            <!-- Alertes de connexion : e-mail à chaque connexion au Dashboard (includes/login_alert.php) — propriétaire uniquement -->
             <form method="post" action="settings.php#systeme" class="panel form" novalidate data-login-alert>
                 <?= csrf_field() ?>
-                <h2 class="panel__title"><?= icon('mail') ?> Alertes de connexion</h2>
+                <h2 class="panel__title"><?= icon('mail') ?> Alertes par e-mail <span class="badge badge--info"><?= icon('lock') ?> Visible par vous seul</span></h2>
                 <p class="cell-sub">Un e-mail est envoyé à chaque connexion au Dashboard (mot de passe, reconnexion automatique, prise de contrôle d'un compte) :
-                    compte, date et heure, adresse IP, appareil et navigateur.</p>
+                    compte, date et heure, adresse IP, appareil et navigateur. Ces réglages ne sont visibles que sur votre compte.</p>
                 <div class="field">
                     <label for="login-alert-email">Adresse qui reçoit les alertes</label>
                     <input id="login-alert-email" name="login_alert_email" type="email" maxlength="150" inputmode="email" autocomplete="off"
@@ -854,6 +864,10 @@ dash_header('Paramètres', 'settings');
                     <small class="field__hint"><?= trim($s['login_alert_email']) !== '' ? 'Alertes actives.' : 'Alertes désactivées.' ?> Laisser vide pour ne plus en recevoir.</small>
                     <?= $err('login_alert_email') ?>
                 </div>
+                <label class="check">
+                    <input type="checkbox" name="activity_mail" value="1" <?= (is_post() && post('op') === 'login_alert' ? isset($_POST['activity_mail']) : $s['activity_mail'] !== '0') ? 'checked' : '' ?>>
+                    <span>Recevoir aussi chaque opération du Dashboard : reçus, factures, courriers, dossiers GTC-Vault, comptes, paramètres, sauvegardes…</span>
+                </label>
                 <div class="form-actions">
                     <button type="submit" name="op" value="login_alert_test" class="btn btn--ghost"><?= icon('send') ?> Envoyer un e-mail de test</button>
                     <button type="submit" name="op" value="login_alert" class="btn btn--primary"><?= icon('check') ?> Enregistrer</button>
@@ -882,7 +896,7 @@ dash_header('Paramètres', 'settings');
                         <label for="smtp-user">Adresse de la boîte mail</label>
                         <input id="smtp-user" name="smtp_user" type="email" maxlength="150" inputmode="email" autocomplete="off"
                                placeholder="no-reply@globaltradingcorporation.net" value="<?= $val('smtp_user', $s['smtp_user']) ?>"<?= $inv('smtp_user') ?>>
-                        <small class="field__hint">Laisser vide pour revenir à la fonction mail() du serveur.</small>
+                        <small class="field__hint">Boîte Gmail : serveur smtp.gmail.com et <strong>mot de passe d'application</strong> Google (pas le mot de passe Gmail). Laisser vide pour revenir à la fonction mail().</small>
                         <?= $err('smtp_user') ?>
                     </div>
                     <div class="field">
@@ -908,6 +922,7 @@ dash_header('Paramètres', 'settings');
                 </div>
                 <div class="form-actions"><button type="submit" class="btn btn--primary"><?= icon('check') ?> Enregistrer</button></div>
             </form>
+            <?php endif; ?>
 
             <section class="panel">
                 <h2 class="panel__title">Sauvegarde de la base de données</h2>

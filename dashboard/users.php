@@ -3,6 +3,7 @@
  * Gestion des comptes collaborateurs : administrateur, caissier, agent (réservé aux administrateurs).
  */
 require_once __DIR__ . '/../includes/dashboard.php';
+require_once __DIR__ . '/../includes/owner.php';
 
 $user = require_login();
 require_role('admin');
@@ -59,6 +60,14 @@ if (is_post()) {
         flash('error', $op === 'delete'
             ? 'Vous ne pouvez pas supprimer votre propre compte : vous perdriez l\'accès au Dashboard.'
             : 'Vous ne pouvez pas modifier votre propre statut ou rôle.');
+        redirect('users.php');
+    }
+
+    // Compte propriétaire (Styve Kentsa, includes/owner.php) : aucun autre administrateur ne peut le modifier
+    if (in_array($op, ['toggle', 'role', 'delete', 'password'], true) && $target !== (int) $user['id']
+        && owner_is_account(db_one('SELECT email FROM users WHERE id = ?', [$target]) ?: null)) {
+        activity_log('security', 'user', $target, 'Compte propriétaire', ['action' => 'Tentative de modification refusée (' . $op . ')']);
+        flash('error', 'Compte propriétaire : seul son titulaire peut modifier son rôle, son statut ou son mot de passe.');
         redirect('users.php');
     }
 
@@ -232,13 +241,17 @@ dash_header('Utilisateurs', 'users');
                                    ['sub', 'Changer mon mot de passe', 'lock', $passwordForm]]
                                 : [['sub', 'Modifier les droits', 'shield', $rolesForm],
                                    ['sub', 'Réinitialiser le mot de passe', 'lock', $passwordForm]];
-                            if (!$self && $u['role'] !== 'admin' && $u['is_active']) {
+                            $ownerRow = !$self && owner_is_account($u);
+                            if ($ownerRow) {
+                                $items = [['off', 'Compte propriétaire', 'lock', 'Seul son titulaire peut modifier ce compte.']];
+                            }
+                            if (!$self && !$ownerRow && $u['role'] !== 'admin' && $u['is_active']) {
                                 // Prise de contrôle du compte (dashboard/switch-user.php)
                                 $items[] = ['post', 'Se connecter en tant que…', 'eye', ['action' => 'start', 'id' => $uid],
                                     "Vous allez utiliser le compte de {$u['name']}. Vos actions seront faites en son nom et notées dans le journal. Continuer ?",
                                     'action' => 'switch-user.php'];
                             }
-                            if (!$self) {
+                            if (!$self && !$ownerRow) {
                                 $items[] = $u['is_active']
                                     ? ['post', 'Désactiver le compte', 'logout', ['op' => 'toggle', 'id' => $uid], "Désactiver le compte de {$u['name']} ? Il ne pourra plus se connecter ; son historique est conservé."]
                                     : ['post', 'Réactiver le compte', 'check', ['op' => 'toggle', 'id' => $uid], null];

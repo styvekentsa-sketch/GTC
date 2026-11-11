@@ -32,6 +32,9 @@ function mailer_smtp_config(): ?array
         'user' => trim($get('GTC_SMTP_USER', 'smtp_user')),
         'pass' => $get('GTC_SMTP_PASS', 'smtp_pass'),
     ];
+    if (preg_match('/@(gmail|googlemail)\.com$/i', $cfg['user']) && stripos($cfg['host'], 'hostinger') !== false) {
+        $cfg['host'] = 'smtp.gmail.com';   // une boîte Gmail ne s'authentifie que chez Google
+    }
     return $cfg['user'] !== '' && $cfg['pass'] !== '' && $cfg['host'] !== '' ? $cfg : null;
 }
 
@@ -70,6 +73,34 @@ function mailer_send(string $to, string $subject, string $body, array $headers):
         // journal facultatif : n'empêche jamais l'envoi
     }
     return $res;
+}
+
+/**
+ * Message complet texte + HTML (multipart/alternative), expédié par « Dashboard GTC ».
+ * Mode test (GTC_MAIL_LOG_DIR dans db.local.php) : écrit dans un fichier (.eml + aperçu .html) au lieu d'être envoyé.
+ */
+function mailer_send_html(string $to, string $subject, string $text, string $html, string $tag = 'mail', string $host = ''): bool
+{
+    $host = $host !== '' ? $host : (preg_replace('/[^a-z0-9.\-]/i', '', (string) ($_SERVER['HTTP_HOST'] ?? '')) ?: 'globaltradingcorporation.net');
+    $boundary = 'gtc-' . bin2hex(random_bytes(12));
+    $headers = [
+        'From'         => mb_encode_mimeheader('Dashboard GTC', 'UTF-8') . ' <' . mailer_from_address($host) . '>',
+        'MIME-Version' => '1.0',
+        'Content-Type' => 'multipart/alternative; boundary="' . $boundary . '"',
+        'X-Mailer'     => 'PHP/' . PHP_VERSION,
+    ];
+    $body = "--{$boundary}\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"
+        . chunk_split(base64_encode($text)) . "\r\n"
+        . "--{$boundary}\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"
+        . chunk_split(base64_encode($html)) . "\r\n--{$boundary}--\r\n";
+    if (defined('GTC_MAIL_LOG_DIR') && is_dir((string) GTC_MAIL_LOG_DIR)) {
+        $file = rtrim((string) GTC_MAIL_LOG_DIR, '/\\') . '/' . $tag . '-' . date('Ymd-His') . '-' . bin2hex(random_bytes(3));
+        file_put_contents($file . '.eml', 'To: ' . $to . "\r\nSubject: " . $subject . "\r\n"
+            . implode("\r\n", array_map(fn ($k, $v) => "$k: $v", array_keys($headers), $headers)) . "\r\n\r\n" . $body);
+        file_put_contents($file . '.html', $html);
+        return true;
+    }
+    return mailer_send($to, $subject, $body, $headers)['ok'];
 }
 
 function mailer_php_mail(string $to, string $subject, string $body, array $headers): array

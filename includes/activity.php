@@ -75,6 +75,25 @@ function activity_log(string $action, string $entity, ?int $entityId = null, str
     } catch (Throwable $e) {
         error_log('[GTC] Journal d\'activité : ' . $e->getMessage());
     }
+    // Rapport d'activité par e-mail au propriétaire (includes/activity_mail.php) : n'interrompt jamais l'action
+    try {
+        require_once __DIR__ . '/activity_mail.php';
+        activity_mail_queue([
+            'src'     => 'dashboard',
+            'code'    => $action,
+            'action'  => ACTIVITY_ACTIONS[$action]['label'] ?? ucfirst($action),
+            'tone'    => ACTIVITY_ACTIONS[$action]['tone'] ?? 'info',
+            'entity'  => ACTIVITY_ENTITIES[$entity] ?? $entity,
+            'label'   => $label,
+            'details' => $details ? activity_details_text(json_encode($details, JSON_UNESCAPED_UNICODE)) : '',
+            'user'    => (string) ($user['name'] ?? ''),
+            'role'    => isset($user['role']) && function_exists('role_label') ? role_label($user['role']) : '',
+            'admin'   => $admin ? (string) $admin['name'] : '',
+            'link'    => '',
+        ]);
+    } catch (Throwable $e) {
+        error_log('[GTC] Rapport d\'activité par e-mail : ' . $e->getMessage());
+    }
 }
 
 /** Détails lisibles d'une entrée (« Statut : Brouillon → Envoyé · Montant : 5 000 EUR »). */
