@@ -278,12 +278,14 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
         <!-- Ajouter une pièce (compléter un dossier provisoire, renouveler une CNI expirée…) : vault/client-action.php -->
         <details class="vault-add-doc no-print"<?= $client['review_status'] === 'pending' && $missing ? ' open' : '' ?> data-add-doc>
             <summary class="btn btn--ghost btn--sm"><?= icon('plus') ?> Ajouter une pièce</summary>
-            <form method="post" action="vault/client-action.php" enctype="multipart/form-data" class="vault-add-doc__form">
+            <!-- Même dépôt que le formulaire de nouveau dossier : fichier du poste (clic ou glisser-déposer, scanner)
+                 ou photo prise avec un téléphone (QR code : capture-api.php → capture.php), aperçu avant l'envoi -->
+            <form method="post" action="vault/client-action.php" enctype="multipart/form-data" class="vault-add-doc__form" id="add-doc-form" data-max-bytes="<?= KYC_MAX_BYTES ?>">
                 <?= csrf_field() ?>
                 <input type="hidden" name="op" value="add_document">
                 <input type="hidden" name="uuid" value="<?= h($client['uuid']) ?>">
                 <input type="hidden" name="back" value="vault/client.php?uuid=<?= h($client['uuid']) ?>">
-                <div class="field">
+                <div class="field vault-add-doc__type">
                     <label for="add-doc-type">Type de pièce</label>
                     <select id="add-doc-type" name="type_document" required>
                         <?php // Pièce proposée d'office : la première qui manque au dossier
@@ -293,11 +295,35 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="field">
-                    <label for="add-doc-file">Fichier <small>(JPG, PNG ou PDF, 5 Mo au maximum)</small></label>
-                    <input type="file" id="add-doc-file" name="document" accept="image/jpeg,image/png,application/pdf" required>
+                <div class="kyc-slot vault-add-doc__slot" data-add-slot>
+                    <div class="kyc-slot__head">
+                        <span class="kyc-slot__label" id="add-doc-label">Fichier ou photo de la pièce</span>
+                        <span class="kyc-slot__tools">
+                            <button type="button" class="kyc-mobile-btn" data-mobile title="Photographier la pièce avec un téléphone">
+                                <?= vault_icon('phone') ?> Scanner avec un mobile
+                            </button>
+                        </span>
+                    </div>
+                    <label for="add-doc-file" data-drop class="kyc-drop">
+                        <input type="file" id="add-doc-file" name="document" class="visually-hidden" required
+                               accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+                               aria-labelledby="add-doc-label" aria-describedby="add-doc-hint add-doc-error">
+                        <span class="kyc-drop__icon"><?= vault_icon('upload') ?></span>
+                        <span class="kyc-drop__text"><strong>Choisir un fichier</strong> ou glissez-le ici</span>
+                        <span class="kyc-drop__hint" id="add-doc-hint">Photo, scan ou PDF · JPG, PNG ou PDF, 5 Mo au maximum</span>
+                    </label>
+                    <div data-preview hidden class="kyc-file">
+                        <div data-thumb class="kyc-file__thumb"></div>
+                        <div class="kyc-file__body">
+                            <p data-name class="kyc-file__name"></p>
+                            <p data-meta class="kyc-file__meta"></p>
+                        </div>
+                        <button type="button" data-replace class="btn btn--ghost btn--sm">Remplacer</button>
+                        <button type="button" data-remove class="icon-btn icon-btn--danger" aria-label="Retirer le fichier" title="Retirer"><?= vault_icon('x') ?></button>
+                    </div>
+                    <p class="field__error" id="add-doc-error" data-error role="alert"></p>
                 </div>
-                <button type="submit" class="btn btn--primary btn--sm"><?= icon('save') ?> Enregistrer la pièce</button>
+                <button type="submit" class="btn btn--primary btn--sm vault-add-doc__submit" data-add-submit disabled><?= icon('save') ?> Enregistrer la pièce</button>
             </form>
         </details>
     </section>
@@ -760,6 +786,207 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
 
   // Arrivée depuis « Définir la photo de profil » (création du dossier) : recadrage ouvert directement
   if (location.hash === '#photo' && !<?= json_encode((bool) $client['avatar_path']) ?>) openAvatar();
+})();
+</script>
+
+<!-- ==================== AJOUT D'UNE PIÈCE : DÉPÔT DE FICHIER ET CAPTURE PAR TÉLÉPHONE ==================== -->
+<?= vault_capture_dialog(true) ?>
+<script src="vault/assets/qrcode/qrcode.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var form = document.getElementById('add-doc-form');
+  if (!form) return;
+  var MAX = parseInt(form.getAttribute('data-max-bytes'), 10);
+  var TYPES = { 'image/jpeg': 'JPG', 'image/png': 'PNG', 'application/pdf': 'PDF' };
+  var EXT = /\.(jpe?g|png|pdf)$/i;
+  var CSRF = form.elements.csrf_token.value;
+  var typeSel = document.getElementById('add-doc-type');
+  var submit = form.querySelector('[data-add-submit]');
+  var el = form.querySelector('[data-add-slot]');
+  var s = { input: el.querySelector('input[type=file]'), drop: el.querySelector('[data-drop]'), preview: el.querySelector('[data-preview]'),
+            thumb: el.querySelector('[data-thumb]'), name: el.querySelector('[data-name]'), meta: el.querySelector('[data-meta]'), error: el.querySelector('[data-error]'), url: null };
+  var SVG = function (p) { return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>'; };
+  var ICON_OK = SVG('<path d="m5 12 5 5 9-10"/>'), ICON_PHONE = SVG('<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>');
+  var ICON_PDF = SVG('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5"/>');
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function fmtSize(b) { return b < 1048576 ? Math.max(1, Math.round(b / 1024)) + ' Ko' : (b / 1048576).toFixed(1).replace('.', ',') + ' Mo'; }
+
+  // ---------- Dépôt : clic, glisser-déposer, aperçu, remplacer / retirer (comme le formulaire de nouveau dossier) ----------
+  function setError(msg) { s.error.textContent = msg; s.drop.classList.toggle('is-invalid', !!msg); }
+  function clear() {
+    s.input.value = '';
+    if (s.url) { URL.revokeObjectURL(s.url); s.url = null; }
+    s.preview.hidden = true; s.drop.hidden = false; s.thumb.innerHTML = ''; s.thumb.className = 'kyc-file__thumb';
+    submit.disabled = true;
+  }
+  function show(file, source) {
+    if (s.url) URL.revokeObjectURL(s.url);
+    s.thumb.innerHTML = ''; s.thumb.className = 'kyc-file__thumb';
+    if (/^image\//.test(file.type)) {
+      s.url = URL.createObjectURL(file);
+      var img = new Image(); img.src = s.url; img.alt = ''; s.thumb.appendChild(img);
+    } else {
+      s.thumb.className = 'kyc-file__thumb kyc-file__thumb--pdf';
+      s.thumb.innerHTML = ICON_PDF + '<span>PDF</span>';
+    }
+    s.name.textContent = file.name; s.name.title = file.name;
+    s.meta.textContent = (TYPES[file.type] || 'Fichier') + ' · ' + fmtSize(file.size);
+    if (source === 'mobile') s.meta.insertAdjacentHTML('afterbegin', '<span class="kyc-file__mobile">' + ICON_PHONE + 'Photo prise au mobile</span> · ');
+    s.drop.hidden = true; s.preview.hidden = false;
+    setError('');
+    submit.disabled = false;
+  }
+  function check(file) {
+    if (!(file.type in TYPES) || !EXT.test(file.name)) return 'Format refusé : seuls JPG, PNG et PDF sont acceptés.';
+    if (file.size > MAX) return 'Fichier trop lourd (' + fmtSize(file.size) + ') : 5 Mo au maximum.';
+    if (file.size === 0) return 'Le fichier est vide.';
+    return '';
+  }
+  function accept(files, source) {
+    if (!files || !files.length) return false;
+    if (files.length > 1) { setError('Une seule pièce à la fois.'); return false; }
+    var file = files[0], msg = check(file);
+    if (msg) { clear(); setError(msg); return false; }
+    if (s.input.files[0] !== file) {
+      try { var dt = new DataTransfer(); dt.items.add(file); s.input.files = dt.files; }
+      catch (e) { setError('Votre navigateur ne gère pas le glisser-déposer : cliquez sur « Choisir un fichier ».'); return false; }
+    }
+    show(file, source);
+    return true;
+  }
+  s.input.addEventListener('change', function () { s.input.files.length ? accept(s.input.files) : clear(); });
+  ['dragenter', 'dragover'].forEach(function (t) { s.drop.addEventListener(t, function (e) { e.preventDefault(); s.drop.classList.add('is-dragover'); }); });
+  ['dragleave', 'dragend', 'drop'].forEach(function (t) { s.drop.addEventListener(t, function () { s.drop.classList.remove('is-dragover'); }); });
+  s.drop.addEventListener('drop', function (e) { e.preventDefault(); accept(e.dataTransfer.files); });
+  el.querySelector('[data-remove]').addEventListener('click', function () { clear(); s.input.focus(); });
+  el.querySelector('[data-replace]').addEventListener('click', function () { s.input.click(); });
+  form.addEventListener('submit', function (e) {
+    if (!s.input.files.length) { e.preventDefault(); setError('Choisissez le fichier de la pièce ou photographiez-la avec un téléphone.'); return; }
+    submit.disabled = true;
+    submit.lastChild.textContent = ' Enregistrement…';
+  });
+
+  // ---------- « Scanner avec un mobile » : un QR code pour la pièce choisie (capture-api.php → capture.php) ----------
+  // Type de pièce → pièce de capture (le téléphone affiche son nom ; pièce d'identité : CNI ou passeport)
+  var SLOT = { cni_recto: ['doc_identite', 'cni'], passeport: ['doc_identite', 'passeport'], cni_verso: ['doc_verso', 'cni'],
+               rccm: ['doc_rccm', 'cni'], statut_entreprise: ['doc_statuts', 'cni'], autre: ['doc_autre', 'cni'] };
+  var dlg = document.getElementById('capture-dialog');
+  var qrBox = document.getElementById('capture-qr'), statusBox = document.getElementById('capture-status'), list = document.getElementById('capture-steps');
+  var cap = { id: null, url: '', end: 0, poll: null, tick: null, run: 0, version: '', received: false, label: '', thumb: null };
+
+  function state(text, tone) { statusBox.querySelector('[data-text]').textContent = text; statusBox.setAttribute('data-tone', tone); }
+  function stop() { clearTimeout(cap.poll); clearInterval(cap.tick); cap.poll = cap.tick = null; }
+  function expired(msg) {
+    stop(); cap.id = null;
+    qrBox.classList.add('is-dim');
+    statusBox.querySelector('[data-timer]').textContent = '';
+    state(msg || 'QR code expiré. Générez-en un nouveau.', 'error');
+    dlg.querySelector('[data-capture-renew]').hidden = false;
+  }
+  function render() {
+    list.className = 'cap-steps';
+    list.innerHTML = '<li class="cap-step"><span class="cap-step__thumb">' + (cap.thumb ? '<img src="' + cap.thumb + '" alt="">' : '1') + '</span><div class="cap-step__body"><p class="cap-step__label">'
+      + esc(cap.label) + '</p>' + (cap.received ? '<span class="cap-step__state is-ok">' + ICON_OK + ' Reçue</span>' : '<span class="cap-step__state">En attente</span>') + '</div></li>';
+    document.getElementById('capture-scan').hidden = cap.received;
+    dlg.querySelector('[data-capture-validate]').hidden = !cap.received;
+    dlg.querySelector('[data-cancel-label]').hidden = cap.received;
+    if (cap.received) state('Photo reçue. Vérifiez qu\'elle est nette, puis validez (une photo reprise sur le téléphone remplacera celle-ci).', 'ok');
+  }
+  function open() {
+    var run = ++cap.run;
+    stop();
+    var map = SLOT[typeSel.value] || SLOT.autre;
+    cap.id = null; cap.version = ''; cap.received = false;
+    cap.label = typeSel.options[typeSel.selectedIndex].text;
+    if (cap.thumb) { URL.revokeObjectURL(cap.thumb); cap.thumb = null; }
+    document.getElementById('capture-sub').textContent = 'Pièce : ' + cap.label + '.';
+    qrBox.classList.remove('is-dim'); qrBox.innerHTML = '<span class="vault-spin"></span>';
+    dlg.querySelector('[data-capture-renew]').hidden = true;
+    dlg.querySelector('[data-capture-copy]').hidden = true;
+    statusBox.querySelector('[data-timer]').textContent = '';
+    state('Préparation du QR code…', 'wait');
+    render();
+    if (!dlg.open) dlg.showModal();
+    var fd = new FormData();
+    fd.append('csrf_token', CSRF); fd.append('slots', map[0]); fd.append('piece', map[1]); fd.append('optional', '');
+    fetch('vault/capture-api.php?action=create', { method: 'POST', body: fd, credentials: 'same-origin' })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); })
+      .then(function (res) {
+        if (run !== cap.run) return;
+        if (!res.ok) { expired(res.d.message || (res.status === 401 ? 'Session expirée : reconnectez-vous.' : 'Le QR code n\'a pas pu être créé.')); return; }
+        cap.id = res.d.id; cap.url = res.d.url; cap.end = Date.now() + res.d.expires_in * 1000; cap.step = res.d.steps[0].id;
+        if (typeof qrcode !== 'function') { expired('Le générateur de QR code n\'a pas pu être chargé.'); return; }
+        var qr = qrcode(0, 'M'); qr.addData(cap.url); qr.make();
+        qrBox.innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+        var svg = qrBox.querySelector('svg'); svg.setAttribute('width', '100%'); svg.setAttribute('height', '100%'); svg.setAttribute('aria-hidden', 'true');
+        dlg.querySelector('[data-capture-copy]').hidden = false;
+        state('En attente du téléphone…', 'wait');
+        tick(); cap.tick = setInterval(tick, 1000);
+        poll(run);
+      })
+      .catch(function () { if (run === cap.run) expired('Connexion au serveur impossible. Réessayez.'); });
+  }
+  function tick() {
+    var sec = Math.max(0, Math.round((cap.end - Date.now()) / 1000));
+    statusBox.querySelector('[data-timer]').textContent = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+    if (!sec) expired(cap.received ? 'QR code expiré. La photo reçue reste dans le formulaire.' : null);
+  }
+  function poll(run) {
+    cap.poll = setTimeout(function () {
+      if (run !== cap.run || !cap.id) return;
+      fetch('vault/capture-api.php?action=status&id=' + cap.id, { cache: 'no-store', credentials: 'same-origin' })
+        .then(function (r) { if (r.status === 401) throw new Error('401'); return r.json(); })
+        .then(function (d) {
+          if (run !== cap.run) return;
+          if (d.status === 'expired' || d.status === 'cancelled') { expired(d.status === 'expired' ? null : 'Ce QR code n\'est plus actif. Générez-en un nouveau.'); return; }
+          var st = d.steps[0] || {};
+          if (st.status === 'uploaded' && st.version && st.version !== cap.version) {
+            cap.version = st.version;
+            return fetchPhoto(run).then(function () { if (run === cap.run) poll(run); });
+          }
+          if (!cap.received) state(d.status === 'opened' ? 'Téléphone connecté · photo en cours…' : 'En attente du téléphone…', d.status === 'opened' ? 'live' : 'wait');
+          poll(run);
+        })
+        .catch(function (e) { if (run !== cap.run) return; if (e.message === '401') expired('Session expirée : reconnectez-vous.'); else poll(run); });
+    }, 1500);
+  }
+  function fetchPhoto(run) {
+    return fetch('vault/capture-api.php?action=file&id=' + cap.step, { cache: 'no-store', credentials: 'same-origin' })
+      .then(function (r) { if (!r.ok) throw new Error('http'); return r.blob(); })
+      .then(function (blob) {
+        if (run !== cap.run) return;
+        var type = blob.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        var file = new File([blob], 'photo-mobile-' + typeSel.value.replace(/_/g, '-') + (type === 'image/png' ? '.png' : '.jpg'), { type: type, lastModified: Date.now() });
+        if (!accept([file], 'mobile')) { state('Photo refusée : ' + s.error.textContent, 'error'); return; }
+        if (cap.thumb) URL.revokeObjectURL(cap.thumb);
+        cap.thumb = URL.createObjectURL(file); cap.received = true;
+        render();
+      })
+      .catch(function () { if (run === cap.run) state('La photo n\'a pas pu être récupérée : reprenez-la sur le téléphone.', 'error'); });
+  }
+  // Fermeture (validation ou annulation) : la session est close côté serveur
+  dlg.addEventListener('close', function () {
+    cap.run++; stop();
+    if (cap.id) {
+      var fd = new FormData(); fd.append('csrf_token', CSRF); fd.append('id', cap.id);
+      fetch('vault/capture-api.php?action=cancel', { method: 'POST', body: fd, credentials: 'same-origin', keepalive: true }).catch(function () {});
+    }
+    cap.id = null;
+    if (cap.received) submit.focus(); else el.querySelector('[data-mobile]').focus();
+  });
+  el.querySelector('[data-mobile]').addEventListener('click', open);
+  dlg.querySelectorAll('[data-capture-close]').forEach(function (b) { b.addEventListener('click', function () { dlg.close(); }); });
+  dlg.querySelector('[data-capture-validate]').addEventListener('click', function () { dlg.close(); });
+  dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+  dlg.querySelector('[data-capture-renew]').addEventListener('click', open);
+  dlg.querySelector('[data-capture-copy]').addEventListener('click', function () {
+    var b = this;
+    (navigator.clipboard ? navigator.clipboard.writeText(cap.url) : Promise.reject()).then(function () {
+      b.textContent = 'Lien copié'; setTimeout(function () { b.textContent = 'Copier le lien (WhatsApp…)'; }, 1800);
+    }, function () { window.prompt('Lien de capture (valable 15 minutes) :', cap.url); });
+  });
 })();
 </script>
 

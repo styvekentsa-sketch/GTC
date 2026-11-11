@@ -31,7 +31,8 @@ $stats = [
     'pending'        => (int) db_value("SELECT COUNT(*) FROM invoices WHERE status = 'pending'"),
     'overdue'        => (int) db_value("SELECT COUNT(*) FROM invoices WHERE status = 'pending' AND due_date IS NOT NULL AND due_date < ?", [$today]),
     'paid_xaf_month' => (float) db_value("SELECT COALESCE(SUM(amount_given), 0) FROM invoices WHERE status = 'paid' AND source_currency = 'XAF' AND issue_date >= ?", [$monthStart]),
-    'jobs_active'    => (int) db_value("SELECT COUNT(*) FROM print_jobs WHERE status IN ('queued', 'printing')"),
+    // Factures commerciales, proformas et devis émis ce mois (hors annulés)
+    'commercial_month' => (int) db_value("SELECT COUNT(*) FROM commercial_invoices WHERE issue_date >= ? AND status <> 'cancelled'", [$monthStart]),
     'unread'         => can_access_messages() ? (int) db_value("SELECT COUNT(*) FROM messages WHERE status = 'unread'") : 0,
 ];
 
@@ -207,13 +208,13 @@ dash_header('Accueil', 'index');
             <p class="stat__value stat__value--sm"><?= e(money($stats['paid_xaf_month'], 'XAF')) ?></p>
         </div>
     </article>
-    <article class="stat">
-        <span class="stat__icon stat__icon--slate"><?= icon('printer') ?></span>
+    <a class="stat stat--link" href="invoices-list.php">
+        <span class="stat__icon stat__icon--slate"><?= icon('file') ?></span>
         <div>
-            <p class="stat__label">Impressions en cours</p>
-            <p class="stat__value"><?= $stats['jobs_active'] ?></p>
+            <p class="stat__label">Factures ce mois</p>
+            <p class="stat__value"><?= $stats['commercial_month'] ?></p>
         </div>
-    </article>
+    </a>
 </section>
 
 <div class="dash-grid">
@@ -246,7 +247,7 @@ dash_header('Accueil', 'index');
     <section class="panel">
         <header class="panel__head">
             <h2 class="panel__title">Imprimantes</h2>
-            <a href="<?= is_admin() ? 'settings.php#systeme' : 'printing.php?tab=printers' ?>" class="panel__link"><?= is_admin() ? 'Gérer' : 'Voir' ?></a>
+            <?php if (is_admin()): ?><a href="settings.php#systeme" class="panel__link">Gérer</a><?php endif; ?>
         </header>
         <?php if (!$printers): ?>
             <p class="empty">Aucune imprimante configurée.</p>

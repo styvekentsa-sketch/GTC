@@ -383,7 +383,7 @@ function dash_modules(): array
             'shipments'  => ['href' => 'shipments.php',     'icon' => 'ship',     'label' => 'Suivi des colis',   'title' => 'Suivi des colis',            'desc' => 'Conteneurs et colis en transit',   'tone' => 'blue'],
             'simulator'  => ['href' => 'simulator.php',     'icon' => 'calc',     'label' => 'Simulateur Avancé', 'title' => 'Simulateur Avancé',          'desc' => 'Calculer une opération de change', 'tone' => 'blue'],
             'rates'      => ['href' => 'rates.php',         'icon' => 'exchange', 'label' => 'Taux de change',    'title' => 'Taux de change',             'desc' => 'Grille des devises du jour',       'tone' => 'green'],
-            'printing'   => ['href' => 'printing.php',      'icon' => 'printer',  'label' => 'Impression réseau', 'title' => 'Impression réseau',          'desc' => 'Imprimantes et file d\'attente',   'tone' => 'magenta'],
+            // « Impression réseau » (file des travaux) retiré le 11/11/2026 ; les imprimantes des reçus restent dans Paramètres
         ];
     }
     // GTC-Vault : coffre-fort KYC, réservé à l'administration, à la conformité et aux agents (VAULT_ROLES)
@@ -482,6 +482,8 @@ function dash_header(string $title, string $active = '', array $styles = [], boo
     <link rel="stylesheet" href="<?= e(asset_url('assets/css/custom-select.css', site_root())) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('assets/css/dashboard.css', site_root())) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('assets/css/global-search.css', site_root())) ?>">
+    <!-- Barre latérale réduite (rail d'icônes) : choix mémorisé, appliqué avant l'affichage (assets/js/dashboard.js § 1 bis) -->
+    <script>try { if (localStorage.getItem('gtc.sidebar') === 'collapsed') document.documentElement.classList.add('sb-collapsed'); } catch (e) { /* stockage indisponible */ }</script>
     <?php foreach ($styles as $css): ?>
     <link rel="stylesheet" href="<?= e(asset_url($css, site_root())) ?>">
     <?php endforeach; ?>
@@ -493,12 +495,13 @@ function dash_header(string $title, string $active = '', array $styles = [], boo
 <aside class="sidebar" id="sidebar" aria-label="Menu du dashboard">
     <div class="sidebar__brand">
         <span class="sidebar__logo"><img src="<?= e(asset_url('assets/img/logo-gtc-light-436.png', site_root())) ?>" alt="<?= e(GTC_NAME) ?>" width="166" height="41"></span>
+        <img class="sidebar__mark" src="<?= e(site_root()) ?>assets/img/favicon.svg" alt="" width="34" height="34" aria-hidden="true">
         <span class="sidebar__name"><small>Dashboard</small></span>
     </div>
 
     <nav class="sidebar__nav">
         <?php foreach ($menu as $key => $item): ?>
-            <a href="<?= e($item['href']) ?>" class="sidebar__link<?= $key === $active ? ' is-active' : '' ?>"
+            <a href="<?= e($item['href']) ?>" class="sidebar__link<?= $key === $active ? ' is-active' : '' ?>" data-tip="<?= e($item['label']) ?>"
                <?= $key === $active ? 'aria-current="page"' : '' ?>>
                 <?= icon($item['icon']) ?>
                 <span><?= e($item['label']) ?></span>
@@ -510,19 +513,19 @@ function dash_header(string $title, string $active = '', array $styles = [], boo
     </nav>
 
     <div class="sidebar__footer">
-        <button type="button" class="sidebar__link sidebar__link--btn sidebar__link--install" data-pwa-install hidden>
+        <button type="button" class="sidebar__link sidebar__link--btn sidebar__link--install" data-pwa-install hidden data-tip="Installer l'application">
             <?= icon('download') ?><span>Installer l'application</span>
         </button>
-        <a href="<?= e(site_root()) ?>index.php" class="sidebar__link" target="_blank" rel="noopener">
+        <a href="<?= e(site_root()) ?>index.php" class="sidebar__link" target="_blank" rel="noopener" data-tip="Voir le site">
             <?= icon('external') ?><span>Voir le site</span>
         </a>
-        <a href="settings.php" class="sidebar__link<?= in_array($active, ['settings', 'password'], true) ? ' is-active' : '' ?>"
+        <a href="settings.php" data-tip="Paramètres" class="sidebar__link<?= in_array($active, ['settings', 'password'], true) ? ' is-active' : '' ?>"
            <?= in_array($active, ['settings', 'password'], true) ? 'aria-current="page"' : '' ?>>
             <?= icon('settings') ?><span>Paramètres</span>
         </a>
         <form action="logout.php" method="post">
             <?= csrf_field() ?>
-            <button type="submit" class="sidebar__link sidebar__link--btn">
+            <button type="submit" class="sidebar__link sidebar__link--btn" data-tip="Déconnexion">
                 <?= icon('logout') ?><span>Déconnexion</span>
             </button>
         </form>
@@ -554,6 +557,12 @@ function dash_header(string $title, string $active = '', array $styles = [], boo
                 <img src="<?= e(asset_url('assets/img/logo-gtc-436.png', site_root())) ?>" alt="" width="166" height="41">
             </a>
         <?php else: ?>
+            <!-- Ordinateur : réduire le menu en rail d'icônes (Ctrl + B) ; mobile : bouton « menu » ci-dessous -->
+            <button class="topbar__collapse" id="sidebar-collapse" type="button" aria-controls="sidebar" aria-expanded="true"
+                    aria-keyshortcuts="Control+B Meta+B" aria-label="Masquer le menu">
+                <?= icon('sidebar') ?>
+                <span class="topbar__tip" role="tooltip"><span data-collapse-label>Masquer le menu</span><kbd data-collapse-kbd>Ctrl B</kbd></span>
+            </button>
             <button class="topbar__menu" id="sidebar-toggle" type="button" aria-label="Ouvrir le menu"
                     aria-controls="sidebar" aria-expanded="false">
                 <?= icon('menu') ?>

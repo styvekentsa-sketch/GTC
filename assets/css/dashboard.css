@@ -2532,3 +2532,86 @@ tr.is-live-updated > td { animation: invite-flash 2.4s ease; }
 .dash--embed .dash-main { margin-left: 0; min-height: 0; }
 .dash--embed .dash-content { padding: 1rem 1.25rem 1.5rem; max-width: none; }
 @media (max-width: 640px) { .dash--embed .dash-content { padding: 0.75rem; } }
+
+/* ==========================================================================
+   Barre latérale réductible (ordinateur) : rail d'icônes, Ctrl + B — assets/js/dashboard.js § 1 bis
+   Classe « sb-collapsed » sur <html> (posée avant l'affichage : aucun saut au chargement) ;
+   « sb-anim » : animation seulement quand l'utilisateur bascule, jamais au chargement de la page.
+   ========================================================================== */
+.sidebar__mark { display: none; width: 34px; height: 34px; border-radius: 10px; }
+
+/* Bouton de la barre supérieure */
+.topbar__collapse {
+  position: relative;
+  display: grid; place-items: center; flex-shrink: 0;
+  width: 40px; height: 40px; margin-right: -0.25rem;
+  border: 1px solid transparent; border-radius: var(--radius-sm);
+  background: transparent; color: var(--text-muted); cursor: pointer;
+  transition: background-color var(--t), color var(--t), border-color var(--t);
+}
+.topbar__collapse svg { width: 20px; height: 20px; }
+.topbar__collapse:hover { background: var(--surface-hi); border-color: var(--line); color: var(--text); }
+.topbar__collapse:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.topbar__collapse[aria-expanded="false"] { color: var(--blue); }
+/* Infobulle sous le bouton : « Masquer le menu  Ctrl B » */
+.topbar__tip {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 60;
+  display: inline-flex; align-items: center; gap: 0.625rem;
+  padding: 0.375rem 0.5rem 0.375rem 0.625rem; border-radius: 8px;
+  background: #1F2630; color: #F3F4F6; font-size: 0.75rem; font-weight: 500; white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.22);
+  opacity: 0; transform: translateY(-3px); pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.topbar__tip kbd { border-color: rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.08); color: #D1D5DB; }
+.topbar__collapse:hover .topbar__tip, .topbar__collapse:focus-visible .topbar__tip { opacity: 1; transform: none; transition-delay: 0.35s; }
+
+/* Infobulle des icônes du rail (élément flottant, hors de la barre qui masque ce qui dépasse) */
+.sb-tip {
+  position: fixed; z-index: 120; padding: 0.4375rem 0.6875rem; border-radius: 8px;
+  background: #1F2630; color: #fff; font-size: 0.8125rem; font-weight: 500; white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.25); pointer-events: none;
+  opacity: 0; transform: translateX(-4px); transition: opacity 0.1s ease, transform 0.1s ease;
+}
+.sb-tip::before {
+  content: ""; position: absolute; top: 50%; left: -4px; width: 8px; height: 8px;
+  background: inherit; transform: translateY(-50%) rotate(45deg); border-radius: 1px;
+}
+.sb-tip.is-visible { opacity: 1; transform: none; }
+.sb-tip__count { margin-left: 0.5rem; padding: 0 0.375rem; border-radius: 999px; background: var(--green-ink); font-size: 0.6875rem; font-weight: 700; }
+
+@media (min-width: 1025px) {
+  html.sb-anim .sidebar { transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), padding 0.22s cubic-bezier(0.4, 0, 0.2, 1); }
+  html.sb-anim .dash-main { transition: margin-left 0.22s cubic-bezier(0.4, 0, 0.2, 1); }
+
+  html.sb-collapsed { --sidebar-w: 76px; }
+  html.sb-collapsed .sidebar { padding-inline: 0.75rem; }
+  html.sb-collapsed .sidebar__brand { align-items: center; padding-inline: 0; padding-bottom: 0.875rem; }
+  html.sb-collapsed .sidebar__logo, html.sb-collapsed .sidebar__name { display: none; }
+  html.sb-collapsed .sidebar__mark { display: block; }
+  html.sb-collapsed .sidebar__nav { margin-inline: 0; padding-inline: 0; scrollbar-width: none; }   /* défile à la molette, sans barre visible */
+  html.sb-collapsed .sidebar__nav::-webkit-scrollbar { display: none; }
+  html.sb-collapsed .sidebar__link { position: relative; justify-content: center; gap: 0; padding-inline: 0; }
+  html.sb-collapsed .sidebar__link > span:not(.sidebar__count) { display: none; }
+  html.sb-collapsed .sidebar__link svg { width: 20px; height: 20px; }
+  /* Messages non lus : pastille sur l'icône */
+  html.sb-collapsed .sidebar__count {
+    position: absolute; top: 5px; right: 9px; min-width: 9px; height: 9px; padding: 0;
+    border: 2px solid var(--anthracite); font-size: 0; line-height: 0;
+  }
+  html.sb-collapsed .sidebar__link.is-active .sidebar__count { border-color: var(--blue); }
+}
+@media (max-width: 1024px) {
+  .topbar__collapse { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.sb-anim .sidebar, html.sb-anim .dash-main, .topbar__tip, .sb-tip { transition: none; }
+}
+@media print {
+  .topbar__collapse, .sb-tip { display: none !important; }
+}
+
+/* Indicateur cliquable du Hub (ex. « Factures ce mois » → liste des factures) */
+a.stat--link { color: inherit; text-decoration: none; transition: border-color var(--t), box-shadow var(--t), transform var(--t); }
+a.stat--link:hover { border-color: rgba(0, 81, 165, 0.35); box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08); transform: translateY(-1px); }
+a.stat--link:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }

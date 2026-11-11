@@ -499,45 +499,7 @@ vault_header('GTC-Vault · Nouveau dossier KYC');
 </form>
 
 <!-- ==================== CAPTURE PAR TÉLÉPHONE : UN QR CODE POUR TOUTES LES PIÈCES ==================== -->
-<dialog id="capture-dialog" class="vault-dialog" aria-labelledby="capture-title">
-    <div class="vault-dialog__head">
-        <span class="vault-dialog__icon"><?= vault_icon('phone') ?></span>
-        <div>
-            <h2 id="capture-title">Scanner avec un mobile</h2>
-            <p id="capture-sub">Un seul QR code pour toutes les pièces, à la suite.</p>
-        </div>
-        <button type="button" class="icon-btn" data-capture-close aria-label="Fermer"><?= vault_icon('x') ?></button>
-    </div>
-
-    <!-- QR code et marche à suivre (masqués une fois toutes les pièces reçues) -->
-    <div id="capture-scan" class="cap-scan">
-        <div id="capture-qr" class="cap-qr" role="img" aria-label="QR code de capture"><span class="vault-spin"></span></div>
-        <ol class="pwa-dialog__steps">
-            <li>Flashez ce QR code avec l'appareil photo du téléphone.</li>
-            <li>Photographiez chaque pièce : le téléphone passe seul à la suivante.</li>
-            <li>Vérifiez les photos ici, puis validez.</li>
-        </ol>
-    </div>
-
-    <!-- Pièces de la session : état et photo reçue -->
-    <ul id="capture-steps" class="cap-steps" aria-live="polite"></ul>
-
-    <div id="capture-status" class="cap-status" role="status" aria-live="polite" data-tone="wait">
-        <span class="cap-status__dot"></span>
-        <span class="cap-status__text" data-text>Préparation du QR code…</span>
-        <span class="cap-status__timer" data-timer></span>
-    </div>
-
-    <div class="vault-dialog__actions">
-        <button type="button" class="vault-link-btn" data-capture-copy hidden>Copier le lien (WhatsApp…)</button>
-        <span class="vault-dialog__end">
-            <button type="button" class="btn btn--primary btn--sm" data-capture-renew hidden><?= icon('refresh') ?> Nouveau QR code</button>
-            <button type="button" class="btn btn--ghost btn--sm" data-capture-close data-cancel-label>Annuler</button>
-            <button type="button" class="btn btn--primary btn--sm" data-capture-validate hidden><?= icon('check') ?> Photos correctes, valider</button>
-        </span>
-    </div>
-    <p class="vault-dialog__fine">QR code personnel, valable 15 minutes pour les pièces de ce dossier. Les photos sont transmises au dossier sécurisé puis effacées du serveur de transit.</p>
-</dialog>
+<?= vault_capture_dialog() ?>
 
 <script src="vault/assets/qrcode/qrcode.min.js"></script>
 <script>
