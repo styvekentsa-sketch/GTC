@@ -249,6 +249,51 @@ function vault_watermark_text(): string
  * Utilisée par l'aperçu filigrané (viewer.php) et le recadrage des photos de profil (avatar.php) : les mêmes
  * coordonnées relatives désignent donc le même endroit sur l'aperçu et sur l'original.
  */
+/**
+ * Contrôle d'un fichier envoyé (formulaire KYC, saisie rapide depuis la caisse, ajout de pièce) :
+ * [extension, mime] ou message d'erreur. Type lu dans le contenu du fichier, jamais dans son nom.
+ */
+function kyc_check_file(array $f): array|string
+{
+    if ($f['error'] === UPLOAD_ERR_INI_SIZE || $f['error'] === UPLOAD_ERR_FORM_SIZE || $f['size'] > KYC_MAX_BYTES) {
+        return 'Fichier trop lourd (5 Mo au maximum).';
+    }
+    if ($f['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($f['tmp_name'])) {
+        return 'Le fichier n\'a pas pu être reçu, réessayez.';
+    }
+    if ($f['size'] === 0) {
+        return 'Le fichier est vide.';
+    }
+    $mime = (new finfo(FILEINFO_MIME_TYPE))->file($f['tmp_name']) ?: '';
+    if (!isset(KYC_MIME_TYPES[$mime])) {
+        return 'Format refusé : seuls JPG, PNG et PDF sont acceptés.';
+    }
+    return [KYC_MIME_TYPES[$mime], $mime];
+}
+
+/**
+ * Range une pièce contrôlée par kyc_check_file() dans le stockage hors web et l'inscrit dans client_documents.
+ * $f : fichier PHP + 'ext' et 'mime'. Retourne le chemin absolu (à effacer si la transaction échoue).
+ */
+function kyc_store_document(PDO $pdo, int $clientId, string $type, array $f, int $userId, string $now): string
+{
+    $dir = KYC_STORAGE_DIR . '/' . date('Y/m');
+    if (!is_dir($dir) && !mkdir($dir, 0750, true) && !is_dir($dir)) {
+        throw new RuntimeException('Dossier de stockage inaccessible.');
+    }
+    $rel  = date('Y/m') . '/' . bin2hex(random_bytes(16)) . '.' . $f['ext'];
+    $dest = KYC_STORAGE_DIR . '/' . $rel;
+    if (!move_uploaded_file($f['tmp_name'], $dest)) {
+        throw new RuntimeException('Copie du fichier impossible.');
+    }
+    @chmod($dest, 0640);
+    $name = mb_substr((string) preg_replace('/[^\p{L}\p{N} ._()\-]/u', '_', basename((string) $f['name'])), 0, 255);
+    $pdo->prepare('INSERT INTO client_documents (client_id, type_document, nom_original, chemin_fichier, taille_fichier, mime_type, created_at, uploaded_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        ->execute([$clientId, $type, $name, $rel, (int) $f['size'], $f['mime'], $now, $userId]);
+    return $dest;
+}
+
 function kyc_open_image(string $path, string $mime): ?GdImage
 {
     if (!function_exists('imagecreatefromjpeg')) {

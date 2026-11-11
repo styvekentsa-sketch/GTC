@@ -282,6 +282,16 @@ function db_ensure_schema(PDO $pdo): void
         // GTC-Vault : adresse e-mail glissée dans le champ « Adresse » (saisie ou remplissage automatique du navigateur)
         db_repair_client_addresses($pdo);
     }
+    if (!db_column_exists($pdo, 'clients', 'review_status')) {
+        // GTC-Vault : statut de vérification du dossier. « pending » (provisoire, en attente) pour un dossier créé
+        // à la volée depuis la caisse ; la conformité le complète puis le valide (« verified »). Dossiers existants :
+        // déjà vérifiés (créés dans GTC-Vault avec leurs pièces).
+        $pdo->exec("ALTER TABLE clients ADD COLUMN review_status VARCHAR(12) NOT NULL DEFAULT 'verified'");
+        $pdo->exec('ALTER TABLE clients ADD COLUMN review_source VARCHAR(30) NULL');
+        $pdo->exec('ALTER TABLE clients ADD COLUMN reviewed_by ' . db_types()['fk'] . ' NULL');
+        $pdo->exec('ALTER TABLE clients ADD COLUMN reviewed_at ' . db_types()['dt'] . ' NULL');
+        $pdo->exec('CREATE INDEX idx_clients_review ON clients (review_status)');
+    }
     if (!db_column_exists($pdo, 'clients', 'archived_at')) {
         // GTC-Vault : dossier archivé (masqué du répertoire et de la facturation, conservé et restaurable)
         $pdo->exec('ALTER TABLE clients ADD COLUMN archived_at ' . db_types()['dt'] . ' NULL');

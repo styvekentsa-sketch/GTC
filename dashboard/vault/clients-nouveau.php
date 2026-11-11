@@ -40,24 +40,7 @@ function kyc_required(string $type, string $piece): array
     return $piece === 'cni' ? ['doc_identite', 'doc_verso'] : ['doc_identite'];
 }
 
-/** Contrôle d'un fichier envoyé : [extension, mime] ou message d'erreur. */
-function kyc_check_file(array $f): array|string
-{
-    if ($f['error'] === UPLOAD_ERR_INI_SIZE || $f['error'] === UPLOAD_ERR_FORM_SIZE || $f['size'] > KYC_MAX_BYTES) {
-        return 'Fichier trop lourd (5 Mo au maximum).';
-    }
-    if ($f['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($f['tmp_name'])) {
-        return 'Le fichier n\'a pas pu être reçu, réessayez.';
-    }
-    if ($f['size'] === 0) {
-        return 'Le fichier est vide.';
-    }
-    $mime = (new finfo(FILEINFO_MIME_TYPE))->file($f['tmp_name']) ?: '';
-    if (!isset(KYC_MIME_TYPES[$mime])) {
-        return 'Format refusé : seuls JPG, PNG et PDF sont acceptés.';
-    }
-    return [KYC_MIME_TYPES[$mime], $mime];
-}
+// Contrôle des fichiers envoyés : kyc_check_file() (includes/vault.php), commun à la saisie rapide depuis la caisse
 
 // ---------- Traitement ----------
 $errors = [];

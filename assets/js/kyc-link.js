@@ -23,6 +23,8 @@
   var list    = root.querySelector('[data-kyc-results]');
   var chosen  = root.querySelector('[data-kyc-chosen]');
   var form    = root.closest('form');
+  var canCreate = root.hasAttribute('data-quick');                 // enregistrement rapide d'un nouveau client
+  var context   = root.getAttribute('data-context') || 'receipt';  // receipt (reçu) | invoice (facture)
 
   var results = [];
   var active  = -1;
@@ -34,7 +36,10 @@
     check: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>',
     alert: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>',
     shield: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
-    x: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>'
+    x: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+    clock: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>',
+    plus: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+    upload: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5M12 3v12"/></svg>'
   };
 
   function esc(s) {
@@ -43,12 +48,19 @@
     });
   }
 
+  // États : complet (vert), incomplet (orange), provisoire — créé depuis la caisse, à vérifier par la conformité (bleu)
+  var STATES = {
+    complete:   { tone: 'success', icon: 'check', short: 'KYC complet',    long: 'Dossier KYC complet' },
+    incomplete: { tone: 'warning', icon: 'alert', short: 'KYC incomplet',  long: 'Dossier KYC incomplet' },
+    pending:    { tone: 'info',    icon: 'clock', short: 'KYC provisoire', long: 'Dossier KYC provisoire' }
+  };
   function badge(c, compact) {
-    var ok = c.status === 'complete';
-    var label = compact ? (ok ? 'KYC complet' : 'KYC incomplet') : (ok ? 'Dossier KYC complet' : 'Dossier KYC incomplet');
-    var title = c.missing && c.missing.length ? 'Manque : ' + c.missing.join(', ') : 'Pièces d\'identité vérifiées dans GTC-Vault';
-    return '<span class="badge badge--' + (ok ? 'success' : 'warning') + ' kyc-badge" data-kyc-badge="' + esc(c.status) + '" title="' + esc(title) + '">'
-      + (ok ? ICONS.check : ICONS.alert) + ' ' + esc(label) + '</span>';
+    var st = STATES[c.status] || STATES.incomplete;
+    var missing = c.missing && c.missing.length ? c.missing.join(', ') : '';
+    var title = c.status === 'pending' ? 'Dossier créé depuis la caisse, en attente de vérification par la conformité' + (missing ? ' — manque : ' + missing : '')
+      : (missing ? 'Manque : ' + missing : 'Pièces d\'identité vérifiées dans GTC-Vault');
+    return '<span class="badge badge--' + st.tone + ' kyc-badge" data-kyc-badge="' + esc(c.status) + '" title="' + esc(title) + '">'
+      + ICONS[st.icon] + ' ' + esc(compact ? st.short : st.long) + '</span>';
   }
 
   function subline(c) {
@@ -66,8 +78,9 @@
     results = items;
     active = -1;
     if (!items.length) {
-      list.innerHTML = '<li class="kyc-link__empty" role="presentation">Aucun dossier GTC-Vault pour « ' + esc(q) + ' ». '
-        + 'Saisissez le client à la main' + (canOpen ? ' ou <a href="vault/clients-nouveau.php" target="_blank" rel="noopener">créez son dossier KYC</a>' : '') + '.</li>';
+      list.innerHTML = '<li class="kyc-link__empty" role="presentation">Aucun dossier GTC-Vault pour « ' + esc(q) + ' ».'
+        + (canCreate ? '<button type="button" class="btn btn--primary btn--sm kyc-link__new" data-kyc-new>' + ICONS.plus + ' Enregistrer ce nouveau client dans GTC-Vault</button>'
+          : ' Saisissez le client à la main.') + '</li>';
       open(true);
       return;
     }
@@ -131,7 +144,9 @@
       + '<span class="kyc-chip__body"><strong data-kyc-name>' + esc(c.name) + '</strong><small>' + esc(subline(c)) + '</small></span>'
       + badge(c, false)
       + '<button type="button" class="btn btn--ghost btn--sm" data-kyc-unlink>' + ICONS.x + ' Délier</button>'
-      + (c.missing && c.missing.length ? '<p class="kyc-chip__warn">' + ICONS.alert + ' Dossier incomplet — manque : ' + esc(c.missing.join(', '))
+      + (c.status === 'pending' ? '<p class="kyc-chip__warn kyc-chip__warn--info">' + ICONS.clock + ' Dossier provisoire créé depuis la caisse : la conformité vérifiera'
+          + (c.missing && c.missing.length ? ' et complétera les pièces (manque : ' + esc(c.missing.join(', ')) + ')' : ' les pièces') + '. Contrôlez l\'original de la pièce d\'identité.</p>'
+        : c.missing && c.missing.length ? '<p class="kyc-chip__warn">' + ICONS.alert + ' Dossier incomplet — manque : ' + esc(c.missing.join(', '))
         + '. Vérifiez l\'identité du client avant de finaliser l\'opération.</p>' : '')
       + '</div>';
   }
@@ -181,6 +196,7 @@
   });
 
   list.addEventListener('mousedown', function (e) {
+    if (e.target.closest('[data-kyc-new]')) { e.preventDefault(); openQuick(search.value.trim()); return; }
     var li = e.target.closest('[role=option]');
     if (!li) return;
     e.preventDefault();   // le champ garde le focus : pas de fermeture avant le choix
@@ -200,6 +216,180 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) { if (d && d.client) chosen.innerHTML = chip(d.client); })
       .catch(function () { /* la carte rendue par le serveur reste affichée */ });
+  }
+
+  /* ==========================================================================
+     Enregistrement rapide d'un nouveau client (dashboard/client-quick.php)
+     Fenêtre créée ici et placée hors du formulaire du document (pas de formulaire imbriqué).
+     ========================================================================== */
+  var modal = null;
+
+  function field(name, label, input, hint) {
+    return '<div class="field kq-field" data-kq-field="' + name + '"><label for="kq-' + name + '">' + label + '</label>' + input
+      + (hint ? '<small class="field__hint">' + hint + '</small>' : '') + '<small class="field__error" data-kq-error="' + name + '" hidden></small></div>';
+  }
+  function fileField(name, label) {
+    return '<div class="field kq-file" data-kq-field="' + name + '"><label for="kq-' + name + '" data-kq-label="' + name + '">' + label + '</label>'
+      + '<label class="kq-drop" for="kq-' + name + '">' + ICONS.upload + '<span data-kq-filename="' + name + '">Choisir un fichier (JPG, PNG ou PDF, 5 Mo max.)</span></label>'
+      + '<input type="file" id="kq-' + name + '" name="' + name + '" accept="image/jpeg,image/png,application/pdf" class="kq-file__input">'
+      + '<small class="field__error" data-kq-error="' + name + '" hidden></small></div>';
+  }
+
+  function buildModal() {
+    modal = document.createElement('div');
+    modal.className = 'kq-backdrop';
+    modal.hidden = true;
+    modal.innerHTML = '<div class="kq-dialog" role="dialog" aria-modal="true" aria-labelledby="kq-title">'
+      + '<form class="kq-form" novalidate>'
+      + '<header class="kq-head"><span class="kq-head__icon" aria-hidden="true">' + ICONS.shield + '</span><div><h2 id="kq-title">Nouveau client GTC-Vault</h2>'
+      + '<p>Dossier créé en statut <strong>provisoire</strong> et lié au document en cours. La conformité vérifiera et complétera les pièces.</p></div>'
+      + '<button type="button" class="kq-close" data-kq-close aria-label="Fermer">' + ICONS.x + '</button></header>'
+      + '<div class="kq-body">'
+      + '<div class="kq-alert" data-kq-alert hidden></div>'
+      + '<fieldset class="kq-type"><legend>Type de client</legend>'
+      + '<label><input type="radio" name="type_client" value="particulier" checked> Particulier</label>'
+      + '<label><input type="radio" name="type_client" value="entreprise"> Entreprise</label></fieldset>'
+      + '<div class="kq-grid">'
+      + field('nom_complet', '<span data-kq-name-label>Nom complet</span> *', '<input id="kq-nom_complet" name="nom_complet" maxlength="255" autocomplete="off" required>')
+      + field('telephone', 'Téléphone *', '<input id="kq-telephone" name="telephone" type="tel" maxlength="30" autocomplete="off" placeholder="+237 6 70 00 00 00" required>', 'Sans indicatif : Cameroun (+237).')
+      + field('numero_identifiant', '<span data-kq-id-label>N° CNI / passeport</span> *', '<input id="kq-numero_identifiant" name="numero_identifiant" maxlength="100" autocomplete="off" class="kq-upper" required>')
+      + field('email', 'E-mail', '<input id="kq-email" name="email" type="email" maxlength="150" autocomplete="off" inputmode="email" placeholder="nom@exemple.com">')
+      + '<div class="kq-full">' + field('adresse', 'Adresse', '<textarea id="kq-adresse" name="adresse" rows="2" maxlength="2000" placeholder="Quartier, rue, ville"></textarea>') + '</div>'
+      + '</div>'
+      + '<div class="kq-files">' + fileField('doc_recto', 'CNI — recto') + fileField('doc_verso', 'CNI — verso') + '</div>'
+      + '<p class="kq-note">' + ICONS.clock + ' Pièces facultatives à ce stade : sans elles, le dossier reste provisoire jusqu\'à leur ajout par la conformité.</p>'
+      + '</div>'
+      + '<footer class="kq-foot"><button type="button" class="btn btn--ghost" data-kq-close>Annuler</button>'
+      + '<button type="submit" class="btn btn--primary" data-kq-submit>' + ICONS.check + ' <span>Enregistrer et lier au document</span></button></footer>'
+      + '</form></div>';
+    document.body.appendChild(modal);
+
+    var f = modal.querySelector('form');
+    // Libellés selon le type de client
+    f.addEventListener('change', function (e) {
+      if (e.target.name === 'type_client') {
+        var company = e.target.value === 'entreprise';
+        f.querySelector('[data-kq-name-label]').textContent = company ? 'Raison sociale' : 'Nom complet';
+        f.querySelector('[data-kq-id-label]').textContent = company ? 'N° RCCM' : 'N° CNI / passeport';
+        f.querySelector('[data-kq-label="doc_recto"]').textContent = company ? 'Pièce du représentant — recto' : 'CNI — recto';
+        f.querySelector('[data-kq-label="doc_verso"]').textContent = company ? 'Pièce du représentant — verso' : 'CNI — verso';
+      }
+      if (e.target.type === 'file') {
+        var file = e.target.files[0];
+        var span = f.querySelector('[data-kq-filename="' + e.target.name + '"]');
+        span.textContent = file ? file.name + ' (' + Math.max(1, Math.round(file.size / 1024)) + ' Ko)' : 'Choisir un fichier (JPG, PNG ou PDF, 5 Mo max.)';
+        span.parentNode.classList.toggle('has-file', !!file);
+        var err = '';
+        if (file && file.size > 5 * 1024 * 1024) err = 'Fichier trop lourd (5 Mo au maximum).';
+        else if (file && !/^(image\/(jpeg|png)|application\/pdf)$/.test(file.type)) err = 'Format refusé : seuls JPG, PNG et PDF sont acceptés.';
+        setError(e.target.name, err);
+      }
+    });
+    modal.addEventListener('click', function (e) {
+      if (e.target === modal || e.target.closest('[data-kq-close]')) closeQuick();
+      var use = e.target.closest('[data-kq-use]');
+      if (use && modal._existing) { var ex = modal._existing; closeQuick(); choose(ex); }
+    });
+    modal.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { e.preventDefault(); closeQuick(); }
+      if (e.key === 'Tab') {   // focus gardé dans la fenêtre
+        var items = [].slice.call(modal.querySelectorAll('input, textarea, button')).filter(function (el) { return !el.disabled && el.offsetParent !== null; });
+        var first = items[0], last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    });
+    f.addEventListener('submit', submitQuick);
+  }
+
+  function setError(name, msg) {
+    var el = modal.querySelector('[data-kq-error="' + name + '"]');
+    var input = modal.querySelector('[name="' + name + '"]');
+    if (el) { el.textContent = msg || ''; el.hidden = !msg; }
+    if (input) { if (msg) input.setAttribute('aria-invalid', 'true'); else input.removeAttribute('aria-invalid'); }
+  }
+  function alertBox(html, tone) {
+    var a = modal.querySelector('[data-kq-alert]');
+    a.className = 'kq-alert' + (tone ? ' kq-alert--' + tone : '');
+    a.innerHTML = html || '';
+    a.hidden = !html;
+  }
+
+  function openQuick(q) {
+    if (!modal) buildModal();
+    var f = modal.querySelector('form');
+    f.reset();
+    f.querySelector('[name=type_client]:checked').dispatchEvent(new Event('change', { bubbles: true }));   // libellés « Particulier »
+    modal.querySelectorAll('[data-kq-error]').forEach(function (el) { setError(el.getAttribute('data-kq-error'), ''); });
+    modal.querySelectorAll('[data-kq-filename]').forEach(function (s) { s.textContent = 'Choisir un fichier (JPG, PNG ou PDF, 5 Mo max.)'; s.parentNode.classList.remove('has-file'); });
+    alertBox('');
+    modal._existing = null;
+    // La recherche tapée pré-remplit le bon champ : téléphone (chiffres), N° de pièce (lettres + chiffres) ou nom
+    q = (q || '').trim();
+    var digits = q.replace(/[\s+().-]/g, '');
+    if (/^\d{6,15}$/.test(digits)) f.telephone.value = q;
+    else if (/\d/.test(q) && /^[A-Za-z0-9 ./-]+$/.test(q)) f.numero_identifiant.value = q.toUpperCase();
+    else f.nom_complet.value = q;
+    open(false);
+    modal.hidden = false;
+    document.documentElement.classList.add('kq-lock');
+    // Curseur dans le premier champ obligatoire encore vide
+    ([f.nom_complet, f.telephone, f.numero_identifiant].filter(function (i) { return !i.value; })[0] || f.nom_complet).focus();
+  }
+  function closeQuick() {
+    if (!modal) return;
+    modal.hidden = true;
+    document.documentElement.classList.remove('kq-lock');
+    search.focus();
+  }
+
+  function submitQuick(e) {
+    e.preventDefault();
+    var f = e.target;
+    // Contrôles immédiats (le serveur refait tout)
+    var bad = false;
+    [['nom_complet', f.nom_complet.value.trim().length >= 2 ? '' : 'Indiquez le nom du client.'],
+     ['telephone', /^\+?[\d\s().-]{8,30}$/.test(f.telephone.value.trim()) ? '' : 'Numéro invalide.'],
+     ['numero_identifiant', /^[A-Za-z0-9][A-Za-z0-9 .\/-]{2,99}$/.test(f.numero_identifiant.value.trim()) ? '' : 'N° de pièce obligatoire (3 caractères minimum).'],
+     ['email', !f.email.value.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(f.email.value.trim()) ? '' : 'Adresse e-mail invalide.'],
+     ['adresse', /[^\s@]+@[^\s@]+\.[^\s@]{2,}/.test(f.adresse.value) ? 'L\'adresse ne doit pas contenir d\'e-mail : indiquez-le dans le champ « E-mail ».' : '']
+    ].forEach(function (c) { setError(c[0], c[1]); if (c[1]) bad = true; });
+    if (modal.querySelector('.kq-file .field__error:not([hidden])')) bad = true;
+    if (bad) { var first = modal.querySelector('[aria-invalid="true"]'); if (first) first.focus(); return; }
+
+    var fd = new FormData(f);
+    fd.append('csrf_token', (form && form.querySelector('[name=csrf_token]') || {}).value || '');
+    fd.append('context', context);
+    var btn = f.querySelector('[data-kq-submit]');
+    btn.disabled = true;
+    btn.querySelector('span').textContent = 'Enregistrement…';
+    alertBox('');
+    fetch('client-quick.php', { method: 'POST', body: fd, credentials: 'same-origin', headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { status: r.status, d: d }; }); })
+      .then(function (res) {
+        var d = res.d;
+        if (res.status === 201 && d.client) {
+          closeQuick();
+          choose(d.client);
+          return;
+        }
+        if (res.status === 409) {
+          modal._existing = d.existing || null;
+          alertBox(ICONS.alert + '<span>' + esc(d.error) + '</span>' + (d.existing ? '<button type="button" class="btn btn--primary btn--sm" data-kq-use>Utiliser ce dossier</button>' : ''), 'warn');
+          return;
+        }
+        if (d.fields) Object.keys(d.fields).forEach(function (k) { setError(k, d.fields[k]); });
+        alertBox(ICONS.alert + '<span>' + esc(d.error || 'Le dossier n\'a pas pu être enregistré.') + '</span>', 'error');
+      })
+      .catch(function () { alertBox(ICONS.alert + '<span>Connexion interrompue : le dossier n\'a pas été enregistré. Réessayez.</span>', 'error'); })
+      .then(function () { btn.disabled = false; btn.querySelector('span').textContent = 'Enregistrer et lier au document'; });
+  }
+
+  // Lien permanent sous la recherche : client absent, même sans avoir cherché
+  var newLink = root.querySelector('[data-kyc-new-link]');
+  if (newLink && canCreate) {
+    newLink.hidden = false;
+    newLink.addEventListener('click', function () { openQuick(search.value.trim()); });
   }
 
   // Envoi : le nom saisi doit rester celui du dossier lié (sinon le lien est trompeur)

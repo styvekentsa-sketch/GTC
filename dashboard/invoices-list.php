@@ -221,7 +221,7 @@ if ($action === 'new' || $action === 'edit') {
                 <!-- Passerelle GTC-Vault : recherche du dossier KYC, remplissage des champs, badge de conformité -->
                 <?= kyc_link_field($form['vault'] ?? null,
                     ['name' => 'client_name', 'phone' => 'client_phone', 'email' => 'client_email', 'address' => 'client_address', 'idNumber' => 'client_id_number'],
-                    isset($errors['vault_client']) && is_string($errors['vault_client']) ? $errors['vault_client'] : null) ?>
+                    isset($errors['vault_client']) && is_string($errors['vault_client']) ? $errors['vault_client'] : null, 'invoice') ?>
                 <div class="field">
                     <label for="client_name">Nom / Raison sociale *</label>
                     <input id="client_name" name="client_name" required maxlength="150" autocomplete="off" value="<?= e($form['client_name']) ?>"<?= $inv('client_name') ?>>

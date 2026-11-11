@@ -29,9 +29,9 @@ if ($partial) {
 // ---------- Paramètres ----------
 $q     = trim((string) preg_replace('/\s+/u', ' ', mb_substr((string) ($_GET['q'] ?? ''), 0, 100)));
 $type  = isset(CLIENTS_TYPES[$_GET['type'] ?? '']) ? (string) $_GET['type'] : '';
-$etat  = ($_GET['etat'] ?? '') === 'archives' ? 'archives' : '';
-if ($etat === 'archives') {
-    $type = '';   // vue « Archivés » : tous les types
+$etat  = in_array($_GET['etat'] ?? '', ['archives', 'provisoires'], true) ? (string) $_GET['etat'] : '';
+if ($etat !== '') {
+    $type = '';   // vues « Archivés » et « À vérifier » : tous les types
 }
 $page  = max(1, (int) ($_GET['page'] ?? 1));
 $words = $q === '' ? [] : array_slice(array_unique(search_words($q)), 0, 5);
@@ -80,6 +80,9 @@ function clients_where(array $words, string $type, ?string $etat = ''): array
     $params = [];
     if ($etat !== null) {   // null : actifs et archivés confondus
         $sql[] = $etat === 'archives' ? 'c.archived_at IS NOT NULL' : 'c.archived_at IS NULL';
+    }
+    if ($etat === 'provisoires') {   // dossiers créés depuis la caisse, à vérifier par la conformité
+        $sql[] = "c.review_status = 'pending'";
     }
     if ($type !== '') {
         $sql[] = 'c.type_client = ?';
@@ -142,13 +145,17 @@ try {
     $st = $pdo->prepare("SELECT COUNT(*) FROM clients c {$whereArch}");
     $st->execute($paramsArch);
     $archivedCount = (int) $st->fetchColumn();
-    $total = $etat === 'archives' ? $archivedCount : $counts[$type];
+    [$wherePend, $paramsPend] = clients_where($words, '', 'provisoires');
+    $st = $pdo->prepare("SELECT COUNT(*) FROM clients c {$wherePend}");
+    $st->execute($paramsPend);
+    $pendingCount = (int) $st->fetchColumn();
+    $total = $etat === 'archives' ? $archivedCount : ($etat === 'provisoires' ? $pendingCount : $counts[$type]);
     $pages = max(1, (int) ceil($total / CLIENTS_PER_PAGE));
     $page  = min($page, $pages);
 
     [$where, $params] = clients_where($words, $type, $etat);
     $offset = ($page - 1) * CLIENTS_PER_PAGE;
-    $st = $pdo->prepare("SELECT c.uuid, c.type_client, c.nom_complet, c.telephone, c.numero_identifiant, c.created_at, c.avatar_path, c.archived_at,
+    $st = $pdo->prepare("SELECT c.uuid, c.type_client, c.nom_complet, c.telephone, c.numero_identifiant, c.created_at, c.avatar_path, c.archived_at, c.review_status,
                                 (SELECT COUNT(*) FROM client_documents d WHERE d.client_id = c.id) AS nb_docs
                          FROM clients c {$where}
                          ORDER BY c.created_at DESC, c.id DESC
@@ -161,6 +168,7 @@ try {
     $pages = 1;
 }
 $archivedCount ??= 0;
+$pendingCount ??= 0;
 $isEmptyBase = !$error && $counts[''] === 0 && !$words && $etat === '' && $archivedCount === 0;
 
 // ---------- Gabarits ----------
@@ -214,7 +222,7 @@ function client_actions_menu(array $r, string $back): string
 /** Pastilles de filtre, résultats, pagination : renvoyés tels quels à la recherche fluide. */
 function render_results(): string
 {
-    global $rows, $total, $page, $pages, $q, $type, $words, $counts, $error, $isEmptyBase, $etat, $archivedCount;
+    global $rows, $total, $page, $pages, $q, $type, $words, $counts, $error, $isEmptyBase, $etat, $archivedCount, $pendingCount;
     ob_start(); ?>
     <div class="vault-list-head">
         <nav class="chips vault-chips" aria-label="Filtrer par type de client">
@@ -225,6 +233,11 @@ function render_results(): string
                     <?= h($label) ?> <span class="chip__count"><?= $counts[$key] ?></span>
                 </a>
             <?php endforeach; ?>
+            <!-- Dossiers provisoires créés depuis la caisse : à compléter et valider par la conformité -->
+            <a href="<?= h(clients_url(['etat' => $etat === 'provisoires' ? null : 'provisoires', 'type' => null, 'page' => null])) ?>" data-nav data-etat
+               class="chip vault-chip--pending<?= $etat === 'provisoires' ? ' is-active' : '' ?><?= $pendingCount ? ' has-items' : '' ?>"<?= $etat === 'provisoires' ? ' aria-current="true"' : '' ?>>
+                <?= icon('clock') ?> À vérifier <span class="chip__count"><?= $pendingCount ?></span>
+            </a>
             <!-- Dossiers archivés : conservés, restaurables, hors du répertoire et de la facturation -->
             <a href="<?= h(clients_url(['etat' => $etat === 'archives' ? null : 'archives', 'type' => null, 'page' => null])) ?>" data-nav data-etat
                class="chip vault-chip--archive<?= $etat === 'archives' ? ' is-active' : '' ?>"<?= $etat === 'archives' ? ' aria-current="true"' : '' ?>>
@@ -233,7 +246,7 @@ function render_results(): string
         </nav>
         <p class="vault-summary" data-summary>
             <?php if ($total > 0): ?>
-                <?= $total === 1 ? '1 dossier' : number_format($total, 0, ',', "\u{202F}") . ' dossiers' ?><?= $etat === 'archives' ? ($total === 1 ? ' archivé' : ' archivés') : '' ?><?= $q !== '' ? ' pour « ' . h($q) . ' »' : '' ?>
+                <?= $total === 1 ? '1 dossier' : number_format($total, 0, ',', "\u{202F}") . ' dossiers' ?><?= $etat === 'archives' ? ($total === 1 ? ' archivé' : ' archivés') : ($etat === 'provisoires' ? ' à vérifier' : '') ?><?= $q !== '' ? ' pour « ' . h($q) . ' »' : '' ?>
                 <?php if ($total > CLIENTS_PER_PAGE): ?>
                     · <?= ($page - 1) * CLIENTS_PER_PAGE + 1 ?>–<?= min($total, $page * CLIENTS_PER_PAGE) ?>
                 <?php endif; ?>
@@ -255,7 +268,7 @@ function render_results(): string
     <?php elseif (!$rows): ?>
         <div class="empty vault-empty" role="status">
             <span class="vault-empty__icon"><?= icon('search') ?></span>
-            <h2><?= $etat === 'archives' && $q === '' ? 'Aucun dossier archivé' : 'Aucun client ne correspond' . ($q !== '' ? ' à « ' . h($q) . ' »' : '') ?></h2>
+            <h2><?= $etat === 'archives' && $q === '' ? 'Aucun dossier archivé' : ($etat === 'provisoires' && $q === '' ? 'Aucun dossier à vérifier' : 'Aucun client ne correspond' . ($q !== '' ? ' à « ' . h($q) . ' »' : '')) ?></h2>
             <p>Vérifiez l'orthographe, cherchez une partie du nom, du téléphone ou du N° d'identifiant<?= $type ? ', ou élargissez à tous les types' : '' ?>.</p>
             <div class="toolbar__actions">
                 <a href="vault/clients.php" data-nav data-reset class="btn btn--ghost">Effacer la recherche</a>
@@ -281,7 +294,7 @@ function render_results(): string
                         $url = 'vault/client.php?uuid=' . rawurlencode($r['uuid']);
                         [$day, $time] = vault_date($r['created_at']); ?>
                         <tr data-href="<?= h($url) ?>"<?= $r['archived_at'] ? ' class="is-archived"' : '' ?>>
-                            <td data-label="Type"><?= type_badge($r['type_client']) ?></td>
+                            <td data-label="Type"><span class="cell-stack"><?= type_badge($r['type_client']) ?><?= $r['review_status'] === 'pending' ? '<span class="badge badge--info vault-pending" title="Créé depuis la caisse, à vérifier par la conformité">' . icon('clock') . ' Provisoire</span>' : '' ?></span></td>
                             <td data-label="Client">
                                 <span class="vault-client">
                                     <?= avatar_html($r, kyc_initials($r['nom_complet']), 'sm') ?>

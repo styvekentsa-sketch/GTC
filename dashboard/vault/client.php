@@ -44,10 +44,12 @@ if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
 $st = vault_db()->prepare('SELECT c.id, c.uuid, c.type_client, c.nom_complet, c.telephone, c.email, c.adresse, c.numero_identifiant,
                                   c.created_at, c.updated_at, c.avatar_path, c.created_by, u.name AS created_by_name,
                                   c.archived_at, ua.name AS archived_by_name,
+                                  c.review_status, c.review_source, c.reviewed_at, ur.name AS reviewed_by_name,
                                   d.id AS doc_id, d.type_document, d.nom_original, d.taille_fichier, d.mime_type, d.created_at AS doc_created_at
                            FROM clients c
                            LEFT JOIN users u ON u.id = c.created_by
                            LEFT JOIN users ua ON ua.id = c.archived_by
+                           LEFT JOIN users ur ON ur.id = c.reviewed_by
                            LEFT JOIN client_documents d ON d.client_id = c.id
                            WHERE c.uuid = ?
                            ORDER BY d.created_at ASC, d.id ASC');
@@ -104,7 +106,7 @@ $canOpenFinance = in_array($user['role'] ?? '', OPERATION_ROLES, true);
 $journal = [];
 try {
     $st = vault_db()->prepare("SELECT created_at, user_name, action, details FROM audit_logs
-                               WHERE client_uuid = ? AND action IN ('client_create', 'client_view', 'document_view', 'finance_link', 'client_archive', 'client_restore')
+                               WHERE client_uuid = ? AND action IN ('client_create', 'client_view', 'document_view', 'finance_link', 'client_archive', 'client_restore', 'client_verify', 'document_add')
                                ORDER BY id DESC LIMIT 8");
     $st->execute([$uuid]);
     $journal = $st->fetchAll();
@@ -150,6 +152,30 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
         </a>
     </div>
 </div>
+
+<?php if ($client['review_status'] === 'pending'):
+    $canVerify = !$missing && ((int) $client['created_by'] !== (int) $user['id'] || ($user['role'] ?? '') === 'admin'); ?>
+    <!-- Dossier provisoire créé depuis la caisse (dashboard/client-quick.php) : à compléter puis valider (double contrôle) -->
+    <div class="alert alert--info vault-review" role="status" data-review-banner>
+        <?= icon('clock') ?>
+        <div>
+            <p><strong>Dossier provisoire — en attente de vérification</strong></p>
+            <p>Créé depuis le poste de caisse par <?= h($client['created_by_name'] ?: '—') ?> le <?= h(implode(' à ', vault_date($client['created_at']))) ?>.
+                <?= $missing ? 'Pièces à ajouter : ' . h(implode(', ', $missing)) . '. ' : 'Pièces au complet : ' ?>
+                vérifiez-les avec l'original puis validez le dossier.</p>
+        </div>
+        <form method="post" action="vault/client-action.php" class="vault-review__form">
+            <?= csrf_field() ?>
+            <input type="hidden" name="uuid" value="<?= h($client['uuid']) ?>">
+            <input type="hidden" name="back" value="vault/client.php?uuid=<?= h($client['uuid']) ?>">
+            <button type="submit" name="op" value="verify" class="btn btn--primary btn--sm" data-client-verify<?= $canVerify ? '' : ' disabled' ?>
+                    data-confirm="Valider le dossier KYC de <?= h($client['nom_complet']) ?> ?&#10;&#10;Confirmez que les pièces correspondent à l'original présenté par le client."
+                    title="<?= $missing ? 'Ajoutez d\'abord les pièces manquantes' : ($canVerify ? 'Valider le dossier' : 'Vous avez créé ce dossier : une autre personne doit le valider') ?>"><?= icon('check') ?> Valider le dossier</button>
+        </form>
+    </div>
+<?php elseif ($client['review_source'] && $client['reviewed_at']): ?>
+    <p class="vault-reviewed" data-reviewed><?= icon('check') ?> Dossier créé depuis la caisse, vérifié et validé par <?= h($client['reviewed_by_name'] ?: '—') ?> le <?= h(implode(' à ', vault_date($client['reviewed_at']))) ?>.</p>
+<?php endif; ?>
 
 <?php if ($client['archived_at']): [$ad, $at] = vault_date($client['archived_at']); ?>
     <div class="alert alert--warning" role="status" data-archived-banner>
@@ -249,8 +275,32 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
                 <?php endforeach; ?>
             </ul>
         <?php endif; ?>
+        <!-- Ajouter une pièce (compléter un dossier provisoire, renouveler une CNI expirée…) : vault/client-action.php -->
+        <details class="vault-add-doc no-print"<?= $client['review_status'] === 'pending' && $missing ? ' open' : '' ?> data-add-doc>
+            <summary class="btn btn--ghost btn--sm"><?= icon('plus') ?> Ajouter une pièce</summary>
+            <form method="post" action="vault/client-action.php" enctype="multipart/form-data" class="vault-add-doc__form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="op" value="add_document">
+                <input type="hidden" name="uuid" value="<?= h($client['uuid']) ?>">
+                <input type="hidden" name="back" value="vault/client.php?uuid=<?= h($client['uuid']) ?>">
+                <div class="field">
+                    <label for="add-doc-type">Type de pièce</label>
+                    <select id="add-doc-type" name="type_document" required>
+                        <?php // Pièce proposée d'office : la première qui manque au dossier
+                        $toAdd = ['Registre du commerce (RCCM)' => 'rccm', 'CNI — verso' => 'cni_verso'][$missing[0] ?? ''] ?? ($missing ? 'cni_recto' : 'autre');
+                        foreach (KYC_DOC_LABELS as $key => $label): ?>
+                            <option value="<?= h($key) ?>"<?= $key === $toAdd ? ' selected' : '' ?>><?= h($label) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="add-doc-file">Fichier <small>(JPG, PNG ou PDF, 5 Mo au maximum)</small></label>
+                    <input type="file" id="add-doc-file" name="document" accept="image/jpeg,image/png,application/pdf" required>
+                </div>
+                <button type="submit" class="btn btn--primary btn--sm"><?= icon('save') ?> Enregistrer la pièce</button>
+            </form>
+        </details>
     </section>
-
     <!-- ==================== JOURNAL DES CONSULTATIONS ==================== -->
     <section class="panel no-print" aria-labelledby="audit-title">
         <header class="panel__head">
@@ -262,7 +312,8 @@ session_write_close();   // en-tête affiché (messages flash consommés) : la s
                 [$jd, $jt] = vault_date($j['created_at']);
                 [$dot, $verb] = ['document_view' => ['doc', 'a consulté une pièce'], 'client_create' => ['create', 'a créé le dossier'],
                     'finance_link' => ['create', 'a émis un document financier'], 'client_archive' => ['', 'a archivé le dossier'],
-                    'client_restore' => ['create', 'a restauré le dossier']][$j['action']] ?? ['', 'a ouvert la fiche']; ?>
+                    'client_restore' => ['create', 'a restauré le dossier'], 'client_verify' => ['create', 'a vérifié et validé le dossier'],
+                    'document_add' => ['doc', 'a ajouté une pièce']][$j['action']] ?? ['', 'a ouvert la fiche']; ?>
                 <li>
                     <span class="vault-journal__dot<?= $dot ? ' vault-journal__dot--' . $dot : '' ?>" aria-hidden="true"></span>
                     <div>

@@ -5,6 +5,9 @@
  *   op=archive   dossier masqué du répertoire et de la recherche de la facturation ; conservé intact, restaurable
  *                (rôles GTC-Vault : administration, conformité, agents) ;
  *   op=restore   dossier archivé remis dans le répertoire (mêmes rôles) ;
+ *   op=add_document  pièce ajoutée au dossier (compléter un dossier provisoire créé depuis la caisse) ;
+ *   op=verify    dossier provisoire vérifié et validé : pièces complètes, jamais par la personne qui l'a créé
+ *                (double contrôle), sauf un administrateur ;
  *   op=delete    suppression DÉFINITIVE du dossier, de ses pièces (fichiers) et de sa photo de profil —
  *                administrateurs uniquement, et refusée si des reçus ou factures sont rattachés au dossier :
  *                la preuve d'identification d'une opération doit être conservée (obligation KYC / LBC-FT) ;
@@ -36,7 +39,7 @@ if (empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $tok
 $op   = (string) ($_POST['op'] ?? '');
 $uuid = strtolower((string) ($_POST['uuid'] ?? ''));
 $pdo  = vault_db();
-$st   = $pdo->prepare('SELECT id, uuid, nom_complet, archived_at, avatar_path FROM clients WHERE uuid = ?');
+$st   = $pdo->prepare('SELECT id, uuid, nom_complet, type_client, archived_at, avatar_path, created_by, review_status, review_source FROM clients WHERE uuid = ?');
 $st->execute([$uuid]);
 $client = $st->fetch();
 if (!$client) {
@@ -108,6 +111,71 @@ switch ($op) {
             . ' (' . count($files) . ' pièce' . (count($files) > 1 ? 's' : '') . ', ' . $removed . ' fichier' . ($removed > 1 ? 's' : '') . ' effacé' . ($removed > 1 ? 's' : '') . ')');
         flash('success', 'Dossier de ' . $name . ' supprimé définitivement, avec ses pièces.');
         redirect('../' . $toList());
+
+    // Pièce ajoutée à un dossier existant (compléter un dossier provisoire créé depuis la caisse, renouveler une CNI…)
+    case 'add_document':
+        $type = (string) ($_POST['type_document'] ?? '');
+        $f = $_FILES['document'] ?? null;
+        if (!isset(KYC_DOC_LABELS[$type])) {
+            flash('error', 'Choisissez le type de la pièce.');
+            redirect('../' . $back);
+        }
+        if (!$f || $f['error'] === UPLOAD_ERR_NO_FILE) {
+            flash('error', 'Choisissez le fichier de la pièce (JPG, PNG ou PDF, 5 Mo au maximum).');
+            redirect('../' . $back);
+        }
+        $check = kyc_check_file($f);
+        if (is_string($check)) {
+            flash('error', $check);
+            redirect('../' . $back);
+        }
+        $path = null;
+        try {
+            $pdo->beginTransaction();
+            $path = kyc_store_document($pdo, (int) $client['id'], $type, $f + ['ext' => $check[0], 'mime' => $check[1]], (int) $user['id'], date('Y-m-d H:i:s'));
+            $pdo->prepare('UPDATE clients SET updated_at = ? WHERE id = ?')->execute([date('Y-m-d H:i:s'), (int) $client['id']]);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            if ($path) {
+                @unlink($path);
+            }
+            error_log('[GTC-Vault ajout de pièce] ' . $e->getMessage());
+            flash('error', 'La pièce n\'a pas pu être enregistrée. Réessayez.');
+            redirect('../' . $back);
+        }
+        vault_audit('document_add', $client, (int) $pdo->lastInsertId() ?: null,
+            $user['name'] . ' a ajouté la pièce « ' . KYC_DOC_LABELS[$type] . ' » au dossier de ' . $name);
+        flash('success', 'Pièce « ' . KYC_DOC_LABELS[$type] . ' » ajoutée au dossier de ' . $name . '.');
+        redirect('../' . $back);
+
+    // Validation d'un dossier provisoire par la conformité : pièces complètes, et jamais par l'auteur du dossier
+    // (double contrôle : la personne qui a enregistré le client à la caisse ne valide pas son propre dossier)
+    case 'verify':
+        if ($client['review_status'] !== 'pending') {
+            flash('success', 'Ce dossier est déjà validé.');
+            redirect('../' . $back);
+        }
+        require_once __DIR__ . '/../../includes/kyc_link.php';
+        $types = array_column($pdo->query('SELECT type_document FROM client_documents WHERE client_id = ' . (int) $client['id'])->fetchAll(), 'type_document');
+        $missing = kyc_missing((string) $client['type_client'], $types);
+        if ($missing) {
+            flash('error', 'Dossier incomplet : ajoutez d\'abord ' . implode(', ', $missing) . ', puis validez.');
+            redirect('../' . $back);
+        }
+        if ((int) $client['created_by'] === (int) $user['id'] && ($user['role'] ?? '') !== 'admin') {
+            vault_audit('access_denied', $client, null, 'Validation refusée : ' . $user['name'] . ' est l\'auteur du dossier provisoire de ' . $name);
+            flash('error', 'Vous avez créé ce dossier : sa validation doit être faite par une autre personne (conformité ou administration).');
+            redirect('../' . $back);
+        }
+        $pdo->prepare("UPDATE clients SET review_status = 'verified', reviewed_by = ?, reviewed_at = ?, updated_at = ? WHERE id = ?")
+            ->execute([(int) $user['id'], date('Y-m-d H:i:s'), date('Y-m-d H:i:s'), (int) $client['id']]);
+        vault_audit('client_verify', $client, null, $user['name'] . ' a vérifié et validé le dossier KYC de ' . $name
+            . ' (dossier provisoire créé depuis le poste de caisse, ' . count($types) . ' pièce' . (count($types) > 1 ? 's' : '') . ')');
+        flash('success', 'Dossier de ' . $name . ' vérifié et validé.');
+        redirect('../' . $back);
 
     default:
         redirect('clients.php');

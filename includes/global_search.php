@@ -75,7 +75,7 @@ function gs_search(string $q, array $user): array
         $count = (int) db_value("SELECT COUNT(*) FROM clients WHERE {$where}", $params);
         if ($count) {
             // Dossiers archivés aussi trouvés (badge « Archivé »), après les dossiers actifs
-            $rows = db_all("SELECT id, uuid, type_client, nom_complet, telephone, email, adresse, numero_identifiant, archived_at
+            $rows = db_all("SELECT id, uuid, type_client, nom_complet, telephone, email, adresse, numero_identifiant, archived_at, review_status
                             FROM clients WHERE {$where} ORDER BY CASE WHEN archived_at IS NULL THEN 0 ELSE 1 END, nom_complet LIMIT {$n}", $params);
             $docs = kyc_doc_types(array_column($rows, 'id'));
             $items = [];
@@ -85,7 +85,7 @@ function gs_search(string $q, array $user): array
                     'title' => $c['name'],
                     'sub'   => implode(' · ', array_filter([$c['typeLabel'], $c['phone'], $c['idNumber'] !== '' ? $c['idLabel'] . ' ' . $c['idNumber'] : ''])),
                     'badge' => $r['archived_at'] !== null ? ['label' => 'Archivé', 'tone' => 'muted']
-                        : ['label' => $c['status'] === 'complete' ? 'KYC complet' : 'KYC incomplet', 'tone' => $c['status'] === 'complete' ? 'success' : 'warning'],
+                        : ['label' => ['complete' => 'KYC complet', 'incomplete' => 'KYC incomplet', 'pending' => 'KYC provisoire'][$c['status']], 'tone' => KYC_LINK_STATES[$c['status']]['tone']],
                     'url'   => 'vault/client.php?uuid=' . rawurlencode($c['uuid']),
                 ];
             }

@@ -20,6 +20,8 @@ const KYC_LINK_ROLES = ['admin', 'caissier', 'agent', 'conformite'];
 const KYC_LINK_STATES = [
     'complete'   => ['label' => 'Dossier KYC complet',   'tone' => 'success', 'icon' => 'check'],
     'incomplete' => ['label' => 'Dossier KYC incomplet', 'tone' => 'warning', 'icon' => 'alert'],
+    // Créé à la volée depuis la caisse : à compléter et valider par la conformité (dashboard/vault/client.php)
+    'pending'    => ['label' => 'Dossier KYC provisoire', 'tone' => 'info',    'icon' => 'clock'],
 ];
 
 /**
@@ -98,7 +100,9 @@ function kyc_client_public(array $c, array $docTypes): array
         'address'   => kyc_clean_address($c['adresse'] ?? ''),   // colonne « adresse » seule, jamais l'e-mail
         'idNumber'  => (string) ($c['numero_identifiant'] ?? ''),
         'idLabel'   => kyc_id_label((string) $c['type_client']),
-        'status'    => $missing ? 'incomplete' : 'complete',
+        // Dossier provisoire (créé depuis la caisse) : « pending » tant que la conformité ne l'a pas validé
+        'status'    => ($c['review_status'] ?? 'verified') === 'pending' ? 'pending' : ($missing ? 'incomplete' : 'complete'),
+        'review'    => (string) ($c['review_status'] ?? 'verified'),
         'missing'   => $missing,
     ];
 }
@@ -129,7 +133,7 @@ function kyc_client_search(string $q, int $limit = 8): array
         $phoneSql = " OR REPLACE(REPLACE(REPLACE(telephone, ' ', ''), '-', ''), '.', '') LIKE ?";
         $params[] = '%' . $digits . '%';
     }
-    $rows = db_all('SELECT id, uuid, type_client, nom_complet, telephone, email, adresse, numero_identifiant FROM clients
+    $rows = db_all('SELECT id, uuid, type_client, nom_complet, telephone, email, adresse, numero_identifiant, review_status FROM clients
                     WHERE archived_at IS NULL AND ((' . implode(' AND ', $where) . ')' . $phoneSql . ')   -- dossiers archivés exclus de la facturation
                     ORDER BY nom_complet LIMIT ' . max(1, min(20, $limit)), $params);
     $docs = kyc_doc_types(array_column($rows, 'id'));
@@ -142,7 +146,7 @@ function kyc_client_by_uuid(string $uuid): ?array
     if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $uuid)) {
         return null;
     }
-    $c = db_one('SELECT id, uuid, type_client, nom_complet, telephone, email, adresse, numero_identifiant FROM clients WHERE uuid = ?', [$uuid]);
+    $c = db_one('SELECT id, uuid, type_client, nom_complet, telephone, email, adresse, numero_identifiant, review_status FROM clients WHERE uuid = ?', [$uuid]);
     if (!$c) {
         return null;
     }
@@ -157,7 +161,7 @@ function kyc_clients_by_ids(array $ids): array
         return [];
     }
     $in = implode(', ', array_fill(0, count($ids), '?'));
-    $rows = db_all("SELECT id, uuid, type_client, nom_complet, telephone, email, adresse, numero_identifiant FROM clients WHERE id IN ({$in})", $ids);
+    $rows = db_all("SELECT id, uuid, type_client, nom_complet, telephone, email, adresse, numero_identifiant, review_status FROM clients WHERE id IN ({$in})", $ids);
     $docs = kyc_doc_types($ids);
     $out = [];
     foreach ($rows as $r) {
@@ -215,8 +219,10 @@ function kyc_badge(string $status, array $missing = [], bool $compact = false): 
     if (!$s) {
         return '';
     }
-    $label = $compact ? ($status === 'complete' ? 'KYC complet' : 'KYC incomplet') : $s['label'];
-    $title = $missing ? 'Manque : ' . implode(', ', $missing) : 'Pièces d\'identité vérifiées dans GTC-Vault';
+    $label = $compact ? ['complete' => 'KYC complet', 'incomplete' => 'KYC incomplet', 'pending' => 'KYC provisoire'][$status] : $s['label'];
+    $title = $status === 'pending'
+        ? 'Dossier créé depuis la caisse, en attente de vérification par la conformité' . ($missing ? ' — manque : ' . implode(', ', $missing) : '')
+        : ($missing ? 'Manque : ' . implode(', ', $missing) : 'Pièces d\'identité vérifiées dans GTC-Vault');
     return '<span class="badge badge--' . e($s['tone']) . ' kyc-badge" data-kyc-badge="' . e($status) . '" title="' . e($title) . '">'
         . icon($s['icon']) . ' ' . e($label) . '</span>';
 }
@@ -252,11 +258,13 @@ function kyc_link_summary(?array $client, ?string $statusAtIssue): string
  * $linked : dossier déjà lié (modification, ou nouvel affichage après une erreur) ; les champs à remplir sont
  * désignés par leur id dans data-kyc-fill (name, phone, email, address, idNumber).
  */
-function kyc_link_field(?array $linked, array $fill, ?string $error = null): string
+function kyc_link_field(?array $linked, array $fill, ?string $error = null, string $context = 'receipt'): string
 {
+    // Enregistrement rapide d'un nouveau client (dashboard/client-quick.php) : comptes des opérations
+    $quick = in_array(current_user()['role'] ?? '', OPERATION_ROLES, true);
     ob_start(); ?>
-    <div class="field field--full kyc-link" data-kyc-link data-api="clients-api.php"
-         data-fill="<?= e(json_encode($fill)) ?>"<?= kyc_can_open_vault() ? ' data-vault="1"' : '' ?>>
+    <div class="field field--full kyc-link" data-kyc-link data-api="clients-api.php" data-context="<?= $context === 'invoice' ? 'invoice' : 'receipt' ?>"
+         data-fill="<?= e(json_encode($fill)) ?>"<?= kyc_can_open_vault() ? ' data-vault="1"' : '' ?><?= $quick ? ' data-quick="1"' : '' ?>>
         <label for="kyc-search">Client GTC-Vault <small>(recherche par nom, téléphone ou N° de pièce)</small></label>
         <input type="hidden" name="vault_client" value="<?= e($linked['uuid'] ?? '') ?>" data-kyc-uuid>
         <div class="kyc-link__box"<?= $linked ? ' hidden' : '' ?> data-kyc-box>
@@ -271,7 +279,8 @@ function kyc_link_field(?array $linked, array $fill, ?string $error = null): str
                 <?= kyc_link_chip($linked) ?>
             <?php endif; ?>
         </div>
-        <small class="field__hint" data-kyc-hint>Le client choisi remplit les champs ci-dessous et le document est rattaché à son dossier KYC.</small>
+        <small class="field__hint" data-kyc-hint>Le client choisi remplit les champs ci-dessous et le document est rattaché à son dossier KYC.
+            <button type="button" class="kyc-link__newlink" data-kyc-new-link hidden>Client absent ? Enregistrer un nouveau client</button></small>
         <?php if ($error): ?><small class="field__error"><?= e($error) ?></small><?php endif; ?>
         <noscript><small class="field__hint">La recherche GTC-Vault nécessite JavaScript ; les champs restent saisissables à la main.</small></noscript>
     </div>
@@ -288,8 +297,11 @@ function kyc_link_chip(array $c): string
         . '<small>' . e(implode(' · ', $sub)) . '</small></span>'
         . kyc_badge($c['status'], $c['missing'])
         . '<button type="button" class="btn btn--ghost btn--sm" data-kyc-unlink>' . icon('x') . ' Délier</button>'
-        . ($c['missing'] ? '<p class="kyc-chip__warn">' . icon('alert') . ' Dossier incomplet — manque : ' . e(implode(', ', $c['missing']))
-            . '. Vérifiez l\'identité du client avant de finaliser l\'opération.</p>' : '')
+        . ($c['status'] === 'pending'
+            ? '<p class="kyc-chip__warn kyc-chip__warn--info">' . icon('clock') . ' Dossier provisoire créé depuis la caisse : la conformité vérifiera'
+              . ($c['missing'] ? ' et complétera les pièces (manque : ' . e(implode(', ', $c['missing'])) . ')' : ' les pièces') . '. Contrôlez l\'original de la pièce d\'identité.</p>'
+            : ($c['missing'] ? '<p class="kyc-chip__warn">' . icon('alert') . ' Dossier incomplet — manque : ' . e(implode(', ', $c['missing']))
+            . '. Vérifiez l\'identité du client avant de finaliser l\'opération.</p>' : ''))
         . '</div>';
 }
 
